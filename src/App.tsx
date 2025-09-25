@@ -9,6 +9,8 @@ import { Toaster } from '@/components/ui/sonner'
 import { AdvancedAnalytics } from '@/components/AdvancedAnalytics'
 import { BatchDetails } from '@/components/BatchDetails'
 import { BatchAnalytics } from '@/components/BatchAnalytics'
+import { CapaReview } from '@/components/CapaReview'
+import { CapaTimeline } from '@/components/CapaTimeline'
 
 export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'advanced-analytics' | 'audit'
 
@@ -38,6 +40,18 @@ function App() {
         return <BatchMonitoring />
       }
       case 'quality':
+        // Render sub-pages for quality route overlays
+        if ((route || '').startsWith('capa/')) {
+          const parts = (route || '').split('/').filter(Boolean)
+          // Expected: capa/:id/review or capa/:id/timeline
+          const [, capaId, subpage] = parts
+          if (parts.length === 3 && capaId && subpage === 'review') {
+            return <CapaReview id={capaId} onBack={() => setRoute('')} />
+          }
+          if (parts.length === 3 && capaId && subpage === 'timeline') {
+            return <CapaTimeline id={capaId} onBack={() => setRoute('')} />
+          }
+        }
         return <QualityManagement />
       case 'analytics':
         return <Analytics />

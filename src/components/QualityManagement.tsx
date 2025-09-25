@@ -17,6 +17,7 @@ import {
   Robot
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
+import { buildInvestigationSources, sourcesToString } from '@/data/archive'
 
 type WindowSpark = {
   llmPrompt: (strings: TemplateStringsArray, ...expr: unknown[]) => unknown
@@ -176,6 +177,7 @@ const mockCAPAs: CAPA[] = [
 export function QualityManagement() {
   const [deviations, setDeviations] = useKV<Deviation[]>('deviations', mockDeviations)
   const [capas, setCAPAs] = useKV<CAPA[]>('capas', mockCAPAs)
+  const [, setRoute] = useKV<string>('route', '')
   const [, setSelectedDeviation] = useState<Deviation | null>(null)
   const [investigationNotes, setInvestigationNotes] = useState('')
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false)
@@ -250,26 +252,33 @@ export function QualityManagement() {
   const spark = getSpark()
   const llmPrompt = spark?.llmPrompt
   if (!llmPrompt || !spark?.llm) throw new Error('AI helpers not available')
+      const sources = buildInvestigationSources(deviation.batchId)
       const prompt = llmPrompt`
-        You are a pharmaceutical quality expert AI assistant. Analyze this deviation:
-        
-        Title: ${deviation.title}
-        Description: ${deviation.description}
-        Batch ID: ${deviation.batchId}
-        Severity: ${deviation.severity}
-        
-        Based on typical pharmaceutical manufacturing processes and GMP guidelines, provide:
-        1. Potential root causes (list 3-5 most likely causes)
-        2. Investigation steps to confirm root cause
-        3. Immediate containment actions
-        4. Recommended corrective and preventive actions
-        5. Risk assessment for product quality impact
-        
-        Ground your analysis in pharmaceutical industry best practices and regulatory guidelines.
-        Be specific and actionable. Avoid generic responses.
+        You are a pharmaceutical quality expert AI assistant. Analyze this deviation using the provided SOURCES.
+
+        Deviation:
+        - Title: ${deviation.title}
+        - Description: ${deviation.description}
+        - Batch ID: ${deviation.batchId}
+        - Severity: ${deviation.severity}
+
+        SOURCES (each has an id like [S1]):
+        ${sourcesToString(sources)}
+
+        Instructions:
+        - Base your reasoning strictly on the SOURCES where possible.
+        - When you use a fact from a source, cite it inline as [S#]. Example: "Temperature exceeded limits [S1]".
+        - Provide:
+          1. Potential root causes (3-5)
+          2. Investigation steps to confirm root cause
+          3. Immediate containment actions
+          4. Recommended corrective and preventive actions
+          5. Risk assessment for product quality impact
+        - Keep responses concise and actionable.
       `
-  const analysis = await spark.llm(prompt, 'gpt-4o')
-      setAiAnalysis(analysis)
+      const analysis = await spark.llm(prompt, 'gpt-4o')
+      const sourcesList = '\n\nSources:\n' + sources.map(s => `${s.id} — ${s.title}`).join('\n')
+      setAiAnalysis(analysis + sourcesList)
     } catch {
       setAiAnalysis('Error generating analysis. Please try again.')
       toast.error('Failed to generate AI analysis')
@@ -552,11 +561,11 @@ export function QualityManagement() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => setRoute(`capa/${capa.id}/review`)}>
                         <CheckCircle className="h-4 w-4 mr-2" />
                         Review
                       </Button>
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => setRoute(`capa/${capa.id}/timeline`)}>
                         <Clock className="h-4 w-4 mr-2" />
                         Timeline
                       </Button>
