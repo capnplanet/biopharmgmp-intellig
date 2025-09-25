@@ -98,7 +98,7 @@ export function BatchMonitoring() {
   const [, setCurrentTime] = useState(new Date())
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 30000)
+    const timer = setInterval(() => setCurrentTime(new Date()), 15000)
     return () => clearInterval(timer)
   }, [])
 

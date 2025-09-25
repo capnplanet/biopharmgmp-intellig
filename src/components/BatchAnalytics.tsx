@@ -81,6 +81,11 @@ function ParamRow({ label, current, min, max, target, unit }: {
 
 export function BatchAnalytics({ batchId, onBack }: Props) {
   const batch = batches.find(b => b.id === batchId)
+  const [, setNow] = React.useState(new Date())
+  React.useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 20000)
+    return () => window.clearInterval(id)
+  }, [])
 
   if (!batch) {
     return (
