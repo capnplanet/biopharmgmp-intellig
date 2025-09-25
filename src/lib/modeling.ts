@@ -179,20 +179,173 @@ export function clamp(x: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, x))
 }
 
+// ---------- Minimal on-device Logistic Regression ----------
+
+type LRState = {
+  // feature order; vector x aligns with keys in this array
+  featureKeys: string[]
+  weights: Float64Array // length = d
+  bias: number
+  mean: Float64Array // standardization mean
+  std: Float64Array // standardization std (>= 1e-6)
+  trainedAt: number
+  n: number // samples used to train
+}
+
+const lrRegistry: Partial<Record<ModelId, LRState>> = {}
+
+function sigmoid(z: number) {
+  // clamp to avoid overflow
+  if (z >= 0) {
+    const ez = Math.exp(-z)
+    return 1 / (1 + ez)
+  } else {
+    const ez = Math.exp(z)
+    return ez / (1 + ez)
+  }
+}
+
+function buildFeatureKeys(records: PredictionRecord[]): string[] {
+  const set = new Set<string>()
+  for (const r of records) {
+    for (const k of Object.keys(r.features)) set.add(k)
+  }
+  return Array.from(set)
+}
+
+function vectorize(features: Features, keys: string[]): Float64Array {
+  const x = new Float64Array(keys.length)
+  for (let j = 0; j < keys.length; j++) x[j] = Number(features[keys[j]] ?? 0)
+  return x
+}
+
+function standardizeFit(X: Float64Array[]): { mean: Float64Array; std: Float64Array } {
+  const d = X[0].length
+  const mean = new Float64Array(d)
+  const std = new Float64Array(d)
+  for (const x of X) {
+    for (let j = 0; j < d; j++) mean[j] += x[j]
+  }
+  for (let j = 0; j < d; j++) mean[j] /= X.length
+  for (const x of X) {
+    for (let j = 0; j < d; j++) {
+      const v = x[j] - mean[j]
+      std[j] += v * v
+    }
+  }
+  for (let j = 0; j < d; j++) std[j] = Math.sqrt(std[j] / Math.max(1, X.length - 1)) || 1
+  // floor std to avoid divide-by-zero
+  for (let j = 0; j < d; j++) if (std[j] < 1e-6) std[j] = 1
+  return { mean, std }
+}
+
+function standardizeApply(x: Float64Array, mean: Float64Array, std: Float64Array): Float64Array {
+  const d = x.length
+  const z = new Float64Array(d)
+  for (let j = 0; j < d; j++) z[j] = (x[j] - mean[j]) / std[j]
+  return z
+}
+
+export type LRTrainOptions = {
+  learningRate?: number
+  epochs?: number
+  l2?: number
+  minSamples?: number
+  requireBothClasses?: boolean
+}
+
+/**
+ * Train a per-model logistic regression from monitor records. Stores the model in-memory.
+ * Returns true if trained/updated; false if insufficient data.
+ */
+export function trainLogisticForModel(model: ModelId, opts?: LRTrainOptions): boolean {
+  const lr = opts?.learningRate ?? 0.1
+  const epochs = opts?.epochs ?? 200
+  const l2 = opts?.l2 ?? 1e-3
+  const minN = opts?.minSamples ?? 60
+  const needBoth = opts?.requireBothClasses ?? true
+  const rs = monitor.getRecords(model)
+  if (rs.length < minN) return false
+  const pos = rs.filter(r => r.y === 1).length
+  const neg = rs.filter(r => r.y === 0).length
+  if (needBoth && (pos === 0 || neg === 0)) return false
+
+  const keys = buildFeatureKeys(rs)
+  const Xraw: Float64Array[] = rs.map(r => vectorize(r.features, keys))
+  const y = rs.map(r => r.y)
+  const { mean, std } = standardizeFit(Xraw)
+  const X = Xraw.map(x => standardizeApply(x, mean, std))
+
+  const d = keys.length
+  const w = new Float64Array(d)
+  let b = 0
+
+  // simple batch gradient descent on cross-entropy with L2
+  for (let epoch = 0; epoch < epochs; epoch++) {
+  const gradW = new Float64Array(d)
+    let gradB = 0
+    for (let i = 0; i < X.length; i++) {
+      const xi = X[i]
+      let z = b
+      for (let j = 0; j < d; j++) z += w[j] * xi[j]
+      const p = sigmoid(z)
+      const err = p - y[i]
+      for (let j = 0; j < d; j++) gradW[j] += err * xi[j]
+      gradB += err
+    }
+    // average and add L2
+    for (let j = 0; j < d; j++) gradW[j] = gradW[j] / X.length + l2 * w[j]
+    gradB = gradB / X.length
+    // update
+    for (let j = 0; j < d; j++) w[j] -= lr * gradW[j]
+    b -= lr * gradB
+  }
+
+  lrRegistry[model] = {
+    featureKeys: keys,
+    weights: w,
+    bias: b,
+    mean,
+    std,
+    trainedAt: Date.now(),
+    n: rs.length,
+  }
+  return true
+}
+
+/** Predict probability using the learned logistic model if available; returns null if not present */
+export function predictLogisticProb(model: ModelId, features: Features): number | null {
+  const st = lrRegistry[model]
+  if (!st) return null
+  const x = vectorize(features, st.featureKeys)
+  const z = standardizeApply(x, st.mean, st.std)
+  let s = st.bias
+  for (let j = 0; j < st.weights.length; j++) s += st.weights[j] * z[j]
+  return clamp(sigmoid(s), 0, 1)
+}
+
+export function getLogisticState(model: ModelId): (LRState & { model: ModelId }) | null {
+  const st = lrRegistry[model]
+  return st ? { ...st, model } : null
+}
+
 // Convenience: produce a few fresh predictions and record them
 export function sampleAndRecordPredictions() {
   const now = Date.now()
   // Record across all batches to include positives and negatives
   for (const b of batches) {
     const q = predictQuality(b)
-    monitor.add({ id: b.id, model: 'quality_prediction', timestamp: now, p: q.p, y: q.y, features: q.features })
+    const qp = predictLogisticProb('quality_prediction', q.features) ?? q.p
+    monitor.add({ id: b.id, model: 'quality_prediction', timestamp: now, p: qp, y: q.y, features: q.features })
     const d = predictDeviationRisk(b)
-    monitor.add({ id: b.id, model: 'deviation_risk', timestamp: now, p: d.p, y: d.y, features: d.features })
+    const dp = predictLogisticProb('deviation_risk', d.features) ?? d.p
+    monitor.add({ id: b.id, model: 'deviation_risk', timestamp: now, p: dp, y: d.y, features: d.features })
   }
   // Record for all equipment to mix alert/non-alert
   for (const eq of equipmentTelemetry) {
     const e = predictEquipmentFailure(eq)
-    monitor.add({ id: eq.id, model: 'equipment_failure', timestamp: now, p: e.p, y: e.y, features: e.features })
+    const ep = predictLogisticProb('equipment_failure', e.features) ?? e.p
+    monitor.add({ id: eq.id, model: 'equipment_failure', timestamp: now, p: ep, y: e.y, features: e.features })
   }
 }
 

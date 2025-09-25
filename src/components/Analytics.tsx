@@ -18,7 +18,7 @@ import {
   Info
 } from '@phosphor-icons/react'
 import { equipmentTelemetry, batches } from '@/data/seed'
-import { monitor, sampleAndRecordPredictions, predictQuality, predictDeviationRisk, predictEquipmentFailure, decisionThreshold } from '@/lib/modeling'
+import { monitor, sampleAndRecordPredictions, predictQuality, predictDeviationRisk, predictEquipmentFailure, decisionThreshold, trainLogisticForModel, predictLogisticProb, getLogisticState, type ModelId } from '@/lib/modeling'
 
 interface PredictiveModel {
   id: string
@@ -67,7 +67,7 @@ const mockMetrics: QualityMetrics = {
   }
 }
 
-// Build functional models from current data using lightweight predictors
+// Build functional models from current data using LR if available; fallback to lightweight predictors
 function buildRuntimeModels(): PredictiveModel[] {
   const pickQualityBatch = batches.reduce((best, b) => {
     if (!best) return b
@@ -86,9 +86,14 @@ function buildRuntimeModels(): PredictiveModel[] {
   const eqScores = equipmentTelemetry.map(e => ({ id: e.id, ...predictEquipmentFailure(e) }))
   const topEq = eqScores.reduce((a, b) => (a && a.p > b.p ? a : b)) || { id: equipmentTelemetry[0]?.id || 'EQ-001', p: 0, y: 0, features: {} as Record<string, number> }
 
-  const q = predictQuality(pickQualityBatch)
-  const d = predictDeviationRisk(pickDeviationBatch)
-  const e = predictEquipmentFailure(equipmentTelemetry.find(x => x.id === topEq.id)!)
+  const qH = predictQuality(pickQualityBatch)
+  const dH = predictDeviationRisk(pickDeviationBatch)
+  const eH = predictEquipmentFailure(equipmentTelemetry.find(x => x.id === topEq.id)!)
+
+  // Try LR probabilities if a trained model exists; otherwise use heuristics
+  const qP = predictLogisticProb('quality_prediction', qH.features) ?? qH.p
+  const dP = predictLogisticProb('deviation_risk', dH.features) ?? dH.p
+  const eP = predictLogisticProb('equipment_failure', eH.features) ?? eH.p
 
   const conf = (p: number) => 0.5 + Math.abs(p - 0.5) / 2 // simple heuristic confidence proxy
 
@@ -96,14 +101,16 @@ function buildRuntimeModels(): PredictiveModel[] {
     id: 'model-001',
     name: 'Batch Quality Predictor',
     type: 'quality_prediction',
-    accuracy: Math.round((1 - q.p * 0.05) * 1000) / 10, // placeholder display only
+    accuracy: Math.round((1 - qP * 0.05) * 1000) / 10, // placeholder display only
     lastTrained: new Date(),
     status: 'active',
     predictions: [{
-      value: q.p * 100,
-      confidence: conf(q.p),
+      value: qP * 100,
+      confidence: conf(qP),
       timestamp: new Date(),
-      explanation: `How it works: p = clamp(0.05 + 0.9*CPP, 0, 1), mapping current CPP compliance (${q.features.cpp_compliance.toFixed(2)}) to probability of meeting all specs. Inputs include |ΔT|=${q.features.temp_delta.toFixed(2)}, |ΔP|=${q.features.pressure_delta.toFixed(2)}, |ΔpH|=${q.features.ph_delta.toFixed(2)}.`
+      explanation: predictLogisticProb('quality_prediction', qH.features) != null
+        ? `Logistic model (local) on engineered features (standardized) outputs probability via σ(w·x + b). Falls back to heuristic if unavailable. Current CPP compliance=${qH.features.cpp_compliance.toFixed(2)}, |ΔT|=${qH.features.temp_delta.toFixed(2)}, |ΔP|=${qH.features.pressure_delta.toFixed(2)}, |ΔpH|=${qH.features.ph_delta.toFixed(2)}.`
+        : `Heuristic: p = clamp(0.05 + 0.9*CPP, 0, 1). Inputs include |ΔT|=${qH.features.temp_delta.toFixed(2)}, |ΔP|=${qH.features.pressure_delta.toFixed(2)}, |ΔpH|=${qH.features.ph_delta.toFixed(2)}.`
     }]
   }
 
@@ -115,10 +122,12 @@ function buildRuntimeModels(): PredictiveModel[] {
     lastTrained: new Date(),
     status: 'active',
     predictions: [{
-      value: d.p * 100,
-      confidence: conf(d.p),
+      value: dP * 100,
+      confidence: conf(dP),
       timestamp: new Date(),
-      explanation: `How it works: risk p = max(normDevs)/2, where norm dev from mid-spec: temp=${d.features.temp_norm_dev.toFixed(2)}, pressure=${d.features.pressure_norm_dev.toFixed(2)}, pH=${d.features.ph_norm_dev.toFixed(2)}.`
+      explanation: predictLogisticProb('deviation_risk', dH.features) != null
+        ? `Logistic model (local) on normalized deviation features; outputs σ(w·x + b). Fallback to heuristic if model untrained. Norm devs: temp=${dH.features.temp_norm_dev.toFixed(2)}, pressure=${dH.features.pressure_norm_dev.toFixed(2)}, pH=${dH.features.ph_norm_dev.toFixed(2)}.`
+        : `Heuristic: risk p = max(normDevs)/2, with temp=${dH.features.temp_norm_dev.toFixed(2)}, pressure=${dH.features.pressure_norm_dev.toFixed(2)}, pH=${dH.features.ph_norm_dev.toFixed(2)}.`
     }]
   }
 
@@ -130,10 +139,12 @@ function buildRuntimeModels(): PredictiveModel[] {
     lastTrained: new Date(),
     status: 'active',
     predictions: [{
-      value: e.p * 100,
-      confidence: conf(e.p),
+      value: eP * 100,
+      confidence: conf(eP),
       timestamp: new Date(),
-      explanation: `How it works: p = 0.6*rms_norm + 0.3*temp_var_norm + 0.2*alert. For ${topEq.id}, rms_norm=${e.features.rms_norm.toFixed(2)}, temp_var_norm=${e.features.temp_var_norm.toFixed(2)}, alert=${e.features.alert_flag}.`
+      explanation: predictLogisticProb('equipment_failure', eH.features) != null
+        ? `Logistic model (local) on vibration/thermal features; outputs σ(w·x + b). Fallback to heuristic if model untrained. For ${topEq.id}, rms_norm=${eH.features.rms_norm.toFixed(2)}, temp_var_norm=${eH.features.temp_var_norm.toFixed(2)}, alert=${eH.features.alert_flag}.`
+        : `Heuristic: p = 0.6*rms_norm + 0.3*temp_var_norm + 0.2*alert. For ${topEq.id}, rms_norm=${eH.features.rms_norm.toFixed(2)}, temp_var_norm=${eH.features.temp_var_norm.toFixed(2)}, alert=${eH.features.alert_flag}.`
     }]
   }
 
@@ -306,6 +317,19 @@ export function Analytics() {
     return () => clearInterval(id)
   }, [])
 
+  // Train/update local logistic regressions periodically from monitor
+  useEffect(() => {
+    // Try training soon after mount, then on an interval
+    const tryTrain = () => {
+      try { trainLogisticForModel('quality_prediction', { minSamples: 60, requireBothClasses: true }) } catch (e) { void e }
+      try { trainLogisticForModel('deviation_risk', { minSamples: 60, requireBothClasses: true }) } catch (e) { void e }
+      try { trainLogisticForModel('equipment_failure', { minSamples: 60, requireBothClasses: true }) } catch (e) { void e }
+    }
+    const t0 = setTimeout(tryTrain, 3000)
+    const id = setInterval(tryTrain, 45000)
+    return () => { clearTimeout(t0); clearInterval(id) }
+  }, [])
+
   // Simulated local retrain on in-memory data (stub):
   // In production, replace with a real, local training job that reads approved datasets and writes versioned model artifacts.
   const retrainLocally = async (modelId: string) => {
@@ -313,6 +337,15 @@ export function Analytics() {
     // Simulate reading from local archive/sim data without external calls
     // Example sources: batches, equipmentTelemetry, audit events, operator logs, trend stats
     await new Promise(r => setTimeout(r, 1200))
+    // Attempt on-device logistic regression training for the selected model type
+    try {
+      const mdl = models.find(m => m.id === modelId)
+      const asModelId = (t: PredictiveModel['type']): ModelId | null => (
+        t === 'quality_prediction' || t === 'equipment_failure' || t === 'deviation_risk' ? t : null
+      )
+      const mid = mdl ? asModelId(mdl.type) : null
+      if (mid) trainLogisticForModel(mid, { minSamples: 60, requireBothClasses: true })
+    } catch (e) { void e }
     // Simulate a small accuracy delta to reflect retrain; in real flow compute from validation set
     setModels(prev => prev.map(m => m.id === modelId ? {
       ...m,
@@ -411,6 +444,7 @@ export function Analytics() {
               <h4 className="font-medium mb-1">Model scope & training</h4>
               <ul className="list-disc ml-5 space-y-1 text-muted-foreground">
                 <li>Predictive layer in this demo uses lightweight heuristic predictors (not trained ML). Metrics (Accuracy, Brier, ECE, AUROC) are computed on live simulated data.</li>
+                <li>Optional local model: A small on-device logistic regression can train in-memory on recent runtime data (features + outcomes) and provide probabilities; it runs locally and falls back to heuristics if insufficient data is available.</li>
                 <li>Retraining: The UI exposes a "Retrain" button, but no training pipeline runs in this demo. In a client deployment, models can be connected to a local training job and kept on-prem.</li>
                 <li>Data sources for predictions: current batch CPPs (temperature, pressure, pH, volume), equipment telemetry (vibration RMS, temperature variance, uptime), and seeded batch metadata from the in-memory archive.</li>
                 <li>Generative RCA: If configured, the AI assistant uses a local prompt-grounded context (batch record, operator logs, calibration/maintenance, CAPA history, audit events, trend stats, and regulatory guidance). No external data is uploaded unless explicitly configured by the client.</li>
@@ -442,6 +476,10 @@ export function Analytics() {
                 <div>
                   <dt className="font-medium">CPP (Critical Process Parameter)</dt>
                   <dd className="text-muted-foreground">A process parameter whose variability can impact product quality and should be monitored or controlled.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Heuristic predictor</dt>
+                  <dd className="text-muted-foreground">A transparent, rule-based scoring function that maps engineered features (e.g., CPP compliance, parameter deltas, vibration signals) to a probability-like risk score without learning from data. It uses hand-set thresholds and monotonic transforms, executes locally on current in-memory/digital-twin data, and applies a decision threshold to produce a label. Benefits: deterministic, fast, explainable. Limitations: not data-trained, may miss patterns that learned models capture.</dd>
                 </div>
                 <div>
                   <dt className="font-medium">EWMA</dt>
@@ -763,6 +801,14 @@ export function Analytics() {
                       <div className="font-medium">{model.name}</div>
                       <div className="text-sm text-muted-foreground">
                         Accuracy: {model.accuracy}% • Last trained: {model.lastTrained.toLocaleDateString()}
+                        {(() => {
+                          const asModelId = (t: PredictiveModel['type']): ModelId | null => (
+                            t === 'quality_prediction' || t === 'equipment_failure' || t === 'deviation_risk' ? t : null
+                          )
+                          const mid = asModelId(model.type)
+                          const st = mid ? getLogisticState(mid) : null
+                          return st ? ` • LR: n=${st.n} d=${st.featureKeys.length}` : ''
+                        })()}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
