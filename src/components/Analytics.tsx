@@ -13,7 +13,9 @@ import {
   CheckCircle,
   Clock,
   Robot,
-  Target
+  Target,
+  BookOpen,
+  Info
 } from '@phosphor-icons/react'
 import { equipmentTelemetry } from '@/data/seed'
 
@@ -280,12 +282,127 @@ export function Analytics() {
       if (clone.predictions[0]) {
         clone.predictions = [{
           ...clone.predictions[0],
-          explanation: `Vibration patterns and temperature fluctuations in ${topEq} suggest potential bearing issues. Recommend maintenance inspection within 72 hours.`
+          explanation: `Vibration patterns and temperature fluctuations in ${topEq} suggest potential bearing issues. (Demo mode) This risk score is simulated using heuristic rules on RMS vibration, rising trend, and temperature variance. In production, we would use features such as RMS, kurtosis, crest factor, and spectral bands against ISO 20816 guidance with a calibrated classifier; thresholds and uncertainty are continuously monitored.`
         }]
       }
       return clone
     })
   }, [models, topEq])
+
+  function ExplainabilityPanel() {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5" />
+            AI Explainability & Methodology
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-5 text-sm leading-6">
+            <div className="p-3 rounded-md border bg-muted/30">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                <p className="text-muted-foreground">
+                  Demo mode: Predictions and insights shown here are generated from deterministic sample data and simple heuristics for illustration. The sections below describe how a production system would generate, validate, and explain similar outputs without confirmation bias.
+                </p>
+              </div>
+            </div>
+
+            <section>
+              <h4 className="font-medium mb-1">Data inputs</h4>
+              <ul className="list-disc ml-5 space-y-1 text-muted-foreground">
+                <li>Critical Process Parameters (CPPs): temperature, pressure, pH, volume, rates (from PAT).</li>
+                <li>Equipment telemetry: vibration RMS, temperature, run-hours, alarms, maintenance logs.</li>
+                <li>Context: batch metadata, stage, raw material lots, operators, environment.</li>
+                <li>Quality events: deviations, CAPA, change controls, effectiveness checks.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h4 className="font-medium mb-1">Feature engineering</h4>
+              <ul className="list-disc ml-5 space-y-1 text-muted-foreground">
+                <li>Rolling stats on CPPs: mean, variance, trend slope, EWMA, control-chart signals (e.g., 3σ).</li>
+                <li>Vibration features: RMS, peak, crest factor, kurtosis, spectral band energy, envelope demodulation.</li>
+                <li>Temporal features: time-since-start, stage transitions, seasonality harmonics.</li>
+                <li>Event encodings: one-hot of alarm codes, recency of maintenance, CAPA links.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h4 className="font-medium mb-1">Model families</h4>
+              <ul className="list-disc ml-5 space-y-1 text-muted-foreground">
+                <li>Classification/regression: gradient-boosted trees (XGBoost/LightGBM), random forests.</li>
+                <li>Time series: ARIMA/SARIMA for forecasting, temporal CNN/LSTM for multivariate trends.</li>
+                <li>Anomaly detection: isolation forest, robust PCA, autoencoders for reconstruction error.</li>
+                <li>Calibrated probabilities: Platt scaling or isotonic regression for well-calibrated risk.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h4 className="font-medium mb-1">Decision logic & thresholds</h4>
+              <p className="text-muted-foreground">
+                Risk scores are compared against guardrails derived from historical outcomes and standards. For equipment, vibration features are mapped to condition categories (e.g., ISO 20816). For CPPs, trend-based rules and predicted excursions are assessed vs. specification limits with look-ahead horizons.
+              </p>
+            </section>
+
+            <section>
+              <h4 className="font-medium mb-1">Uncertainty & confidence</h4>
+              <ul className="list-disc ml-5 space-y-1 text-muted-foreground">
+                <li>Predictive uncertainty via model ensembles, quantile regression, or MC dropout (for deep nets).</li>
+                <li>Probability calibration measured by Brier score and Expected Calibration Error (ECE).</li>
+              </ul>
+            </section>
+
+            <section>
+              <h4 className="font-medium mb-1">Validation & monitoring</h4>
+              <ul className="list-disc ml-5 space-y-1 text-muted-foreground">
+                <li>Time-based cross-validation and backtesting to respect causality.</li>
+                <li>Metrics: AUROC/PR-AUC (classification), MAE/MAPE/RMSE (forecasting), lift/recall at K.</li>
+                <li>Drift detection: KS/AD tests, Population Stability Index (PSI), change-point detection.</li>
+                <li>Post-deployment monitoring and alerting on performance degradation.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h4 className="font-medium mb-1">Explainability & bias mitigation</h4>
+              <ul className="list-disc ml-5 space-y-1 text-muted-foreground">
+                <li>Local explanations with SHAP to rank feature contributions per prediction.</li>
+                <li>Counterfactual analysis to suggest minimal changes that reduce risk.</li>
+                <li>No confirmation bias: frozen validation sets, pre-registered thresholds, and blinded evaluations.</li>
+                <li>Human-in-the-loop review with audit trails (21 CFR Part 11; ALCOA+).</li>
+              </ul>
+            </section>
+
+            <section>
+              <h4 className="font-medium mb-1">Limitations</h4>
+              <p className="text-muted-foreground">
+                This demo does not train or execute real ML models; values are illustrative. In production, all models would undergo GxP validation (e.g., GAMP 5), with versioning, approvals, and continuous oversight.
+              </p>
+            </section>
+
+            <section>
+              <h4 className="font-medium mb-1">References</h4>
+              <ul className="list-disc ml-5 space-y-1 text-muted-foreground">
+                <li>
+                  FDA: Process Analytical Technology (PAT) Guidance for Industry — <a className="underline" href="https://www.fda.gov/regulatory-information/search-fda-guidance-documents/pat-process-analytical-technology" target="_blank" rel="noreferrer">https://www.fda.gov/.../pat-process-analytical-technology</a>
+                </li>
+                <li>
+                  ISO 20816 (Machinery vibration — Evaluation of machine vibration by measurements on non-rotating parts) — overview.
+                </li>
+                <li>
+                  ISPE GAMP 5 (A Risk-Based Approach to Compliant GxP Computerized Systems) — model lifecycle governance.
+                </li>
+                <li>
+                  21 CFR Part 11 — Electronic records and signatures; audit trail requirements.
+                </li>
+              </ul>
+            </section>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <div className="p-6 space-y-6 overflow-auto h-full">
@@ -295,11 +412,12 @@ export function Analytics() {
       </div>
 
       <Tabs defaultValue="predictions" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="predictions">AI Predictions</TabsTrigger>
           <TabsTrigger value="metrics">Quality Metrics</TabsTrigger>
           <TabsTrigger value="trends">Historical Trends</TabsTrigger>
           <TabsTrigger value="models">Model Management</TabsTrigger>
+          <TabsTrigger value="explainability">Explainability</TabsTrigger>
         </TabsList>
 
         <TabsContent value="predictions" className="space-y-6">
@@ -511,6 +629,10 @@ export function Analytics() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="explainability" className="space-y-6">
+          <ExplainabilityPanel />
         </TabsContent>
       </Tabs>
     </div>
