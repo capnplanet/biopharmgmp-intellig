@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -144,11 +144,48 @@ const mockCAPAs: CAPA[] = [
 
 export function QualityManagement() {
   const [deviations, setDeviations] = useKV<Deviation[]>('deviations', mockDeviations)
-  const [capas] = useKV<CAPA[]>('capas', mockCAPAs)
+  const [capas, setCAPAs] = useKV<CAPA[]>('capas', mockCAPAs)
   const [, setSelectedDeviation] = useState<Deviation | null>(null)
   const [investigationNotes, setInvestigationNotes] = useState('')
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false)
   const [aiAnalysis, setAiAnalysis] = useState('')
+
+  const formatDate = (d: Date | string | undefined) => {
+    if (!d) return ''
+    const dt = d instanceof Date ? d : new Date(d)
+    return isNaN(dt.getTime()) ? '' : dt.toLocaleDateString()
+  }
+
+  // Hydrate date fields if they were persisted as strings
+  React.useEffect(() => {
+    const normalizeDeviation = (d: Deviation): Deviation => ({
+      ...d,
+      reportedDate: new Date(d.reportedDate as unknown as string),
+      effectivenessCheck: d.effectivenessCheck
+        ? {
+            ...d.effectivenessCheck,
+            dueDate: new Date(d.effectivenessCheck.dueDate as unknown as string),
+          }
+        : undefined,
+    })
+
+    const normalizeCAPA = (c: CAPA): CAPA => ({
+      ...c,
+      dueDate: new Date(c.dueDate as unknown as string),
+      actions: c.actions.map(a => ({
+        ...a,
+        dueDate: new Date(a.dueDate as unknown as string),
+      }))
+    })
+
+    if (deviations && deviations.length > 0 && typeof deviations[0].reportedDate !== 'object') {
+      setDeviations((deviations || []).map(normalizeDeviation))
+    }
+    if (capas && capas.length > 0 && typeof capas[0].dueDate !== 'object') {
+      setCAPAs((capas || []).map(normalizeCAPA))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const getSeverityColor = (severity: string) => {
     const colors = {
@@ -288,7 +325,7 @@ export function QualityManagement() {
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span>Batch: {deviation.batchId}</span>
                         <span>Reported by: {deviation.reportedBy}</span>
-                        <span>Date: {deviation.reportedDate.toLocaleDateString()}</span>
+                        <span>Date: {formatDate(deviation.reportedDate)}</span>
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -478,7 +515,7 @@ export function QualityManagement() {
                       <h3 className="font-semibold mb-2">{capa.title}</h3>
                       <p className="text-sm text-muted-foreground mb-3">{capa.description}</p>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span>Due: {capa.dueDate.toLocaleDateString()}</span>
+                        <span>Due: {formatDate(capa.dueDate)}</span>
                         <span>Assigned to: {capa.assignedTo}</span>
                         <span>Actions: {capa.actions.length}</span>
                       </div>
