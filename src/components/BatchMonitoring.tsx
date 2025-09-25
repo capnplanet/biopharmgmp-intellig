@@ -16,6 +16,7 @@ import {
 } from '@phosphor-icons/react'
 
 import { batches as seedBatches, type BatchData } from '@/data/seed'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useAuditLogger } from '@/hooks/use-audit'
 
 const mockBatches: BatchData[] = seedBatches
@@ -35,10 +36,17 @@ function ParameterCard({ label, current, target, unit, icon: Icon }: {
     <Card>
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Icon className={`h-4 w-4 ${status === 'warning' ? 'text-warning' : 'text-muted-foreground'}`} />
-            <span className="text-sm font-medium">{label}</span>
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-2 cursor-help">
+                <Icon className={`h-4 w-4 ${status === 'warning' ? 'text-warning' : 'text-muted-foreground'}`} />
+                <span className="text-sm font-medium">{label}</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              Current vs Target with warning at |Δ| &gt; 10% of target. Δ = |current - target|. Units: {unit}.
+            </TooltipContent>
+          </Tooltip>
           {status === 'warning' && (
             <Warning className="h-4 w-4 text-warning" />
           )}

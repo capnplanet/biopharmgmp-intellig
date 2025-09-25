@@ -18,7 +18,7 @@ import {
   Info
 } from '@phosphor-icons/react'
 import { equipmentTelemetry, batches } from '@/data/seed'
-import { monitor, sampleAndRecordPredictions, predictQuality, predictDeviationRisk, predictEquipmentFailure } from '@/lib/modeling'
+import { monitor, sampleAndRecordPredictions, predictQuality, predictDeviationRisk, predictEquipmentFailure, decisionThreshold } from '@/lib/modeling'
 
 interface PredictiveModel {
   id: string
@@ -535,19 +535,20 @@ export function Analytics() {
           {/* Live model performance summary */}
           <div className="grid gap-4 md:grid-cols-3">
             {(['quality_prediction','equipment_failure','deviation_risk'] as const).map((m) => {
-              const { n, accuracy, brier, ece, auroc } = monitor.metrics(m)
+              const t = decisionThreshold[m]
+              const { n, accuracy, brier, ece, auroc } = monitor.metrics(m, { threshold: t, minN: 30, requireBothClasses: true })
               const title = m === 'quality_prediction' ? 'Quality Prediction' : m === 'equipment_failure' ? 'Equipment Failure' : 'Deviation Risk'
               return (
                 <Card key={m}>
                   <CardHeader>
-                    <CardTitle className="text-sm text-muted-foreground">{title} — Live Performance</CardTitle>
+                    <CardTitle className="text-sm text-muted-foreground">{title} — Live Performance (t={t})</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="text-muted-foreground">Samples</div>
                       <div className="text-right font-mono">{n}</div>
                       <div className="text-muted-foreground">Accuracy</div>
-                      <div className="text-right font-mono">{(accuracy*100).toFixed(1)}%</div>
+                      <div className="text-right font-mono">{accuracy == null ? '—' : `${(accuracy*100).toFixed(1)}%`}</div>
                       <div className="text-muted-foreground">Brier</div>
                       <div className="text-right font-mono">{brier.toFixed(3)}</div>
                       <div className="text-muted-foreground">ECE</div>

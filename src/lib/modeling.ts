@@ -25,19 +25,37 @@ class ModelMonitor {
     return model ? this.records.filter(r => r.model === model) : this.records.slice()
   }
 
-  metrics(model: ModelId) {
+  metrics(
+    model: ModelId,
+    opts?: { threshold?: number; minN?: number; requireBothClasses?: boolean }
+  ) {
+    const t = opts?.threshold ?? 0.5
+    const minN = opts?.minN ?? 1
+    const needBoth = opts?.requireBothClasses ?? false
     const rs = this.getRecords(model)
     const n = rs.length
-    if (!n) return { n: 0, accuracy: 0, brier: 0, ece: 0, auroc: 0 }
-    const accuracy = rs.filter(r => (r.p >= 0.5 ? 1 : 0) === r.y).length / n
+    if (!n) return { n: 0, accuracy: null as number | null, brier: 0, ece: 0, auroc: 0, threshold: t, hasPosNeg: false }
+    const preds = rs.map(r => ({ c: r.p >= t ? 1 : 0 as 0|1, y: r.y }))
+    const pos = rs.filter(r => r.y === 1).length
+    const neg = rs.filter(r => r.y === 0).length
+    const hasPosNeg = pos > 0 && neg > 0
+    const rawAcc = preds.filter(x => x.c === x.y).length / n
     const brier = rs.reduce((s, r) => s + (r.p - r.y) * (r.p - r.y), 0) / n
     const ece = expectedCalibrationError(rs, 5)
     const auroc = computeAUROC(rs)
-    return { n, accuracy, brier, ece, auroc }
+    const accuracy: number | null = (n >= minN && (!needBoth || hasPosNeg)) ? rawAcc : null
+    return { n, accuracy, brier, ece, auroc, threshold: t, hasPosNeg }
   }
 }
 
 export const monitor = new ModelMonitor()
+
+// Per-model decision thresholds for converting probabilities to classes
+export const decisionThreshold: Record<ModelId, number> = {
+  quality_prediction: 0.95, // strict since y=1 means all CPPs in spec
+  deviation_risk: 0.5,
+  equipment_failure: 0.5,
+}
 
 // Expected Calibration Error with equal-width bins
 function expectedCalibrationError(rs: PredictionRecord[], bins = 5) {
@@ -164,24 +182,18 @@ export function clamp(x: number, lo: number, hi: number) {
 // Convenience: produce a few fresh predictions and record them
 export function sampleAndRecordPredictions() {
   const now = Date.now()
-  const pickBatchForQuality = batches.reduce((a, b) => (getCPPCompliance(a) < getCPPCompliance(b) ? a : b))
-  const pickBatchForDeviation = batches.reduce((a, b) => (deviationScore(a) > deviationScore(b) ? a : b))
-  const pickEq = equipmentTelemetry.reduce((a, b) => (a.vibrationRMS + (a.vibrationAlert ? 2 : 0)) > (b.vibrationRMS + (b.vibrationAlert ? 2 : 0)) ? a : b)
-
-  const q = predictQuality(pickBatchForQuality)
-  monitor.add({ id: pickBatchForQuality.id, model: 'quality_prediction', timestamp: now, p: q.p, y: q.y, features: q.features })
-  const d = predictDeviationRisk(pickBatchForDeviation)
-  monitor.add({ id: pickBatchForDeviation.id, model: 'deviation_risk', timestamp: now, p: d.p, y: d.y, features: d.features })
-  const e = predictEquipmentFailure(pickEq)
-  monitor.add({ id: pickEq.id, model: 'equipment_failure', timestamp: now, p: e.p, y: e.y, features: e.features })
+  // Record across all batches to include positives and negatives
+  for (const b of batches) {
+    const q = predictQuality(b)
+    monitor.add({ id: b.id, model: 'quality_prediction', timestamp: now, p: q.p, y: q.y, features: q.features })
+    const d = predictDeviationRisk(b)
+    monitor.add({ id: b.id, model: 'deviation_risk', timestamp: now, p: d.p, y: d.y, features: d.features })
+  }
+  // Record for all equipment to mix alert/non-alert
+  for (const eq of equipmentTelemetry) {
+    const e = predictEquipmentFailure(eq)
+    monitor.add({ id: eq.id, model: 'equipment_failure', timestamp: now, p: e.p, y: e.y, features: e.features })
+  }
 }
 
-function deviationScore(batch: BatchData) {
-  const { cppBounds: s, parameters: p } = batch
-  const dist = (
-    Math.abs(p.temperature.current - (s.temperature.min + s.temperature.max) / 2) / ((s.temperature.max - s.temperature.min) / 2) +
-    Math.abs(p.pressure.current - (s.pressure.min + s.pressure.max) / 2) / ((s.pressure.max - s.pressure.min) / 2) +
-    Math.abs(p.pH.current - (s.pH.min + s.pH.max) / 2) / ((s.pH.max - s.pH.min) / 2)
-  ) / 3
-  return dist
-}
+// (deviationScore helper no longer used after broad sampling)

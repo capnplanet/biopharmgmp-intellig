@@ -1,5 +1,6 @@
 import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { batches, getCPPCompliance, equipmentTelemetry, equipmentCalibration } from '@/data/seed'
@@ -66,7 +67,14 @@ function ParamRow({ label, current, min, max, target, unit }: {
   const dist = Math.abs(current - target)
   return (
     <div className={`grid grid-cols-5 gap-2 items-center p-2 rounded-md border ${inSpec ? 'border-border' : 'border-warning/60 bg-warning/5'}`}>
-      <div className="font-medium">{label}</div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="font-medium cursor-help">{label}</div>
+        </TooltipTrigger>
+        <TooltipContent>
+          In-spec if {min.toFixed(2)}–{max.toFixed(2)}{unit}. Δ = |current - target| = {dist.toFixed(2)}{unit}.
+        </TooltipContent>
+      </Tooltip>
       <div className="font-mono">{fmt(current)}{unit}</div>
       <div className="text-muted-foreground text-sm">Target: {fmt(target)}{unit}</div>
       <div className="text-muted-foreground text-sm">Spec: {fmt(min)}-{fmt(max)}{unit}</div>
@@ -138,7 +146,14 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex items-center justify-between">
-            <CardTitle className="text-sm text-muted-foreground">CPP Compliance</CardTitle>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <CardTitle className="text-sm text-muted-foreground cursor-help">CPP Compliance</CardTitle>
+              </TooltipTrigger>
+              <TooltipContent>
+                Per-batch CPP compliance = (# parameters within bounds) / 4. Shows current batch compliance percentage.
+              </TooltipContent>
+            </Tooltip>
             {cpp === 1 ? (
               <CheckCircle className="h-4 w-4 text-success" />
             ) : (
@@ -224,7 +239,14 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle>Temperature Trend</CardTitle>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <CardTitle className="cursor-help">Temperature Trend</CardTitle>
+              </TooltipTrigger>
+              <TooltipContent>
+                Area + line of temperature over recent hours. Dashed orange lines are spec limits (min/max) from batch CPP bounds.
+              </TooltipContent>
+            </Tooltip>
           </CardHeader>
           <CardContent>
             <ChartContainer
@@ -254,7 +276,14 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Pressure Trend</CardTitle>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <CardTitle className="cursor-help">Pressure Trend</CardTitle>
+              </TooltipTrigger>
+              <TooltipContent>
+                Area + line of pressure over recent hours. Dashed orange lines show allowed pressure bounds for this batch.
+              </TooltipContent>
+            </Tooltip>
           </CardHeader>
           <CardContent>
             <ChartContainer
@@ -284,7 +313,14 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>pH Trend</CardTitle>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <CardTitle className="cursor-help">pH Trend</CardTitle>
+              </TooltipTrigger>
+              <TooltipContent>
+                Area + line of pH over recent hours. Dashed orange lines indicate spec limits (min/max) for pH.
+              </TooltipContent>
+            </Tooltip>
           </CardHeader>
           <CardContent>
             <ChartContainer
@@ -330,7 +366,14 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Equipment Vibration (mm/s)</CardTitle>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <CardTitle className="cursor-help">Equipment Vibration (mm/s)</CardTitle>
+              </TooltipTrigger>
+              <TooltipContent>
+                Current RMS vibration per equipment. Alerts indicate transient or sustained elevation relative to baseline.
+              </TooltipContent>
+            </Tooltip>
             <div className="text-xs text-muted-foreground">As of {asOf.toLocaleTimeString()}</div>
           </div>
         </CardHeader>
