@@ -140,6 +140,37 @@ const mockCAPAs: CAPA[] = [
       }
     ]
   }
+  ,
+  {
+    id: 'CAPA-2024-002',
+    title: 'Chromatography Skid Calibration Program',
+    description: 'Address overdue calibration (CRY-001) and due-soon filters (FIL-001) with risk assessment and schedule tightening.',
+    type: 'preventive',
+    priority: 'medium',
+    status: 'draft',
+    dueDate: new Date('2025-02-15T00:00:00Z'),
+    assignedTo: 'Metrology Team',
+    relatedDeviations: [],
+    actions: [
+      { id: 'ACT-003', description: 'Perform calibration on CRY-001', responsible: 'Metrology', dueDate: new Date('2025-01-10T00:00:00Z'), status: 'pending' },
+      { id: 'ACT-004', description: 'Schedule filter train FIL-001 calibration and verification', responsible: 'Maintenance', dueDate: new Date('2025-01-20T00:00:00Z'), status: 'pending' }
+    ]
+  },
+  {
+    id: 'CAPA-2024-003',
+    title: 'Vibration Monitoring Enhancement',
+    description: 'Implement continuous vibration monitoring and alert thresholds for FIL-001 and CRY-001 to prevent equipment-related deviations.',
+    type: 'preventive',
+    priority: 'high',
+    status: 'approved',
+    dueDate: new Date('2025-03-15T00:00:00Z'),
+    assignedTo: 'Engineering Team',
+    relatedDeviations: ['DEV-2024-001'],
+    actions: [
+      { id: 'ACT-005', description: 'Install accelerometers on FIL-001 & CRY-001', responsible: 'Engineering', dueDate: new Date('2025-02-10T00:00:00Z'), status: 'pending' },
+      { id: 'ACT-006', description: 'Define and validate vibration RMS alert thresholds', responsible: 'Quality & Engineering', dueDate: new Date('2025-02-20T00:00:00Z'), status: 'pending' }
+    ]
+  }
 ]
 
 export function QualityManagement() {

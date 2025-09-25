@@ -14,76 +14,9 @@ import {
   Warning
 } from '@phosphor-icons/react'
 
-interface BatchData {
-  id: string
-  product: string
-  productType: 'small-molecule' | 'large-molecule'
-  stage: string
-  progress: number
-  status: 'running' | 'complete' | 'warning' | 'error'
-  startTime: Date
-  equipment: string[]
-  parameters: {
-    temperature: { current: number; target: number; unit: string }
-    pressure: { current: number; target: number; unit: string }
-    pH: { current: number; target: number; unit: string }
-    volume: { current: number; target: number; unit: string }
-  }
-  timeline: {
-    stage: string
-    startTime: Date
-    endTime?: Date
-    status: 'complete' | 'active' | 'pending'
-  }[]
-}
+import { batches as seedBatches, type BatchData } from '@/data/seed'
 
-const mockBatches: BatchData[] = [
-  {
-    id: 'BTH-2024-001',
-    product: 'Monoclonal Antibody X1',
-    productType: 'large-molecule',
-    stage: 'Fermentation',
-    progress: 78,
-    status: 'running',
-    startTime: new Date('2024-01-15T08:00:00Z'),
-    equipment: ['BIO-001', 'CHR-001', 'FIL-001'],
-    parameters: {
-      temperature: { current: 37.2, target: 37.0, unit: '°C' },
-      pressure: { current: 1.2, target: 1.1, unit: 'bar' },
-      pH: { current: 7.1, target: 7.0, unit: 'pH' },
-      volume: { current: 1850, target: 2000, unit: 'L' }
-    },
-    timeline: [
-      { stage: 'Media Preparation', startTime: new Date('2024-01-15T08:00:00Z'), endTime: new Date('2024-01-15T10:00:00Z'), status: 'complete' },
-      { stage: 'Inoculation', startTime: new Date('2024-01-15T10:00:00Z'), endTime: new Date('2024-01-15T11:00:00Z'), status: 'complete' },
-      { stage: 'Fermentation', startTime: new Date('2024-01-15T11:00:00Z'), status: 'active' },
-      { stage: 'Harvest', startTime: new Date('2024-01-16T11:00:00Z'), status: 'pending' },
-      { stage: 'Purification', startTime: new Date('2024-01-16T15:00:00Z'), status: 'pending' }
-    ]
-  },
-  {
-    id: 'BTH-2024-002',
-    product: 'Small Molecule API-Y',
-    productType: 'small-molecule',
-    stage: 'Crystallization',
-    progress: 45,
-    status: 'running',
-    startTime: new Date('2024-01-16T14:30:00Z'),
-    equipment: ['REA-001', 'CRY-001', 'DRY-002'],
-    parameters: {
-      temperature: { current: 25.1, target: 25.0, unit: '°C' },
-      pressure: { current: 0.95, target: 1.0, unit: 'bar' },
-      pH: { current: 3.2, target: 3.0, unit: 'pH' },
-      volume: { current: 500, target: 500, unit: 'L' }
-    },
-    timeline: [
-      { stage: 'Synthesis', startTime: new Date('2024-01-16T14:30:00Z'), endTime: new Date('2024-01-16T18:30:00Z'), status: 'complete' },
-      { stage: 'Crystallization', startTime: new Date('2024-01-16T18:30:00Z'), status: 'active' },
-      { stage: 'Filtration', startTime: new Date('2024-01-17T06:30:00Z'), status: 'pending' },
-      { stage: 'Drying', startTime: new Date('2024-01-17T10:30:00Z'), status: 'pending' }
-    ]
-  }
-]
+const mockBatches: BatchData[] = seedBatches
 
 function ParameterCard({ label, current, target, unit, icon: Icon }: {
   label: string

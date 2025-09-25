@@ -19,6 +19,7 @@ const navigationItems = [
   { id: 'batches' as const, label: 'Batch Monitoring', icon: TestTube },
   { id: 'quality' as const, label: 'Quality Management', icon: ShieldCheck },
   { id: 'analytics' as const, label: 'Analytics', icon: ChartLine },
+  { id: 'advanced-analytics' as const, label: 'Advanced Analytics', icon: ChartLine },
   { id: 'audit' as const, label: 'Audit Trail', icon: FileText },
 ]
 

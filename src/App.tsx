@@ -6,8 +6,9 @@ import { QualityManagement } from './components/QualityManagement'
 import { Analytics } from './components/Analytics'
 import { AuditTrail } from './components/AuditTrail'
 import { Toaster } from '@/components/ui/sonner'
+import { AdvancedAnalytics } from '@/components/AdvancedAnalytics'
 
-export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'audit'
+export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'advanced-analytics' | 'audit'
 
 function App() {
   const [activeTab, setActiveTab] = useKV<NavigationItem>('active-tab', 'dashboard')
@@ -22,6 +23,8 @@ function App() {
         return <QualityManagement />
       case 'analytics':
         return <Analytics />
+      case 'advanced-analytics':
+        return <AdvancedAnalytics />
       case 'audit':
         return <AuditTrail />
       default:
