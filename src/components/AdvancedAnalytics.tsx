@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Gauge, Wrench, Pulse, TrendUp, Warning, CheckCircle } from '@phosphor-icons/react'
 import { batches, equipmentCalibration, equipmentTelemetry, getCPPCompliance } from '@/data/seed'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
 const fmtPct = (n: number) => `${(n * 100).toFixed(0)}%`
 const fmt = (n: number, digits = 1) => n.toFixed(digits)
@@ -34,7 +35,14 @@ export function AdvancedAnalytics() {
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="flex items-center justify-between">
-                <CardTitle className="text-sm text-muted-foreground">Average CPP Compliance</CardTitle>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <CardTitle className="text-sm text-muted-foreground cursor-help">Average CPP Compliance</CardTitle>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Mean of per-batch CPP compliance across active batches. For each batch, compliance = (# CPPs within bounds) / (total CPPs: temperature, pressure, pH, volume).
+                  </TooltipContent>
+                </Tooltip>
                 <CheckCircle className="h-4 w-4 text-success" />
               </CardHeader>
               <CardContent>
@@ -44,7 +52,14 @@ export function AdvancedAnalytics() {
             </Card>
             <Card>
               <CardHeader className="flex items-center justify-between">
-                <CardTitle className="text-sm text-muted-foreground">Batches In Spec</CardTitle>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <CardTitle className="text-sm text-muted-foreground cursor-help">Batches In Spec</CardTitle>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Count of batches where compliance = 1.0 (all monitored CPPs within min–max bounds) over total batches displayed.
+                  </TooltipContent>
+                </Tooltip>
                 <TrendUp className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
@@ -54,7 +69,14 @@ export function AdvancedAnalytics() {
             </Card>
             <Card>
               <CardHeader className="flex items-center justify-between">
-                <CardTitle className="text-sm text-muted-foreground">Open Process Warnings</CardTitle>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <CardTitle className="text-sm text-muted-foreground cursor-help">Open Process Warnings</CardTitle>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Number of batches currently marked as "warning" status, indicating a potential CPP excursion or abnormal drift.
+                  </TooltipContent>
+                </Tooltip>
                 <Warning className="h-4 w-4 text-warning" />
               </CardHeader>
               <CardContent>
@@ -98,7 +120,14 @@ export function AdvancedAnalytics() {
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="flex items-center justify-between">
-                <CardTitle className="text-sm text-muted-foreground">Total Uptime</CardTitle>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <CardTitle className="text-sm text-muted-foreground cursor-help">Total Uptime</CardTitle>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Sum of uptimeHours across all monitored equipment. Updated continuously by the digital twin simulation.
+                  </TooltipContent>
+                </Tooltip>
                 <Gauge className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
@@ -108,7 +137,14 @@ export function AdvancedAnalytics() {
             </Card>
             <Card>
               <CardHeader className="flex items-center justify-between">
-                <CardTitle className="text-sm text-muted-foreground">Vibration Alerts</CardTitle>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <CardTitle className="text-sm text-muted-foreground cursor-help">Vibration Alerts</CardTitle>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Count of equipment where vibrationAlert is true (elevated RMS or transient spike beyond threshold).
+                  </TooltipContent>
+                </Tooltip>
                 <Pulse className="h-4 w-4 text-warning" />
               </CardHeader>
               <CardContent>
@@ -118,7 +154,14 @@ export function AdvancedAnalytics() {
             </Card>
             <Card>
               <CardHeader className="flex items-center justify-between">
-                <CardTitle className="text-sm text-muted-foreground">Calibration Status</CardTitle>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <CardTitle className="text-sm text-muted-foreground cursor-help">Calibration Status</CardTitle>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Counts from equipmentCalibration: "overdue" where status === 'overdue'; "due soon" where status === 'due-soon'.
+                  </TooltipContent>
+                </Tooltip>
                 <Wrench className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { 
@@ -133,31 +134,67 @@ export function Dashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <KPICard
-          title="Active Batches"
-          value={activeBatches.filter(b => b.status === 'running').length}
-          change="+2 from yesterday"
-          icon={TestTube}
-        />
-        <KPICard
-          title="Equipment Online"
-          value={`${equipment.filter(e => e.status === 'online').length}/${equipment.length}`}
-          change="98.5% uptime"
-          icon={Gear}
-        />
-        <KPICard
-          title="Open Deviations"
-          value="3"
-          change="2 pending investigation"
-          status="warning"
-          icon={Warning}
-        />
-        <KPICard
-          title="Quality Score"
-          value="97.8%"
-          change="+0.3% this week"
-          icon={CheckCircle}
-        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>
+              <KPICard
+                title="Active Batches"
+                value={activeBatches.filter(b => b.status === 'running').length}
+                change="+2 from yesterday"
+                icon={TestTube}
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            Count of batches with status === 'running'. Updated by the live digital twin.
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>
+              <KPICard
+                title="Equipment Online"
+                value={`${equipment.filter(e => e.status === 'online').length}/${equipment.length}`}
+                change="98.5% uptime"
+                icon={Gear}
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            Online equipment over total equipment in this summary. Represents current availability.
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>
+              <KPICard
+                title="Open Deviations"
+                value="3"
+                change="2 pending investigation"
+                status="warning"
+                icon={Warning}
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            Number of deviation records currently open in the quality system (demo placeholder).
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>
+              <KPICard
+                title="Quality Score"
+                value="97.8%"
+                change="+0.3% this week"
+                icon={CheckCircle}
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            Composite indicator (demo) aggregating CPP compliance and first pass yield. For illustration only.
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
