@@ -2,8 +2,25 @@ import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { batches, getCPPCompliance } from '@/data/seed'
+import { batches, getCPPCompliance, equipmentTelemetry } from '@/data/seed'
 import { ArrowLeft, ChartLine, Warning, CheckCircle } from '@phosphor-icons/react'
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart'
+import {
+  AreaChart,
+  Area,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  ReferenceLine,
+  BarChart,
+  Bar,
+  Cell,
+} from 'recharts'
 
 type Props = {
   batchId: string
@@ -12,6 +29,27 @@ type Props = {
 
 const fmtPct = (n: number) => `${(n * 100).toFixed(0)}%`
 const fmt = (n: number, digits = 2) => n.toFixed(digits)
+
+type SeriesPoint = { t: number; label: string; value: number }
+
+// Deterministic, lightweight series generator for demo visuals.
+function genSeries(key: string, current: number, target: number, min: number, max: number, points = 24): SeriesPoint[] {
+  const out: SeriesPoint[] = []
+  const span = max - min || Math.max(Math.abs(target), 1)
+  const driftSteps = Math.max(6, Math.floor(points / 4))
+  const basePhase = key.split('').reduce((acc, ch, i) => acc + ch.charCodeAt(0) * (i + 1), 0) % 360
+  for (let i = 0; i < points; i++) {
+    // Smooth approach from target to current toward the end of the series
+    const blend = Math.max(0, (i - (points - driftSteps)) / driftSteps)
+    const center = target * (1 - blend) + current * blend
+    // Small bounded oscillation using sin/cos, phase-shifted by key
+    const rad = (basePhase + i * 12) * (Math.PI / 180)
+    const noise = Math.sin(rad) * 0.015 * span + Math.cos(rad * 0.7) * 0.01 * span
+    const v = center + noise
+    out.push({ t: i, label: `${i - (points - 1)}h`, value: v })
+  }
+  return out
+}
 
 function ParamRow({ label, current, min, max, target, unit }: {
   label: string
@@ -61,6 +99,16 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
 
   const cpp = getCPPCompliance(batch)
   const { parameters: p, cppBounds: s } = batch
+  const tempSeries = genSeries(`${batch.id}-temp`, p.temperature.current, p.temperature.target, s.temperature.min, s.temperature.max)
+  const pressSeries = genSeries(`${batch.id}-press`, p.pressure.current, p.pressure.target, s.pressure.min, s.pressure.max)
+  const phSeries = genSeries(`${batch.id}-ph`, p.pH.current, p.pH.target, s.pH.min, s.pH.max)
+
+  const eqData = batch.equipment
+    .map((id) => {
+      const t = equipmentTelemetry.find((e) => e.id === id)
+      return t ? { id, vibration: t.vibrationRMS, alert: t.vibrationAlert } : null
+    })
+    .filter(Boolean) as { id: string; vibration: number; alert: boolean }[]
 
   return (
     <div className="p-6 space-y-6 overflow-auto h-full">
@@ -112,6 +160,76 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
         </Card>
       </div>
 
+      {/* Trends */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Temperature Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer
+              className="h-40"
+              config={{ temperature: { color: '#3b82f6', label: 'Temperature' } }}
+            >
+              <AreaChart data={tempSeries} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis dataKey="t" hide tickLine={false} axisLine={false} />
+                <YAxis width={28} tickLine={false} axisLine={false} domain={[s.temperature.min - 0.5, s.temperature.max + 0.5]} />
+                <ReferenceLine y={s.temperature.min} stroke="#f59e0b" strokeDasharray="4 4" />
+                <ReferenceLine y={s.temperature.max} stroke="#f59e0b" strokeDasharray="4 4" />
+                <ChartTooltip content={<ChartTooltipContent nameKey="temperature" />} />
+                <Area type="monotone" dataKey="value" name="Temperature" stroke="var(--color-temperature)" fill="var(--color-temperature)" fillOpacity={0.15} strokeWidth={2} />
+                <Line type="monotone" dataKey="value" name="Temperature" stroke="var(--color-temperature)" dot={false} strokeWidth={2} />
+              </AreaChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Pressure Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer
+              className="h-40"
+              config={{ pressure: { color: '#10b981', label: 'Pressure' } }}
+            >
+              <AreaChart data={pressSeries} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis dataKey="t" hide tickLine={false} axisLine={false} />
+                <YAxis width={28} tickLine={false} axisLine={false} domain={[s.pressure.min - 0.1, s.pressure.max + 0.1]} />
+                <ReferenceLine y={s.pressure.min} stroke="#f59e0b" strokeDasharray="4 4" />
+                <ReferenceLine y={s.pressure.max} stroke="#f59e0b" strokeDasharray="4 4" />
+                <ChartTooltip content={<ChartTooltipContent nameKey="pressure" />} />
+                <Area type="monotone" dataKey="value" name="Pressure" stroke="var(--color-pressure)" fill="var(--color-pressure)" fillOpacity={0.15} strokeWidth={2} />
+                <Line type="monotone" dataKey="value" name="Pressure" stroke="var(--color-pressure)" dot={false} strokeWidth={2} />
+              </AreaChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>pH Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer
+              className="h-40"
+              config={{ pH: { color: '#8b5cf6', label: 'pH' } }}
+            >
+              <AreaChart data={phSeries} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis dataKey="t" hide tickLine={false} axisLine={false} />
+                <YAxis width={28} tickLine={false} axisLine={false} domain={[s.pH.min - 0.1, s.pH.max + 0.1]} />
+                <ReferenceLine y={s.pH.min} stroke="#f59e0b" strokeDasharray="4 4" />
+                <ReferenceLine y={s.pH.max} stroke="#f59e0b" strokeDasharray="4 4" />
+                <ChartTooltip content={<ChartTooltipContent nameKey="pH" />} />
+                <Area type="monotone" dataKey="value" name="pH" stroke="var(--color-pH)" fill="var(--color-pH)" fillOpacity={0.15} strokeWidth={2} />
+                <Line type="monotone" dataKey="value" name="pH" stroke="var(--color-pH)" dot={false} strokeWidth={2} />
+              </AreaChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Critical Process Parameters</CardTitle>
@@ -121,6 +239,35 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
           <ParamRow label="Pressure" current={p.pressure.current} min={s.pressure.min} max={s.pressure.max} target={p.pressure.target} unit={p.pressure.unit} />
           <ParamRow label="pH" current={p.pH.current} min={s.pH.min} max={s.pH.max} target={p.pH.target} unit={p.pH.unit} />
           <ParamRow label="Volume" current={p.volume.current} min={s.volume.min} max={s.volume.max} target={p.volume.target} unit={p.volume.unit} />
+        </CardContent>
+      </Card>
+
+      {/* Equipment health */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Equipment Vibration (mm/s)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {eqData.length === 0 ? (
+            <div className="text-muted-foreground text-sm">No equipment telemetry available.</div>
+          ) : (
+            <ChartContainer
+              className="h-48"
+              config={{ ok: { color: '#10b981' }, warn: { color: '#f59e0b' } }}
+            >
+              <BarChart data={eqData} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis dataKey="id" axisLine={false} tickLine={false} />
+                <YAxis width={28} tickLine={false} axisLine={false} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="vibration" name="Vibration (mm/s)">
+                  {eqData.map((d) => (
+                    <Cell key={d.id} fill={d.alert ? 'var(--color-warn)' : 'var(--color-ok)'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ChartContainer>
+          )}
         </CardContent>
       </Card>
     </div>
