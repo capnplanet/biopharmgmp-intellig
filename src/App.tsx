@@ -1,5 +1,5 @@
 import { useKV } from '@github/spark/hooks'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { Dashboard } from './components/Dashboard'
 import { BatchMonitoring } from './components/BatchMonitoring'
@@ -14,6 +14,10 @@ import { CapaReview } from '@/components/CapaReview'
 import { CapaTimeline } from '@/components/CapaTimeline'
 import { DeviationDetails } from '@/components/DeviationDetails'
 import { ChangeControlDetails } from '@/components/ChangeControlDetails'
+import { startDigitalTwin } from '@/lib/digitalTwin'
+import { Button } from '@/components/ui/button'
+import { Slider } from '@/components/ui/slider'
+import { Play, Pause } from '@phosphor-icons/react'
 
 export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'advanced-analytics' | 'audit'
 
@@ -136,6 +140,8 @@ function App() {
       }} />
       <main className="flex-1 overflow-hidden">
         {renderContent()}
+        {/* Digital Twin Controls (floating) */}
+        <TwinControls />
       </main>
       <Toaster />
     </div>
@@ -143,3 +149,51 @@ function App() {
 }
 
 export default App
+
+function TwinControls() {
+  // Start twin on mount
+  const [running, setRunning] = useState(true)
+  const [speed, setSpeed] = useState(60)
+  useEffect(() => {
+    const twin = startDigitalTwin({ tickMs: 2000, simSecondsPerTick: speed, monitorEverySimSeconds: 30 })
+    return () => twin.stop()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Update speed reactively
+  useEffect(() => {
+    const twin = startDigitalTwin()
+    twin.setSpeed(speed)
+  }, [speed])
+
+  const toggle = () => {
+    const twin = startDigitalTwin()
+    if (running) {
+      twin.stop()
+      setRunning(false)
+    } else {
+      twin.start()
+      setRunning(true)
+    }
+  }
+
+  return (
+    <div className="fixed bottom-4 right-4 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border rounded-lg shadow p-3 w-[280px]">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs font-medium text-muted-foreground">Digital Twin</div>
+        <Button variant="outline" size="icon" onClick={toggle} aria-label={running ? 'Pause twin' : 'Resume twin'}>
+          {running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        </Button>
+      </div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>Simulation speed</span>
+          <span>{speed}s/tick</span>
+        </div>
+        <div className="px-1">
+          <Slider min={5} max={600} step={5} value={[speed]} onValueChange={(v) => setSpeed(v[0] || 60)} />
+        </div>
+      </div>
+    </div>
+  )
+}
