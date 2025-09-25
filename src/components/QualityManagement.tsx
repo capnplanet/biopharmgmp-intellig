@@ -302,27 +302,57 @@ export function QualityManagement() {
   if (!llmPrompt || !spark?.llm) throw new Error('AI helpers not available')
       const sources = buildInvestigationSources(deviation.batchId)
       const prompt = llmPrompt`
-        You are a pharmaceutical quality expert AI assistant. Analyze this deviation using the provided SOURCES.
+        You are a pharmaceutical quality expert AI assistant specializing in GMP compliance and root cause analysis. Analyze this deviation using the provided SOURCES to generate a comprehensive, actionable investigation report.
 
-        Deviation:
+        DEVIATION DETAILS:
         - Title: ${deviation.title}
         - Description: ${deviation.description}
         - Batch ID: ${deviation.batchId}
         - Severity: ${deviation.severity}
+        - Status: ${deviation.status}
+        - Reported By: ${deviation.reportedBy}
+        - Date: ${deviation.reportedDate}
 
-        SOURCES (each has an id like [S1]):
+        INVESTIGATION SOURCES (each has an id like [S1]):
         ${sourcesToString(sources)}
 
-        Instructions:
-        - Base your reasoning strictly on the SOURCES where possible.
-        - When you use a fact from a source, cite it inline as [S#]. Example: "Temperature exceeded limits [S1]".
-        - Provide:
-          1. Potential root causes (3-5)
-          2. Investigation steps to confirm root cause
-          3. Immediate containment actions
-          4. Recommended corrective and preventive actions
-          5. Risk assessment for product quality impact
-        - Keep responses concise and actionable.
+        ANALYSIS REQUIREMENTS:
+        You must provide a thorough analysis that is:
+        1. EVIDENCE-BASED: Base all conclusions strictly on the PROVIDED SOURCES
+        2. COMPLIANT: Follow 21 CFR Part 11, GMP, and ICH Q7 requirements
+        3. TRACEABLE: Cite sources inline as [S#] for every factual claim
+        4. ACTIONABLE: Provide specific, implementable recommendations
+
+        REQUIRED OUTPUT SECTIONS:
+
+        **1. IMMEDIATE ASSESSMENT**
+        - Product impact evaluation with specific risk level
+        - Batch disposition recommendation (release/reject/investigate)
+        - Immediate containment actions required
+
+        **2. ROOT CAUSE ANALYSIS**
+        - Primary root cause (most likely based on evidence)
+        - Contributing factors (2-3 secondary causes)
+        - Evidence supporting each cause with source citations
+
+        **3. INVESTIGATION PLAN** 
+        - Specific tests/inspections required to confirm root cause
+        - Additional records to review
+        - Timeline for completion
+        - Responsible parties
+
+        **4. CORRECTIVE ACTIONS (CAPA)**
+        - Immediate corrections (fix the problem)
+        - Corrective actions (prevent recurrence)
+        - Preventive actions (system improvements)
+        - Effectiveness monitoring plan
+
+        **5. REGULATORY CONSIDERATIONS**
+        - Reportability assessment (internal/external notifications)
+        - Documentation requirements
+        - Validation impacts
+
+        FORMAT: Use clear headings, bullet points, and maintain professional tone suitable for regulatory review.
       `
       const analysis = await spark.llm(prompt, 'gpt-4o')
       log('AI Analysis Generated', 'quality', `AI analysis for deviation ${deviation.id}`, { recordId: deviation.id })
