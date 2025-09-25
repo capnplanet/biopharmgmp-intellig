@@ -67,7 +67,7 @@ const mockModels: PredictiveModel[] = [
         value: 15.3,
         confidence: 0.87,
         timestamp: new Date(),
-        explanation: 'Vibration patterns and temperature fluctuations in BIO-001 suggest potential bearing issues. Recommend maintenance inspection within 72 hours.'
+  explanation: 'Vibration patterns and temperature fluctuations in BIO-002 suggest potential bearing issues. Recommend maintenance inspection within 72 hours.'
       }
     ]
   },
@@ -299,7 +299,7 @@ export function Analytics() {
                     <span className="font-medium text-red-900">High Risk Alert</span>
                   </div>
                   <p className="text-sm text-red-800">
-                    Equipment failure prediction indicates potential issues with Bioreactor BIO-001. 
+                    Equipment failure prediction indicates potential issues with Bioreactor BIO-002. 
                     Immediate inspection recommended to prevent production disruption.
                   </p>
                 </div>

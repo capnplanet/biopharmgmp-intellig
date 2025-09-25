@@ -62,6 +62,13 @@ export const equipmentCalibration: EquipmentCalibration[] = [
     status: 'calibrated',
   },
   {
+    id: 'BIO-002',
+    name: 'Bioreactor 2',
+    lastCalibration: new Date('2024-11-20T00:00:00Z'),
+    nextDue: new Date('2025-11-20T00:00:00Z'),
+    status: 'calibrated',
+  },
+  {
     id: 'CHR-001',
     name: 'Chromatography Skid A',
     lastCalibration: new Date('2024-08-15T00:00:00Z'),
@@ -69,10 +76,24 @@ export const equipmentCalibration: EquipmentCalibration[] = [
     status: 'calibrated',
   },
   {
+    id: 'CHR-002',
+    name: 'Chromatography Skid B',
+    lastCalibration: new Date('2024-08-05T00:00:00Z'),
+    nextDue: new Date('2025-08-05T00:00:00Z'),
+    status: 'calibrated',
+  },
+  {
     id: 'FIL-001',
     name: 'Filter Train 1',
     lastCalibration: new Date('2024-05-10T00:00:00Z'),
     nextDue: new Date('2025-05-10T00:00:00Z'),
+    status: 'due-soon',
+  },
+  {
+    id: 'FIL-002',
+    name: 'Filter Train 2',
+    lastCalibration: new Date('2024-05-05T00:00:00Z'),
+    nextDue: new Date('2025-05-05T00:00:00Z'),
     status: 'due-soon',
   },
   {
@@ -100,8 +121,11 @@ export const equipmentCalibration: EquipmentCalibration[] = [
 
 export const equipmentTelemetry: EquipmentTelemetry[] = [
   { id: 'BIO-001', vibrationRMS: 1.6, vibrationAlert: false, temperatureVar: 0.18, uptimeHours: 1800 },
+  { id: 'BIO-002', vibrationRMS: 1.9, vibrationAlert: false, temperatureVar: 0.2, uptimeHours: 1620 },
   { id: 'CHR-001', vibrationRMS: 2.1, vibrationAlert: false, temperatureVar: 0.25, uptimeHours: 1420 },
+  { id: 'CHR-002', vibrationRMS: 2.0, vibrationAlert: false, temperatureVar: 0.23, uptimeHours: 1380 },
   { id: 'FIL-001', vibrationRMS: 3.6, vibrationAlert: true, temperatureVar: 0.31, uptimeHours: 980 },
+  { id: 'FIL-002', vibrationRMS: 3.1, vibrationAlert: false, temperatureVar: 0.29, uptimeHours: 910 },
   { id: 'REA-001', vibrationRMS: 2.8, vibrationAlert: false, temperatureVar: 0.22, uptimeHours: 650 },
   { id: 'CRY-001', vibrationRMS: 4.9, vibrationAlert: true, temperatureVar: 0.44, uptimeHours: 420 },
   { id: 'DRY-002', vibrationRMS: 2.4, vibrationAlert: false, temperatureVar: 0.28, uptimeHours: 300 },
@@ -173,7 +197,7 @@ export const batches: BatchData[] = [
     progress: 62,
     status: 'warning',
     startTime: new Date('2024-01-16T07:45:00Z'),
-    equipment: ['BIO-001', 'CHR-001', 'FIL-001'],
+    equipment: ['BIO-002', 'CHR-002', 'FIL-002'],
     parameters: {
       // Reflecting deviation DEV-2024-001: temperature excursion
       temperature: { current: 38.2, target: 37.0, unit: '°C' },

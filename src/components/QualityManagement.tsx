@@ -155,8 +155,8 @@ const mockCAPAs: CAPA[] = [
   ,
   {
     id: 'CAPA-2024-002',
-    title: 'Chromatography Skid Calibration Program',
-    description: 'Address overdue calibration (CRY-001) and due-soon filters (FIL-001) with risk assessment and schedule tightening.',
+    title: 'Chromatography Skid Calibration (CRY-001) Program',
+    description: 'Address overdue calibration on CRY-001 and due-soon filters (FIL-001) with risk assessment and schedule tightening.',
     type: 'preventive',
     priority: 'medium',
     status: 'draft',
@@ -174,8 +174,8 @@ const mockCAPAs: CAPA[] = [
   },
   {
     id: 'CAPA-2024-003',
-    title: 'Vibration Monitoring Enhancement',
-    description: 'Implement continuous vibration monitoring and alert thresholds for FIL-001 and CRY-001 to prevent equipment-related deviations.',
+    title: 'Vibration Monitoring Enhancement (BIO-002, FIL-002)',
+    description: 'Implement continuous vibration monitoring and alert thresholds for BIO-002 and FIL-002 to prevent equipment-related deviations.',
     type: 'preventive',
     priority: 'high',
     status: 'approved',
@@ -183,7 +183,7 @@ const mockCAPAs: CAPA[] = [
     assignedTo: 'Engineering Team',
     relatedDeviations: ['DEV-2024-001'],
     actions: [
-      { id: 'ACT-005', description: 'Install accelerometers on FIL-001 & CRY-001', responsible: 'Engineering', dueDate: new Date('2025-02-10T00:00:00Z'), status: 'pending' },
+  { id: 'ACT-005', description: 'Install accelerometers on BIO-002 & FIL-002', responsible: 'Engineering', dueDate: new Date('2025-02-10T00:00:00Z'), status: 'pending' },
       { id: 'ACT-006', description: 'Define and validate vibration RMS alert thresholds', responsible: 'Quality & Engineering', dueDate: new Date('2025-02-20T00:00:00Z'), status: 'pending' }
     ],
     effectivenessCheck: {
@@ -206,7 +206,7 @@ export function QualityManagement() {
       requestedBy: 'Engineering',
       requestedDate: new Date('2025-01-05T00:00:00Z'),
       impactedBatches: ['BTH-2024-003'],
-      impactedEquipment: ['BIO-001'],
+      impactedEquipment: ['BIO-002'],
       riskLevel: 'medium'
     },
     {

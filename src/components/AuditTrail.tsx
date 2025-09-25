@@ -68,8 +68,8 @@ const mockAuditEvents: AuditEvent[] = [
     userRole: 'System',
     action: 'Equipment Status Change',
     module: 'equipment',
-    details: 'Bioreactor BIO-001 status changed from RUNNING to WARNING due to temperature deviation',
-    recordId: 'BIO-001',
+    details: 'Bioreactor BIO-002 status changed from RUNNING to WARNING due to temperature deviation',
+    recordId: 'BIO-002',
     ipAddress: '192.168.1.1',
     sessionId: 'sess-system-001',
     outcome: 'warning'

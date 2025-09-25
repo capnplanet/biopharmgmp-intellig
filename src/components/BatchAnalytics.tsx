@@ -160,6 +160,37 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
         </Card>
       </div>
 
+      {/* Quick Equipment Panel */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Equipment Summary</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {batch.equipment.map((id) => (
+              <Badge key={id} variant="outline" className="font-mono">{id}</Badge>
+            ))}
+          </div>
+          {eqData.length ? (
+            <div className="grid gap-3 md:grid-cols-3">
+              {eqData.map((e) => (
+                <div key={e.id} className="p-3 border rounded-lg flex items-center justify-between">
+                  <div className="font-medium">{e.id}</div>
+                  <div className="flex items-center gap-4 text-sm">
+                    <div>Vibration: {fmt(e.vibration)} mm/s</div>
+                    <Badge className={e.alert ? 'bg-warning text-warning-foreground' : 'bg-success text-success-foreground'}>
+                      {e.alert ? 'Alert' : 'OK'}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">No equipment telemetry available.</div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Trends */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
