@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -103,12 +103,24 @@ const mockAuditEvents: AuditEvent[] = [
 ]
 
 export function AuditTrail() {
-  const [auditEvents] = useKV<AuditEvent[]>('audit-events', mockAuditEvents)
+  const [auditEvents, setAuditEvents] = useKV<AuditEvent[]>('audit-events', mockAuditEvents)
   const [filteredEvents, setFilteredEvents] = useState<AuditEvent[]>(auditEvents || [])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedModule, setSelectedModule] = useState<string>('all')
   const [selectedOutcome, setSelectedOutcome] = useState<string>('all')
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
+
+  // hydrate timestamps if persisted as strings
+  useEffect(() => {
+    if (!auditEvents?.length) return
+    if (typeof (auditEvents[0].timestamp as unknown) === 'string') {
+      const hydrated = (auditEvents || []).map(e => ({ ...e, timestamp: new Date(e.timestamp as unknown as string) }))
+      setAuditEvents(hydrated)
+      setFilteredEvents(hydrated)
+      return
+    }
+    setFilteredEvents(auditEvents)
+  }, [auditEvents, setAuditEvents])
 
   const handleSearch = () => {
     let filtered = auditEvents || []

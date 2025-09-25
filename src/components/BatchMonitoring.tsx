@@ -16,6 +16,7 @@ import {
 } from '@phosphor-icons/react'
 
 import { batches as seedBatches, type BatchData } from '@/data/seed'
+import { useAuditLogger } from '@/hooks/use-audit'
 
 const mockBatches: BatchData[] = seedBatches
 
@@ -91,6 +92,7 @@ function BatchTimeline({ timeline }: { timeline: BatchData['timeline'] }) {
 }
 
 export function BatchMonitoring() {
+  const { log } = useAuditLogger()
   const [, setRoute] = useKV<string>('route', '')
   const [selectedBatch, setSelectedBatch] = useState<BatchData>(mockBatches[0])
   const [, setCurrentTime] = useState(new Date())
@@ -156,11 +158,11 @@ export function BatchMonitoring() {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setRoute(`batch/${selectedBatch.id}/view`)}>
+                  <Button variant="outline" size="sm" onClick={() => { setRoute(`batch/${selectedBatch.id}/view`); log('View Batch Details', 'batch', `Viewed details for ${selectedBatch.id}`, { recordId: selectedBatch.id }) }}>
                     <Eye className="h-4 w-4 mr-2" />
                     View Details
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => setRoute(`batch/${selectedBatch.id}/analytics`)}>
+                  <Button variant="outline" size="sm" onClick={() => { setRoute(`batch/${selectedBatch.id}/analytics`); log('Open Batch Analytics', 'batch', `Opened analytics for ${selectedBatch.id}`, { recordId: selectedBatch.id }) }}>
                     <TrendUp className="h-4 w-4 mr-2" />
                     Analytics
                   </Button>

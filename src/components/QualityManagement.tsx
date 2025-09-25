@@ -19,6 +19,7 @@ import {
 import { toast } from 'sonner'
 import { buildInvestigationSources, sourcesToString } from '@/data/archive'
 import type { ChangeControl } from '@/components/ChangeControlDetails'
+import { useAuditLogger } from '@/hooks/use-audit'
 
 type WindowSpark = {
   llmPrompt: (strings: TemplateStringsArray, ...expr: unknown[]) => unknown
@@ -220,6 +221,7 @@ export function QualityManagement() {
       riskLevel: 'high'
     }
   ])
+  const { log } = useAuditLogger()
   const [, setSelectedDeviation] = useState<Deviation | null>(null)
   const [investigationNotes, setInvestigationNotes] = useState('')
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false)
@@ -323,11 +325,13 @@ export function QualityManagement() {
         - Keep responses concise and actionable.
       `
       const analysis = await spark.llm(prompt, 'gpt-4o')
+      log('AI Analysis Generated', 'quality', `AI analysis for deviation ${deviation.id}`, { recordId: deviation.id })
       const sourcesList = '\n\nSources:\n' + sources.map(s => `${s.id} — ${s.title}`).join('\n')
       setAiAnalysis(analysis + sourcesList)
     } catch {
       setAiAnalysis('Error generating analysis. Please try again.')
       toast.error('Failed to generate AI analysis')
+      log('AI Analysis Error', 'quality', `AI analysis failed for deviation ${deviation.id}`, { recordId: deviation.id, outcome: 'failure' })
     }
   }
 
@@ -340,6 +344,7 @@ export function QualityManagement() {
       )
     )
     toast.success(`Deviation ${deviationId} status updated to ${newStatus}`)
+    log('Deviation Status Updated', 'deviation', `Set status to ${newStatus}`, { recordId: deviationId })
   }
 
   return (
@@ -619,11 +624,11 @@ export function QualityManagement() {
                       )}
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setRoute(`capa/${capa.id}/review`)}>
+                      <Button variant="outline" size="sm" onClick={() => { setRoute(`capa/${capa.id}/review`); log('Open CAPA Review', 'capa', `Opened CAPA ${capa.id}`, { recordId: capa.id }) }}>
                         <CheckCircle className="h-4 w-4 mr-2" />
                         Review
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => setRoute(`capa/${capa.id}/timeline`)}>
+                      <Button variant="outline" size="sm" onClick={() => { setRoute(`capa/${capa.id}/timeline`); log('Open CAPA Timeline', 'capa', `Opened CAPA ${capa.id}`, { recordId: capa.id }) }}>
                         <Clock className="h-4 w-4 mr-2" />
                         Timeline
                       </Button>
@@ -653,6 +658,7 @@ export function QualityManagement() {
               }
               setChangeControls(prev => [newCC, ...(prev || [])])
               setRoute(`cc/${id}`)
+              log('Create Change Control', 'change-control', `Created ${id}`, { recordId: id })
             }}>
               <Plus className="h-4 w-4 mr-2" />
               Create Change Request
@@ -674,7 +680,7 @@ export function QualityManagement() {
                     <div className="text-sm">Impacted batches: {cc.impactedBatches.join(', ') || 'None'} • Impacted equipment: {cc.impactedEquipment.join(', ') || 'None'}</div>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setRoute(`cc/${cc.id}`)}>
+                    <Button variant="outline" size="sm" onClick={() => { setRoute(`cc/${cc.id}`); log('Open Change Control', 'change-control', `Opened ${cc.id}`, { recordId: cc.id }) }}>
                       <FileText className="h-4 w-4 mr-2" />
                       View
                     </Button>
