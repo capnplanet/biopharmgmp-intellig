@@ -18,6 +18,7 @@ import {
   Info
 } from '@phosphor-icons/react'
 import { equipmentTelemetry } from '@/data/seed'
+import { monitor, sampleAndRecordPredictions } from '@/lib/modeling'
 
 interface PredictiveModel {
   id: string
@@ -274,6 +275,14 @@ export function Analytics() {
     return () => clearInterval(timer)
   }, [])
 
+  // Minimal live monitoring: sample and record predictions periodically
+  useEffect(() => {
+    // seed once at mount
+    sampleAndRecordPredictions()
+    const id = setInterval(() => sampleAndRecordPredictions(), 30000)
+    return () => clearInterval(id)
+  }, [])
+
   // Populate dynamic explanation text for equipment failure model
   const modelsWithDynamic = React.useMemo(() => {
     return models.map(m => {
@@ -398,6 +407,100 @@ export function Analytics() {
                 </li>
               </ul>
             </section>
+
+            <section>
+              <h4 className="font-medium mb-1">Glossary (Definitions)</h4>
+              <dl className="grid gap-2">
+                <div>
+                  <dt className="font-medium">CPP (Critical Process Parameter)</dt>
+                  <dd className="text-muted-foreground">A process parameter whose variability can impact product quality and should be monitored or controlled.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">EWMA</dt>
+                  <dd className="text-muted-foreground">Exponentially Weighted Moving Average; a smoother that emphasizes recent data to track gradual shifts.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">RMS (Root Mean Square)</dt>
+                  <dd className="text-muted-foreground">A measure of signal magnitude; in vibration analysis, higher RMS often indicates increased mechanical energy and potential faults.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Crest Factor</dt>
+                  <dd className="text-muted-foreground">Peak amplitude divided by RMS; highlights spiky or impulsive events in vibration signals.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Kurtosis</dt>
+                  <dd className="text-muted-foreground">A measure of “tailedness”; elevated kurtosis can indicate impulsive faults (e.g., bearing defects).</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Spectral Band Energy</dt>
+                  <dd className="text-muted-foreground">Energy in specific frequency ranges; used to detect known fault signatures in rotating machinery.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">ARIMA/SARIMA</dt>
+                  <dd className="text-muted-foreground">Time-series models for forecasting; SARIMA extends ARIMA with seasonal effects.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">LSTM / Temporal CNN</dt>
+                  <dd className="text-muted-foreground">Neural architectures that model sequences and temporal dependencies.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Isolation Forest</dt>
+                  <dd className="text-muted-foreground">Anomaly detection method that isolates outliers by random partitioning.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Robust PCA</dt>
+                  <dd className="text-muted-foreground">Dimensionality reduction separating low-rank structure from sparse anomalies.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Autoencoder</dt>
+                  <dd className="text-muted-foreground">Neural network that learns compressed representations; reconstruction error can flag anomalies.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Platt Scaling / Isotonic Regression</dt>
+                  <dd className="text-muted-foreground">Post-hoc probability calibration techniques to align predicted probabilities with observed frequencies.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Brier Score</dt>
+                  <dd className="text-muted-foreground">Mean squared error of probabilistic predictions; lower is better (perfect calibration is 0 if predictions are certain and correct).</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">ECE (Expected Calibration Error)</dt>
+                  <dd className="text-muted-foreground">A summary of how predicted confidences differ from actual accuracies across bins.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">AUROC</dt>
+                  <dd className="text-muted-foreground">Area Under the ROC Curve; probability that a randomly chosen positive ranks higher than a negative.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">PSI (Population Stability Index)</dt>
+                  <dd className="text-muted-foreground">Measures shift between two distributions; used for drift monitoring.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">KS / AD Tests</dt>
+                  <dd className="text-muted-foreground">Kolmogorov–Smirnov and Anderson–Darling tests compare distributions to detect drift.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">SHAP</dt>
+                  <dd className="text-muted-foreground">A method for attributing feature contributions to individual predictions.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Counterfactuals</dt>
+                  <dd className="text-muted-foreground">Minimal changes to inputs that would alter a model’s decision; used for “what-if” analysis.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">PAT (Process Analytical Technology)</dt>
+                  <dd className="text-muted-foreground">Framework for designing, analyzing, and controlling manufacturing through timely measurements of critical attributes.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">GAMP 5</dt>
+                  <dd className="text-muted-foreground">ISPE guidance for risk-based validation of computerized systems in GxP environments.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">21 CFR Part 11</dt>
+                  <dd className="text-muted-foreground">US FDA regulation for electronic records and signatures; includes requirements for audit trails and controls.</dd>
+                </div>
+              </dl>
+            </section>
           </div>
         </CardContent>
       </Card>
@@ -421,6 +524,34 @@ export function Analytics() {
         </TabsList>
 
         <TabsContent value="predictions" className="space-y-6">
+          {/* Live model performance summary */}
+          <div className="grid gap-4 md:grid-cols-3">
+            {(['quality_prediction','equipment_failure','deviation_risk'] as const).map((m) => {
+              const { n, accuracy, brier, ece, auroc } = monitor.metrics(m)
+              const title = m === 'quality_prediction' ? 'Quality Prediction' : m === 'equipment_failure' ? 'Equipment Failure' : 'Deviation Risk'
+              return (
+                <Card key={m}>
+                  <CardHeader>
+                    <CardTitle className="text-sm text-muted-foreground">{title} — Live Performance</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="text-muted-foreground">Samples</div>
+                      <div className="text-right font-mono">{n}</div>
+                      <div className="text-muted-foreground">Accuracy</div>
+                      <div className="text-right font-mono">{(accuracy*100).toFixed(1)}%</div>
+                      <div className="text-muted-foreground">Brier</div>
+                      <div className="text-right font-mono">{brier.toFixed(3)}</div>
+                      <div className="text-muted-foreground">ECE</div>
+                      <div className="text-right font-mono">{ece.toFixed(3)}</div>
+                      <div className="text-muted-foreground">AUROC</div>
+                      <div className="text-right font-mono">{auroc.toFixed(3)}</div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {modelsWithDynamic.map((model) => (
               <PredictionCard key={model.id} model={model} />
