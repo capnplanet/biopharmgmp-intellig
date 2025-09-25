@@ -349,3 +349,48 @@ export {
   ChartLegendContent,
   ChartStyle,
 }
+
+// Unified inline legend for consistent styling across charts
+export type LegendInlineItem = {
+  key: string
+  label: ReactNode
+  color?: string // background color for square indicator
+  dashed?: boolean // render a dashed line indicator instead of a square
+}
+
+export function ChartLegendInline({
+  items,
+  className,
+  align = "center",
+}: {
+  items: LegendInlineItem[]
+  className?: string
+  align?: "left" | "center" | "right"
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-4 text-xs text-muted-foreground",
+        align === "center" ? "justify-center" : align === "right" ? "justify-end" : "justify-start",
+        className
+      )}
+    >
+      {items.map((it) => (
+        <div key={it.key} className="flex items-center gap-1">
+          {it.dashed ? (
+            <span
+              className="inline-block w-4 h-0 border-t-2 border-dashed"
+              style={{ borderColor: it.color || "currentColor" }}
+            />
+          ) : (
+            <span
+              className="inline-block w-3 h-3 rounded-[2px]"
+              style={{ backgroundColor: it.color || "currentColor" }}
+            />
+          )}
+          <span>{it.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}

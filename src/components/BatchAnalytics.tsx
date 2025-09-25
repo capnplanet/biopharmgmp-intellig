@@ -2,12 +2,15 @@ import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { batches, getCPPCompliance, equipmentTelemetry } from '@/data/seed'
+import { batches, getCPPCompliance, equipmentTelemetry, equipmentCalibration } from '@/data/seed'
 import { ArrowLeft, ChartLine, Warning, CheckCircle } from '@phosphor-icons/react'
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  ChartLegendInline,
 } from '@/components/ui/chart'
 import {
   AreaChart,
@@ -102,13 +105,15 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
   const tempSeries = genSeries(`${batch.id}-temp`, p.temperature.current, p.temperature.target, s.temperature.min, s.temperature.max)
   const pressSeries = genSeries(`${batch.id}-press`, p.pressure.current, p.pressure.target, s.pressure.min, s.pressure.max)
   const phSeries = genSeries(`${batch.id}-ph`, p.pH.current, p.pH.target, s.pH.min, s.pH.max)
+  const asOf = new Date()
 
   const eqData = batch.equipment
     .map((id) => {
       const t = equipmentTelemetry.find((e) => e.id === id)
-      return t ? { id, vibration: t.vibrationRMS, alert: t.vibrationAlert } : null
+      const c = equipmentCalibration.find((e) => e.id === id)
+      return t ? { id, vibration: t.vibrationRMS, alert: t.vibrationAlert, calib: c } : null
     })
-    .filter(Boolean) as { id: string; vibration: number; alert: boolean }[]
+    .filter(Boolean) as { id: string; vibration: number; alert: boolean; calib?: (typeof equipmentCalibration)[number] }[]
 
   return (
     <div className="p-6 space-y-6 overflow-auto h-full">
@@ -163,7 +168,10 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
       {/* Quick Equipment Panel */}
       <Card>
         <CardHeader>
-          <CardTitle>Equipment Summary</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Equipment Summary</CardTitle>
+            <div className="text-xs text-muted-foreground">As of {asOf.toLocaleTimeString()}</div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2 mb-3">
@@ -175,9 +183,25 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
             <div className="grid gap-3 md:grid-cols-3">
               {eqData.map((e) => (
                 <div key={e.id} className="p-3 border rounded-lg flex items-center justify-between">
-                  <div className="font-medium">{e.id}</div>
+                  <div>
+                    <div className="font-medium">{e.id}</div>
+                    {e.calib && (
+                      <div className="text-xs text-muted-foreground">Last Cal: {new Date(e.calib.lastCalibration).toLocaleDateString()} • Next: {new Date(e.calib.nextDue).toLocaleDateString()}</div>
+                    )}
+                  </div>
                   <div className="flex items-center gap-4 text-sm">
                     <div>Vibration: {fmt(e.vibration)} mm/s</div>
+                    {e.calib && (
+                      <Badge className={
+                        e.calib.status === 'overdue'
+                          ? 'bg-destructive text-destructive-foreground'
+                          : e.calib.status === 'due-soon'
+                          ? 'bg-warning text-warning-foreground'
+                          : 'bg-success text-success-foreground'
+                      }>
+                        {e.calib.status}
+                      </Badge>
+                    )}
                     <Badge className={e.alert ? 'bg-warning text-warning-foreground' : 'bg-success text-success-foreground'}>
                       {e.alert ? 'Alert' : 'OK'}
                     </Badge>
@@ -205,14 +229,22 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
               <AreaChart data={tempSeries} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
                 <XAxis dataKey="t" hide tickLine={false} axisLine={false} />
-                <YAxis width={28} tickLine={false} axisLine={false} domain={[s.temperature.min - 0.5, s.temperature.max + 0.5]} />
+                <YAxis width={36} tickLine={false} axisLine={false} domain={[s.temperature.min - 0.5, s.temperature.max + 0.5]} label={{ value: '°C', angle: -90, position: 'insideLeft', offset: 10 }} />
                 <ReferenceLine y={s.temperature.min} stroke="#f59e0b" strokeDasharray="4 4" />
                 <ReferenceLine y={s.temperature.max} stroke="#f59e0b" strokeDasharray="4 4" />
-                <ChartTooltip content={<ChartTooltipContent nameKey="temperature" />} />
+                <ChartTooltip content={<ChartTooltipContent nameKey="temperature" formatter={(value) => (<span>{Number(value).toFixed(2)}°C</span>)} />} />
+                <ChartLegend content={<ChartLegendContent />} />
                 <Area type="monotone" dataKey="value" name="Temperature" stroke="var(--color-temperature)" fill="var(--color-temperature)" fillOpacity={0.15} strokeWidth={2} />
                 <Line type="monotone" dataKey="value" name="Temperature" stroke="var(--color-temperature)" dot={false} strokeWidth={2} />
               </AreaChart>
             </ChartContainer>
+            <ChartLegendInline
+              className="mt-2"
+              items={[
+                { key: 'temp', label: 'Temperature', color: 'var(--color-temperature)' },
+                { key: 'spec', label: 'Spec Limit', color: '#f59e0b', dashed: true },
+              ]}
+            />
           </CardContent>
         </Card>
         <Card>
@@ -227,14 +259,22 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
               <AreaChart data={pressSeries} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
                 <XAxis dataKey="t" hide tickLine={false} axisLine={false} />
-                <YAxis width={28} tickLine={false} axisLine={false} domain={[s.pressure.min - 0.1, s.pressure.max + 0.1]} />
+                <YAxis width={36} tickLine={false} axisLine={false} domain={[s.pressure.min - 0.1, s.pressure.max + 0.1]} label={{ value: 'bar', angle: -90, position: 'insideLeft', offset: 10 }} />
                 <ReferenceLine y={s.pressure.min} stroke="#f59e0b" strokeDasharray="4 4" />
                 <ReferenceLine y={s.pressure.max} stroke="#f59e0b" strokeDasharray="4 4" />
-                <ChartTooltip content={<ChartTooltipContent nameKey="pressure" />} />
+                <ChartTooltip content={<ChartTooltipContent nameKey="pressure" formatter={(value) => (<span>{Number(value).toFixed(2)} bar</span>)} />} />
+                <ChartLegend content={<ChartLegendContent />} />
                 <Area type="monotone" dataKey="value" name="Pressure" stroke="var(--color-pressure)" fill="var(--color-pressure)" fillOpacity={0.15} strokeWidth={2} />
                 <Line type="monotone" dataKey="value" name="Pressure" stroke="var(--color-pressure)" dot={false} strokeWidth={2} />
               </AreaChart>
             </ChartContainer>
+            <ChartLegendInline
+              className="mt-2"
+              items={[
+                { key: 'press', label: 'Pressure', color: 'var(--color-pressure)' },
+                { key: 'spec', label: 'Spec Limit', color: '#f59e0b', dashed: true },
+              ]}
+            />
           </CardContent>
         </Card>
         <Card>
@@ -249,14 +289,22 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
               <AreaChart data={phSeries} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
                 <XAxis dataKey="t" hide tickLine={false} axisLine={false} />
-                <YAxis width={28} tickLine={false} axisLine={false} domain={[s.pH.min - 0.1, s.pH.max + 0.1]} />
+                <YAxis width={36} tickLine={false} axisLine={false} domain={[s.pH.min - 0.1, s.pH.max + 0.1]} label={{ value: 'pH', angle: -90, position: 'insideLeft', offset: 10 }} />
                 <ReferenceLine y={s.pH.min} stroke="#f59e0b" strokeDasharray="4 4" />
                 <ReferenceLine y={s.pH.max} stroke="#f59e0b" strokeDasharray="4 4" />
-                <ChartTooltip content={<ChartTooltipContent nameKey="pH" />} />
+                <ChartTooltip content={<ChartTooltipContent nameKey="pH" formatter={(value) => (<span>{Number(value).toFixed(2)} pH</span>)} />} />
+                <ChartLegend content={<ChartLegendContent />} />
                 <Area type="monotone" dataKey="value" name="pH" stroke="var(--color-pH)" fill="var(--color-pH)" fillOpacity={0.15} strokeWidth={2} />
                 <Line type="monotone" dataKey="value" name="pH" stroke="var(--color-pH)" dot={false} strokeWidth={2} />
               </AreaChart>
             </ChartContainer>
+            <ChartLegendInline
+              className="mt-2"
+              items={[
+                { key: 'ph', label: 'pH', color: 'var(--color-pH)' },
+                { key: 'spec', label: 'Spec Limit', color: '#f59e0b', dashed: true },
+              ]}
+            />
           </CardContent>
         </Card>
       </div>
@@ -276,7 +324,10 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
       {/* Equipment health */}
       <Card>
         <CardHeader>
-          <CardTitle>Equipment Vibration (mm/s)</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Equipment Vibration (mm/s)</CardTitle>
+            <div className="text-xs text-muted-foreground">As of {asOf.toLocaleTimeString()}</div>
+          </div>
         </CardHeader>
         <CardContent>
           {eqData.length === 0 ? (
@@ -298,6 +349,15 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
                 </Bar>
               </BarChart>
             </ChartContainer>
+          )}
+          {eqData.length > 0 && (
+            <ChartLegendInline
+              className="mt-2"
+              items={[
+                { key: 'ok', label: 'OK', color: 'var(--color-ok)' },
+                { key: 'warn', label: 'Alert', color: 'var(--color-warn)' },
+              ]}
+            />
           )}
         </CardContent>
       </Card>

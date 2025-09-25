@@ -15,6 +15,7 @@ import {
   Robot,
   Target
 } from '@phosphor-icons/react'
+import { equipmentTelemetry } from '@/data/seed'
 
 interface PredictiveModel {
   id: string
@@ -67,7 +68,7 @@ const mockModels: PredictiveModel[] = [
         value: 15.3,
         confidence: 0.87,
         timestamp: new Date(),
-  explanation: 'Vibration patterns and temperature fluctuations in BIO-002 suggest potential bearing issues. Recommend maintenance inspection within 72 hours.'
+        explanation: '' // populated at runtime using telemetry
       }
     ]
   },
@@ -256,11 +257,35 @@ export function Analytics() {
   const [models] = useState<PredictiveModel[]>(mockModels)
   const [metrics] = useState<QualityMetrics>(mockMetrics)
   const [, setCurrentTime] = useState(new Date())
+  // Determine highest-risk equipment: prefer alert=true, else highest vibrationRMS
+  const topEq = React.useMemo(() => {
+    const list = equipmentTelemetry.slice()
+    const alertFirst = list.filter(e => e.vibrationAlert)
+    if (alertFirst.length) {
+      return alertFirst.sort((a,b) => b.vibrationRMS - a.vibrationRMS)[0].id
+    }
+    return list.sort((a,b) => b.vibrationRMS - a.vibrationRMS)[0]?.id || 'BIO-002'
+  }, [])
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000)
     return () => clearInterval(timer)
   }, [])
+
+  // Populate dynamic explanation text for equipment failure model
+  const modelsWithDynamic = React.useMemo(() => {
+    return models.map(m => {
+      if (m.type !== 'equipment_failure') return m
+      const clone = { ...m }
+      if (clone.predictions[0]) {
+        clone.predictions = [{
+          ...clone.predictions[0],
+          explanation: `Vibration patterns and temperature fluctuations in ${topEq} suggest potential bearing issues. Recommend maintenance inspection within 72 hours.`
+        }]
+      }
+      return clone
+    })
+  }, [models, topEq])
 
   return (
     <div className="p-6 space-y-6 overflow-auto h-full">
@@ -279,7 +304,7 @@ export function Analytics() {
 
         <TabsContent value="predictions" className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {models.map((model) => (
+            {modelsWithDynamic.map((model) => (
               <PredictionCard key={model.id} model={model} />
             ))}
           </div>
@@ -299,7 +324,7 @@ export function Analytics() {
                     <span className="font-medium text-red-900">High Risk Alert</span>
                   </div>
                   <p className="text-sm text-red-800">
-                    Equipment failure prediction indicates potential issues with Bioreactor BIO-002. 
+                    Equipment failure prediction indicates potential issues with Bioreactor {topEq}. 
                     Immediate inspection recommended to prevent production disruption.
                   </p>
                 </div>

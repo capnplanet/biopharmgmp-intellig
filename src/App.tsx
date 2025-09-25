@@ -1,4 +1,5 @@
 import { useKV } from '@github/spark/hooks'
+import { useEffect } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { Dashboard } from './components/Dashboard'
 import { BatchMonitoring } from './components/BatchMonitoring'
@@ -20,6 +21,52 @@ function App() {
   const [activeTab, setActiveTab] = useKV<NavigationItem>('active-tab', 'dashboard')
   // lightweight route overlay for per-batch pages under the Batches tab
   const [route, setRoute] = useKV<string>('route', '')
+
+  // Hash deep linking: #<tab>[/<route>]
+  useEffect(() => {
+    const parseHash = (hash: string): { tab: NavigationItem; r: string } => {
+      const raw = (hash || '').replace(/^#/, '')
+      if (!raw) return { tab: 'dashboard', r: '' }
+      const parts = raw.split('/').filter(Boolean)
+      const tab = (parts[0] as NavigationItem) || 'dashboard'
+      const validTabs: NavigationItem[] = ['dashboard', 'batches', 'quality', 'analytics', 'advanced-analytics', 'audit']
+      const safeTab: NavigationItem = validTabs.includes(tab) ? tab : 'dashboard'
+      const r = parts.slice(1).join('/')
+      // Only keep route for tabs that support overlays
+      const safeRoute = safeTab === 'batches' || safeTab === 'quality' ? r : ''
+      return { tab: safeTab, r: safeRoute }
+    }
+
+    const applyFromHash = () => {
+      const { tab, r } = parseHash(window.location.hash)
+      if (tab && tab !== (activeTab || 'dashboard')) setActiveTab(tab)
+      if (r !== (route || '')) setRoute(r)
+      if ((tab !== 'batches' && tab !== 'quality') && route) setRoute('')
+    }
+
+    // Initialize from current hash
+    applyFromHash()
+    // Respond to user changing the hash
+    const onHashChange = () => applyFromHash()
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Keep hash in sync with state
+  useEffect(() => {
+    const base = activeTab || 'dashboard'
+    const suffix = (base === 'batches' || base === 'quality') && route ? `/${route}` : ''
+    const nextHash = `#${base}${suffix}`
+    if (window.location.hash !== nextHash) {
+      // Avoid adding entries to history on every navigation to keep back button useful
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', nextHash)
+      } else {
+        window.location.hash = nextHash
+      }
+    }
+  }, [activeTab, route])
 
   const renderContent = () => {
     switch (activeTab) {
