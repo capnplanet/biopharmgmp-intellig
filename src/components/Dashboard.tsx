@@ -220,7 +220,7 @@ export function Dashboard() {
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span>{batch.stage}</span>
-                    <span>{batch.progress}%</span>
+                    <span>{batch.progress.toFixed(2)}%</span>
                   </div>
                   <Progress value={batch.progress} className="h-2" />
                 </div>

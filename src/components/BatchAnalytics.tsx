@@ -179,7 +179,7 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
             <CardTitle className="text-sm text-muted-foreground">Progress</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-mono font-bold">{batch.progress}%</div>
+            <div className="text-2xl font-mono font-bold">{batch.progress.toFixed(2)}%</div>
             <div className="text-xs text-muted-foreground">Toward completion</div>
           </CardContent>
         </Card>

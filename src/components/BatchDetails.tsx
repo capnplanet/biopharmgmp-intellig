@@ -140,7 +140,7 @@ export function BatchDetails({ batchId, onBack }: Props) {
             <div>
               <div className="flex justify-between text-sm mb-2">
                 <span>Progress</span>
-                <span>{batch.progress}%</span>
+                <span>{batch.progress.toFixed(2)}%</span>
               </div>
               <Progress value={batch.progress} className="h-2" />
             </div>

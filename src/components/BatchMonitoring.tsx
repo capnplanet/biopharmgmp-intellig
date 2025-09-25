@@ -143,7 +143,7 @@ export function BatchMonitoring() {
                 <div className="mt-2">
                   <div className="flex justify-between text-sm mb-1">
                     <span>{batch.stage}</span>
-                    <span>{batch.progress}%</span>
+                    <span>{batch.progress.toFixed(2)}%</span>
                   </div>
                   <Progress value={batch.progress} className="h-2" />
                 </div>
