@@ -306,6 +306,22 @@ export function Analytics() {
     return () => clearInterval(id)
   }, [])
 
+  // Simulated local retrain on in-memory data (stub):
+  // In production, replace with a real, local training job that reads approved datasets and writes versioned model artifacts.
+  const retrainLocally = async (modelId: string) => {
+    setModels(prev => prev.map(m => m.id === modelId ? { ...m, status: 'training' } : m))
+    // Simulate reading from local archive/sim data without external calls
+    // Example sources: batches, equipmentTelemetry, audit events, operator logs, trend stats
+    await new Promise(r => setTimeout(r, 1200))
+    // Simulate a small accuracy delta to reflect retrain; in real flow compute from validation set
+    setModels(prev => prev.map(m => m.id === modelId ? {
+      ...m,
+      status: 'active',
+      lastTrained: new Date(),
+      accuracy: Math.min(99, Math.max(50, (m.accuracy ?? 80) + (Math.random() * 2 - 1)))
+    } : m))
+  }
+
   function ExplainabilityPanel() {
     return (
       <Card>
@@ -392,10 +408,14 @@ export function Analytics() {
             </section>
 
             <section>
-              <h4 className="font-medium mb-1">Limitations</h4>
-              <p className="text-muted-foreground">
-                This demo does not train or execute real ML models; values are illustrative. In production, all models would undergo GxP validation (e.g., GAMP 5), with versioning, approvals, and continuous oversight.
-              </p>
+              <h4 className="font-medium mb-1">Model scope & training</h4>
+              <ul className="list-disc ml-5 space-y-1 text-muted-foreground">
+                <li>Predictive layer in this demo uses lightweight heuristic predictors (not trained ML). Metrics (Accuracy, Brier, ECE, AUROC) are computed on live simulated data.</li>
+                <li>Retraining: The UI exposes a "Retrain" button, but no training pipeline runs in this demo. In a client deployment, models can be connected to a local training job and kept on-prem.</li>
+                <li>Data sources for predictions: current batch CPPs (temperature, pressure, pH, volume), equipment telemetry (vibration RMS, temperature variance, uptime), and seeded batch metadata from the in-memory archive.</li>
+                <li>Generative RCA: If configured, the AI assistant uses a local prompt-grounded context (batch record, operator logs, calibration/maintenance, CAPA history, audit events, trend stats, and regulatory guidance). No external data is uploaded unless explicitly configured by the client.</li>
+                <li>Production recommendation: Integrate validated ML models (e.g., ONNX runtime or local service endpoint), add a governed training pipeline with data lineage, approvals, and 21 CFR Part 11 controls (GAMP 5-aligned).</li>
+              </ul>
             </section>
 
             <section>
@@ -749,7 +769,7 @@ export function Analytics() {
                       <Badge className={model.status === 'active' ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'}>
                         {model.status}
                       </Badge>
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => retrainLocally(model.id)}>
                         Retrain
                       </Button>
                     </div>
@@ -757,13 +777,13 @@ export function Analytics() {
                 ))}
               </div>
               
-              <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                <h4 className="font-medium mb-2">Model Validation & Bias Prevention:</h4>
+              <div className="mt-6 p-4 bg-blue-50 rounded-lg space-y-2">
+                <h4 className="font-medium">Model validation & training (demo state)</h4>
                 <p className="text-sm text-blue-800">
-                  All models undergo rigorous validation using cross-validation techniques and 
-                  out-of-sample testing. Bias detection algorithms continuously monitor for 
-                  data drift and model degradation. Models are retrained monthly using the 
-                  latest production data to maintain accuracy and prevent confirmation bias.
+                  In this demo, the Retrain action simulates a local training job and updates metadata. No external services are called, and no data leaves the environment. In production, wire this button to your on-prem training pipeline with versioned artifacts and approvals.
+                </p>
+                <p className="text-xs text-blue-700">
+                  Suggested local sources: approved batch records (CPPs, outcomes), equipment telemetry, operator logs, audit trail, CAPA history, trend/control-chart summaries. Ensure data lineage, partitioning, and blinded validation per GAMP 5 and 21 CFR Part 11.
                 </p>
               </div>
             </CardContent>
