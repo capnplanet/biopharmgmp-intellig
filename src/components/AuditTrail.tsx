@@ -103,7 +103,7 @@ const mockAuditEvents: AuditEvent[] = [
 ]
 
 export function AuditTrail() {
-  const [auditEvents, setAuditEvents] = useKV<AuditEvent[]>('audit-events', mockAuditEvents)
+  const [auditEvents] = useKV<AuditEvent[]>('audit-events', mockAuditEvents)
   const [filteredEvents, setFilteredEvents] = useState<AuditEvent[]>(auditEvents || [])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedModule, setSelectedModule] = useState<string>('all')

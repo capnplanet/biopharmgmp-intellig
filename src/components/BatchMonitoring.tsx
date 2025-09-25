@@ -90,7 +90,7 @@ function ParameterCard({ label, current, target, unit, icon: Icon }: {
   current: number
   target: number
   unit: string
-  icon: React.ComponentType<any>
+  icon: React.ComponentType<{ className?: string }>
 }) {
   const deviation = Math.abs(current - target)
   const maxDeviation = target * 0.1

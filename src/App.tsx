@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Sidebar } from './components/Sidebar'
 import { Dashboard } from './components/Dashboard'

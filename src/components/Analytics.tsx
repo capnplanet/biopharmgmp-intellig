@@ -125,7 +125,7 @@ function MetricCard({
   unit?: string
   trend: 'up' | 'down' | 'stable'
   historical: number[]
-  icon: React.ComponentType<any>
+  icon: React.ComponentType<{ className?: string }>
 }) {
   const trendIcon = trend === 'up' ? TrendUp : trend === 'down' ? TrendDown : null
   const trendColor = trend === 'up' ? 'text-success' : trend === 'down' ? 'text-destructive' : 'text-muted-foreground'
@@ -255,7 +255,7 @@ function PredictionCard({ model }: { model: PredictiveModel }) {
 export function Analytics() {
   const [models] = useState<PredictiveModel[]>(mockModels)
   const [metrics] = useState<QualityMetrics>(mockMetrics)
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [, setCurrentTime] = useState(new Date())
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000)

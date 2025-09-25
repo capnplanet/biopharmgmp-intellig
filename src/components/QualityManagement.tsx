@@ -7,7 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 import { 
   Warning, 
   MagnifyingGlass, 
@@ -18,6 +17,17 @@ import {
   Robot
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
+
+type WindowSpark = {
+  llmPrompt: (strings: TemplateStringsArray, ...expr: unknown[]) => unknown
+  llm: (prompt: unknown, model: string) => Promise<string>
+}
+
+const getSpark = (): WindowSpark | undefined => {
+  // Safely access window.spark without introducing 'any' types
+  const w = window as unknown as { spark?: WindowSpark }
+  return w.spark
+}
 
 interface Deviation {
   id: string
@@ -134,8 +144,8 @@ const mockCAPAs: CAPA[] = [
 
 export function QualityManagement() {
   const [deviations, setDeviations] = useKV<Deviation[]>('deviations', mockDeviations)
-  const [capas, setCAPAs] = useKV<CAPA[]>('capas', mockCAPAs)
-  const [selectedDeviation, setSelectedDeviation] = useState<Deviation | null>(null)
+  const [capas] = useKV<CAPA[]>('capas', mockCAPAs)
+  const [, setSelectedDeviation] = useState<Deviation | null>(null)
   const [investigationNotes, setInvestigationNotes] = useState('')
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false)
   const [aiAnalysis, setAiAnalysis] = useState('')
@@ -169,7 +179,10 @@ export function QualityManagement() {
     setAiAnalysis('Analyzing deviation data and batch records...')
     
     try {
-      const prompt = (window as any).spark.llmPrompt`
+  const spark = getSpark()
+  const llmPrompt = spark?.llmPrompt
+  if (!llmPrompt || !spark?.llm) throw new Error('AI helpers not available')
+      const prompt = llmPrompt`
         You are a pharmaceutical quality expert AI assistant. Analyze this deviation:
         
         Title: ${deviation.title}
@@ -187,10 +200,9 @@ export function QualityManagement() {
         Ground your analysis in pharmaceutical industry best practices and regulatory guidelines.
         Be specific and actionable. Avoid generic responses.
       `
-      
-      const analysis = await (window as any).spark.llm(prompt, 'gpt-4o')
+  const analysis = await spark.llm(prompt, 'gpt-4o')
       setAiAnalysis(analysis)
-    } catch (error) {
+    } catch {
       setAiAnalysis('Error generating analysis. Please try again.')
       toast.error('Failed to generate AI analysis')
     }

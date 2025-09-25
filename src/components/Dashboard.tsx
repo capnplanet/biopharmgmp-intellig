@@ -16,7 +16,7 @@ interface KPICardProps {
   value: string | number
   change?: string
   status?: 'normal' | 'warning' | 'critical'
-  icon: React.ComponentType<any>
+  icon: React.ComponentType<{ className?: string }>
 }
 
 function KPICard({ title, value, change, status = 'normal', icon: Icon }: KPICardProps) {
