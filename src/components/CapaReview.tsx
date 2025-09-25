@@ -22,10 +22,12 @@ type CAPA = {
     dueDate: Date
     status: 'pending' | 'complete'
   }[]
+  effectivenessCheck?: { dueDate: Date; status: 'pending' | 'complete'; result?: string }
 }
 
 export function CapaReview({ id, onBack }: { id: string, onBack: () => void }) {
   const [capas] = useKV<CAPA[]>('capas')
+  const [, setRoute] = useKV<string>('route', '')
   const capa = (capas || []).find(c => c.id === id)
 
   if (!capa) {
@@ -59,6 +61,20 @@ export function CapaReview({ id, onBack }: { id: string, onBack: () => void }) {
           </div>
           <div className="text-sm text-muted-foreground">Due: {new Date(capa.dueDate).toLocaleDateString()} • Assigned: {capa.assignedTo}</div>
           <p className="mt-3">{capa.description}</p>
+          {capa.effectivenessCheck && (
+            <div className="mt-3 text-sm">
+              Effectiveness check due {new Date(capa.effectivenessCheck.dueDate).toLocaleDateString()} — {capa.effectivenessCheck.status}
+            </div>
+          )}
+          {capa.relatedDeviations.length > 0 && (
+            <div className="mt-3 text-sm">
+              Related deviations: {capa.relatedDeviations.map((devId, idx) => (
+                <Button key={devId} variant="link" className="px-1" onClick={() => setRoute(`deviation/${devId}`)}>
+                  {devId}{idx < capa.relatedDeviations.length - 1 ? ',' : ''}
+                </Button>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

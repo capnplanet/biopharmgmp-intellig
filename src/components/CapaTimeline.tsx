@@ -22,10 +22,12 @@ type CAPA = {
     dueDate: Date
     status: 'pending' | 'complete'
   }[]
+  effectivenessCheck?: { dueDate: Date; status: 'pending' | 'complete'; result?: string }
 }
 
 export function CapaTimeline({ id, onBack }: { id: string, onBack: () => void }) {
   const [capas] = useKV<CAPA[]>('capas')
+  const [, setRoute] = useKV<string>('route', '')
   const capa = (capas || []).find(c => c.id === id)
 
   if (!capa) {
@@ -54,6 +56,11 @@ export function CapaTimeline({ id, onBack }: { id: string, onBack: () => void })
           <CardTitle className="flex items-center gap-2"><Clock className="h-4 w-4"/>Action Schedule</CardTitle>
         </CardHeader>
         <CardContent>
+          {capa.effectivenessCheck && (
+            <div className="mb-4 text-sm text-muted-foreground">
+              Effectiveness check due {new Date(capa.effectivenessCheck.dueDate).toLocaleDateString()} — {capa.effectivenessCheck.status}
+            </div>
+          )}
           <div className="space-y-4">
             {actionsSorted.map((a, idx) => (
               <div key={a.id} className="flex items-center gap-4">
@@ -71,6 +78,20 @@ export function CapaTimeline({ id, onBack }: { id: string, onBack: () => void })
           </div>
         </CardContent>
       </Card>
+      {capa.relatedDeviations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Related Deviations</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {capa.relatedDeviations.map((devId, idx) => (
+              <Button key={devId} variant="link" className="px-1" onClick={() => setRoute(`deviation/${devId}`)}>
+                {devId}{idx < capa.relatedDeviations.length - 1 ? ',' : ''}
+              </Button>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

@@ -165,6 +165,36 @@ export const batches: BatchData[] = [
       { stage: 'Drying', startTime: new Date('2024-01-17T10:30:00Z'), status: 'pending' },
     ],
   },
+  {
+    id: 'BTH-2024-003',
+    product: 'Monoclonal Antibody X1',
+    productType: 'large-molecule',
+    stage: 'Fermentation',
+    progress: 62,
+    status: 'warning',
+    startTime: new Date('2024-01-16T07:45:00Z'),
+    equipment: ['BIO-001', 'CHR-001', 'FIL-001'],
+    parameters: {
+      // Reflecting deviation DEV-2024-001: temperature excursion
+      temperature: { current: 38.2, target: 37.0, unit: '°C' },
+      pressure: { current: 1.15, target: 1.1, unit: 'bar' },
+      pH: { current: 7.0, target: 7.0, unit: 'pH' },
+      volume: { current: 1900, target: 2000, unit: 'L' },
+    },
+    cppBounds: {
+      temperature: { min: 36.5, max: 37.5, unit: '°C' },
+      pressure: { min: 1.0, max: 1.2, unit: 'bar' },
+      pH: { min: 6.8, max: 7.2, unit: 'pH' },
+      volume: { min: 1800, max: 2000, unit: 'L' },
+    },
+    timeline: [
+      { stage: 'Media Preparation', startTime: new Date('2024-01-16T07:45:00Z'), endTime: new Date('2024-01-16T09:15:00Z'), status: 'complete' },
+      { stage: 'Inoculation', startTime: new Date('2024-01-16T09:15:00Z'), endTime: new Date('2024-01-16T10:00:00Z'), status: 'complete' },
+      { stage: 'Fermentation', startTime: new Date('2024-01-16T10:00:00Z'), status: 'active' },
+      { stage: 'Harvest', startTime: new Date('2024-01-17T10:00:00Z'), status: 'pending' },
+      { stage: 'Purification', startTime: new Date('2024-01-17T14:00:00Z'), status: 'pending' },
+    ],
+  },
 ]
 
 export const getCPPCompliance = (batch: BatchData) => {

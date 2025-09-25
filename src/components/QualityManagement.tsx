@@ -18,6 +18,7 @@ import {
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { buildInvestigationSources, sourcesToString } from '@/data/archive'
+import type { ChangeControl } from '@/components/ChangeControlDetails'
 
 type WindowSpark = {
   llmPrompt: (strings: TemplateStringsArray, ...expr: unknown[]) => unknown
@@ -66,6 +67,11 @@ interface CAPA {
     dueDate: Date
     status: 'pending' | 'complete'
   }[]
+  effectivenessCheck?: {
+    dueDate: Date
+    status: 'pending' | 'complete'
+    result?: string
+  }
 }
 
 const mockDeviations: Deviation[] = [
@@ -139,7 +145,11 @@ const mockCAPAs: CAPA[] = [
         dueDate: new Date('2024-02-15T00:00:00Z'),
         status: 'pending'
       }
-    ]
+    ],
+    effectivenessCheck: {
+      dueDate: new Date('2024-03-30T00:00:00Z'),
+      status: 'pending'
+    }
   }
   ,
   {
@@ -155,7 +165,11 @@ const mockCAPAs: CAPA[] = [
     actions: [
       { id: 'ACT-003', description: 'Perform calibration on CRY-001', responsible: 'Metrology', dueDate: new Date('2025-01-10T00:00:00Z'), status: 'pending' },
       { id: 'ACT-004', description: 'Schedule filter train FIL-001 calibration and verification', responsible: 'Maintenance', dueDate: new Date('2025-01-20T00:00:00Z'), status: 'pending' }
-    ]
+    ],
+    effectivenessCheck: {
+      dueDate: new Date('2025-03-01T00:00:00Z'),
+      status: 'pending'
+    }
   },
   {
     id: 'CAPA-2024-003',
@@ -170,7 +184,11 @@ const mockCAPAs: CAPA[] = [
     actions: [
       { id: 'ACT-005', description: 'Install accelerometers on FIL-001 & CRY-001', responsible: 'Engineering', dueDate: new Date('2025-02-10T00:00:00Z'), status: 'pending' },
       { id: 'ACT-006', description: 'Define and validate vibration RMS alert thresholds', responsible: 'Quality & Engineering', dueDate: new Date('2025-02-20T00:00:00Z'), status: 'pending' }
-    ]
+    ],
+    effectivenessCheck: {
+      dueDate: new Date('2025-04-15T00:00:00Z'),
+      status: 'pending'
+    }
   }
 ]
 
@@ -178,6 +196,30 @@ export function QualityManagement() {
   const [deviations, setDeviations] = useKV<Deviation[]>('deviations', mockDeviations)
   const [capas, setCAPAs] = useKV<CAPA[]>('capas', mockCAPAs)
   const [, setRoute] = useKV<string>('route', '')
+  const [changeControls, setChangeControls] = useKV<ChangeControl[]>('change-controls', [
+    {
+      id: 'CC-2025-001',
+      title: 'Implement new bioreactor temperature PID parameters',
+      description: 'Retune control loop following excursion analysis to improve stability around 37°C',
+      status: 'in-review',
+      requestedBy: 'Engineering',
+      requestedDate: new Date('2025-01-05T00:00:00Z'),
+      impactedBatches: ['BTH-2024-003'],
+      impactedEquipment: ['BIO-001'],
+      riskLevel: 'medium'
+    },
+    {
+      id: 'CC-2025-002',
+      title: 'Add vibration monitoring to FIL-001 & CRY-001',
+      description: 'Permanent installation of sensors and alarm thresholds',
+      status: 'approved',
+      requestedBy: 'Quality',
+      requestedDate: new Date('2025-01-08T00:00:00Z'),
+      impactedBatches: ['BTH-2024-002','BTH-2024-003'],
+      impactedEquipment: ['FIL-001','CRY-001'],
+      riskLevel: 'high'
+    }
+  ])
   const [, setSelectedDeviation] = useState<Deviation | null>(null)
   const [investigationNotes, setInvestigationNotes] = useState('')
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false)
@@ -208,7 +250,11 @@ export function QualityManagement() {
       actions: c.actions.map(a => ({
         ...a,
         dueDate: new Date(a.dueDate as unknown as string),
-      }))
+      })),
+      effectivenessCheck: c.effectivenessCheck ? {
+        ...c.effectivenessCheck,
+        dueDate: new Date(c.effectivenessCheck.dueDate as unknown as string)
+      } : undefined
     })
 
     if (deviations && deviations.length > 0 && typeof deviations[0].reportedDate !== 'object') {
@@ -554,11 +600,23 @@ export function QualityManagement() {
                       </div>
                       <h3 className="font-semibold mb-2">{capa.title}</h3>
                       <p className="text-sm text-muted-foreground mb-3">{capa.description}</p>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                         <span>Due: {formatDate(capa.dueDate)}</span>
                         <span>Assigned to: {capa.assignedTo}</span>
                         <span>Actions: {capa.actions.length}</span>
+                        {capa.effectivenessCheck && (
+                          <span>Effectiveness check: {formatDate(capa.effectivenessCheck.dueDate)} ({capa.effectivenessCheck.status})</span>
+                        )}
                       </div>
+                      {capa.relatedDeviations.length > 0 && (
+                        <div className="mt-2 text-sm">
+                          Related deviations: {capa.relatedDeviations.map((devId, idx) => (
+                            <Button key={devId} variant="link" className="px-1" onClick={() => setRoute(`deviation/${devId}`)}>
+                              {devId}{idx < capa.relatedDeviations.length - 1 ? ',' : ''}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" onClick={() => setRoute(`capa/${capa.id}/review`)}>
@@ -578,21 +636,53 @@ export function QualityManagement() {
         </TabsContent>
 
         <TabsContent value="change-control" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Change Control</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-12 text-muted-foreground">
-                <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Change control management coming soon...</p>
-                <Button className="mt-4">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Change Request
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Change Controls</h2>
+            <Button onClick={() => {
+              const id = `CC-${new Date().getFullYear()}-${String(Math.floor(Math.random()*900)+100)}`
+              const newCC: ChangeControl = {
+                id,
+                title: 'New Change Request',
+                description: 'Describe the proposed change, rationale, and impact.',
+                status: 'draft',
+                requestedBy: 'User',
+                requestedDate: new Date(),
+                impactedBatches: [],
+                impactedEquipment: [],
+                riskLevel: 'low'
+              }
+              setChangeControls(prev => [newCC, ...(prev || [])])
+              setRoute(`cc/${id}`)
+            }}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Change Request
+            </Button>
+          </div>
+
+          <div className="grid gap-4">
+            {(changeControls || []).map(cc => (
+              <Card key={cc.id} className="hover:shadow-sm">
+                <CardContent className="p-5 flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-mono font-medium">{cc.id}</span>
+                      <Badge variant="outline">{cc.status}</Badge>
+                      <Badge variant="outline">Risk: {cc.riskLevel}</Badge>
+                    </div>
+                    <div className="font-semibold">{cc.title}</div>
+                    <div className="text-sm text-muted-foreground mb-2">Requested by {cc.requestedBy} on {new Date(cc.requestedDate).toLocaleDateString()}</div>
+                    <div className="text-sm">Impacted batches: {cc.impactedBatches.join(', ') || 'None'} • Impacted equipment: {cc.impactedEquipment.join(', ') || 'None'}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setRoute(`cc/${cc.id}`)}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      View
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </TabsContent>
       </Tabs>
 

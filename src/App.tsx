@@ -11,6 +11,8 @@ import { BatchDetails } from '@/components/BatchDetails'
 import { BatchAnalytics } from '@/components/BatchAnalytics'
 import { CapaReview } from '@/components/CapaReview'
 import { CapaTimeline } from '@/components/CapaTimeline'
+import { DeviationDetails } from '@/components/DeviationDetails'
+import { ChangeControlDetails } from '@/components/ChangeControlDetails'
 
 export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'advanced-analytics' | 'audit'
 
@@ -50,6 +52,20 @@ function App() {
           }
           if (parts.length === 3 && capaId && subpage === 'timeline') {
             return <CapaTimeline id={capaId} onBack={() => setRoute('')} />
+          }
+        }
+        if ((route || '').startsWith('deviation/')) {
+          const parts = (route || '').split('/').filter(Boolean)
+          const [, devId] = parts
+          if (devId) {
+            return <DeviationDetails id={devId} onBack={() => setRoute('')} />
+          }
+        }
+        if ((route || '').startsWith('cc/')) {
+          const parts = (route || '').split('/').filter(Boolean)
+          const [, ccId] = parts
+          if (ccId) {
+            return <ChangeControlDetails id={ccId} onBack={() => setRoute('')} />
           }
         }
         return <QualityManagement />
