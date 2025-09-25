@@ -1,9 +1,10 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from '@phosphor-icons/react'
+import { useAuditLogger } from '@/hooks/use-audit'
 
 export type ChangeControl = {
   id: string
@@ -20,6 +21,11 @@ export type ChangeControl = {
 export function ChangeControlDetails({ id, onBack }: { id: string; onBack: () => void }) {
   const [ccs] = useKV<ChangeControl[]>('change-controls', [])
   const cc = (ccs || []).find(c => c.id === id)
+  const { log } = useAuditLogger()
+
+  useEffect(() => {
+    if (cc) log('View Change Control', 'change-control', `Viewed ${cc.id}`, { recordId: cc.id })
+  }, [cc, log])
 
   if (!cc) {
     return (

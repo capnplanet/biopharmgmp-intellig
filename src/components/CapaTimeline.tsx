@@ -1,9 +1,10 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Clock, ArrowLeft } from '@phosphor-icons/react'
+import { useAuditLogger } from '@/hooks/use-audit'
 
 type CAPA = {
   id: string
@@ -29,6 +30,11 @@ export function CapaTimeline({ id, onBack }: { id: string, onBack: () => void })
   const [capas] = useKV<CAPA[]>('capas')
   const [, setRoute] = useKV<string>('route', '')
   const capa = (capas || []).find(c => c.id === id)
+  const { log } = useAuditLogger()
+
+  useEffect(() => {
+    if (capa) log('View CAPA Timeline', 'capa', `Viewed timeline for ${capa.id}`, { recordId: capa.id })
+  }, [capa, log])
 
   if (!capa) {
     return (

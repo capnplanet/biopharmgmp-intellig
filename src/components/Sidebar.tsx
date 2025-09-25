@@ -8,6 +8,7 @@ import {
   FileText,
   Atom
 } from '@phosphor-icons/react'
+import { useAuditLogger } from '@/hooks/use-audit'
 
 interface SidebarProps {
   activeTab: NavigationItem
@@ -24,6 +25,7 @@ const navigationItems = [
 ]
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
+  const { log } = useAuditLogger()
   return (
     <div className="w-64 bg-card border-r border-border flex flex-col">
       <div className="p-6 border-b border-border">
@@ -47,7 +49,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
                 key={item.id}
                 variant={activeTab === item.id ? 'default' : 'ghost'}
                 className="w-full justify-start gap-3 h-12"
-                onClick={() => onTabChange(item.id)}
+                onClick={() => { onTabChange(item.id); log('Navigate', 'system', `Tab change to ${item.id}`) }}
               >
                 <Icon className="w-5 h-5" />
                 {item.label}

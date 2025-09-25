@@ -1,9 +1,10 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { MagnifyingGlass, Robot, ArrowLeft } from '@phosphor-icons/react'
+import { useAuditLogger } from '@/hooks/use-audit'
 
 type Deviation = {
   id: string
@@ -23,6 +24,11 @@ type Deviation = {
 export function DeviationDetails({ id, onBack, onInvestigate }: { id: string; onBack: () => void; onInvestigate?: (d: Deviation) => void }) {
   const [deviations] = useKV<Deviation[]>('deviations')
   const deviation = (deviations || []).find(d => d.id === id)
+  const { log } = useAuditLogger()
+
+  useEffect(() => {
+    if (deviation) log('View Deviation', 'deviation', `Viewed ${deviation.id}`, { recordId: deviation.id })
+  }, [deviation, log])
   
   const getSeverityColor = (severity: string) => {
     const colors = { low: 'bg-blue-100 text-blue-800', medium: 'bg-yellow-100 text-yellow-800', high: 'bg-orange-100 text-orange-800', critical: 'bg-red-100 text-red-800' }
