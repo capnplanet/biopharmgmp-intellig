@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useKV } from '@github/spark/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -90,6 +91,7 @@ function BatchTimeline({ timeline }: { timeline: BatchData['timeline'] }) {
 }
 
 export function BatchMonitoring() {
+  const [, setRoute] = useKV<string>('route', '')
   const [selectedBatch, setSelectedBatch] = useState<BatchData>(mockBatches[0])
   const [, setCurrentTime] = useState(new Date())
 
@@ -154,11 +156,11 @@ export function BatchMonitoring() {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={() => setRoute(`batch/${selectedBatch.id}/view`)}>
                     <Eye className="h-4 w-4 mr-2" />
                     View Details
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={() => setRoute(`batch/${selectedBatch.id}/analytics`)}>
                     <TrendUp className="h-4 w-4 mr-2" />
                     Analytics
                   </Button>
