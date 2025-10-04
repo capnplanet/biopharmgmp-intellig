@@ -5,10 +5,16 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CheckCircle, ArrowLeft } from '@phosphor-icons/react'
 import { useAuditLogger } from '@/hooks/use-audit'
-import type { CAPA } from '@/types/quality'
+import { ESignaturePrompt, type SignatureResult } from '@/components/ESignaturePrompt'
+import type { CAPA, ESignatureRecord } from '@/types/quality'
+
+const demoCredentials = {
+  username: 'approver.demo@biopharm.com',
+  password: 'DemoPass123!'
+}
 
 export function CapaReview({ id, onBack }: { id: string, onBack: () => void }) {
-  const [capas] = useKV<CAPA[]>('capas')
+  const [capas, setCAPAs] = useKV<CAPA[]>('capas')
   const [, setRoute] = useKV<string>('route', '')
   const capa = (capas || []).find(c => c.id === id)
   const { log } = useAuditLogger()
@@ -18,6 +24,15 @@ export function CapaReview({ id, onBack }: { id: string, onBack: () => void }) {
       log('View CAPA', 'capa', `Viewed ${capa.id}`, { recordId: capa.id })
     }
   }, [capa, log])
+
+  const appendSignature = (action: string, signature: SignatureResult): ESignatureRecord => ({
+    id: `${capa?.id ?? 'CAPA'}-${Date.now()}`,
+    action,
+    signedBy: signature.userId,
+    signedAt: signature.timestamp,
+    reason: signature.reason,
+    digitalSignature: signature.digitalSignature
+  })
 
   if (!capa) {
     return (
@@ -83,8 +98,74 @@ export function CapaReview({ id, onBack }: { id: string, onBack: () => void }) {
               </Badge>
             </div>
           ))}
+          <div className="pt-4 flex flex-wrap gap-2">
+            {capa.status !== 'approved' && (
+              <ESignaturePrompt
+                trigger={<Button size="sm">Approve CAPA</Button>}
+                title="Approve CAPA"
+                statement={`Approval for ${capa.id}`}
+                demoCredentials={demoCredentials}
+                onConfirm={async (result: SignatureResult) => {
+                  const record = appendSignature('Approval', result)
+                  setCAPAs(current => (current || []).map(item => item.id === capa.id ? {
+                    ...item,
+                    status: 'approved',
+                    signatures: [...(item.signatures || []), record]
+                  } : item))
+                  log('CAPA Approved', 'capa', `CAPA ${capa.id} approved by ${result.userId}`, {
+                    recordId: capa.id,
+                    digitalSignature: result.digitalSignature
+                  })
+                }}
+              />
+            )}
+            {capa.status !== 'complete' && (
+              <ESignaturePrompt
+                trigger={<Button size="sm" variant="outline">Mark Complete</Button>}
+                title="Complete CAPA"
+                statement={`Completion confirmation for ${capa.id}`}
+                demoCredentials={demoCredentials}
+                onConfirm={async (result: SignatureResult) => {
+                  const record = appendSignature('Completion', result)
+                  setCAPAs(current => (current || []).map(item => item.id === capa.id ? {
+                    ...item,
+                    status: 'complete',
+                    signatures: [...(item.signatures || []), record]
+                  } : item))
+                  log('CAPA Completed', 'capa', `CAPA ${capa.id} marked complete by ${result.userId}`, {
+                    recordId: capa.id,
+                    digitalSignature: result.digitalSignature
+                  })
+                }}
+              />
+            )}
+          </div>
         </CardContent>
       </Card>
+
+      {capa.signatures && capa.signatures.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Electronic Signature History</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {capa.signatures
+              .slice()
+              .sort((a, b) => new Date(b.signedAt).getTime() - new Date(a.signedAt).getTime())
+              .map(sig => (
+                <div key={sig.id} className="border rounded-md p-3">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mb-1">
+                    <span>{new Date(sig.signedAt).toLocaleString()}</span>
+                    <span>• {sig.action}</span>
+                    <span>• {sig.signedBy}</span>
+                  </div>
+                  <div className="text-sm">Reason: {sig.reason}</div>
+                  <div className="mt-1 font-mono text-xs text-muted-foreground">{sig.digitalSignature}</div>
+                </div>
+              ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

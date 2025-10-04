@@ -5,16 +5,33 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from '@phosphor-icons/react'
 import { useAuditLogger } from '@/hooks/use-audit'
-import type { ChangeControl } from '@/types/quality'
+import { ESignaturePrompt, type SignatureResult } from '@/components/ESignaturePrompt'
+import type { ChangeControl, ESignatureRecord } from '@/types/quality'
+
+const demoCredentials = {
+  username: 'cc.approver@biopharm.com',
+  password: 'DemoPass123!'
+}
+
+const statusOrder: ChangeControl['status'][] = ['draft', 'in-review', 'approved', 'implemented', 'closed']
 
 export function ChangeControlDetails({ id, onBack }: { id: string; onBack: () => void }) {
-  const [ccs] = useKV<ChangeControl[]>('change-controls', [])
+  const [ccs, setChangeControls] = useKV<ChangeControl[]>('change-controls', [])
   const cc = (ccs || []).find(c => c.id === id)
   const { log } = useAuditLogger()
 
   useEffect(() => {
     if (cc) log('View Change Control', 'change-control', `Viewed ${cc.id}`, { recordId: cc.id })
   }, [cc, log])
+
+  const appendSignature = (action: string, signature: SignatureResult): ESignatureRecord => ({
+    id: `${cc?.id ?? 'CC'}-${Date.now()}`,
+    action,
+    signedBy: signature.userId,
+    signedAt: signature.timestamp,
+    reason: signature.reason,
+    digitalSignature: signature.digitalSignature
+  })
 
   if (!cc) {
     return (
@@ -52,8 +69,61 @@ export function ChangeControlDetails({ id, onBack }: { id: string; onBack: () =>
           <div className="text-sm">
             Impacted equipment: {cc.impactedEquipment.length ? cc.impactedEquipment.join(', ') : 'None'}
           </div>
+          <div className="flex flex-wrap gap-2 mt-4">
+            {(() => {
+              const currentIndex = statusOrder.indexOf(cc.status)
+              const nextStatus = statusOrder[currentIndex + 1]
+              if (!nextStatus) return null
+              const label = `Advance to ${nextStatus.replace('-', ' ')}`
+              return (
+                <ESignaturePrompt
+                  key={nextStatus}
+                  trigger={<Button size="sm">{label}</Button>}
+                  title="Change Control Approval"
+                  statement={`${label} for ${cc.id}`}
+                  demoCredentials={demoCredentials}
+                  onConfirm={async (result: SignatureResult) => {
+                    const record = appendSignature(label, result)
+                    setChangeControls(current => (current || []).map(item => item.id === cc.id ? {
+                      ...item,
+                      status: nextStatus,
+                      signatures: [...(item.signatures || []), record]
+                    } : item))
+                    log('Change Control Status Update', 'change-control', `${cc.id} advanced to ${nextStatus} by ${result.userId}`, {
+                      recordId: cc.id,
+                      digitalSignature: result.digitalSignature
+                    })
+                  }}
+                />
+              )
+            })()}
+          </div>
         </CardContent>
       </Card>
+
+      {cc.signatures && cc.signatures.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Electronic Signature History</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {cc.signatures
+              .slice()
+              .sort((a, b) => new Date(b.signedAt).getTime() - new Date(a.signedAt).getTime())
+              .map(sig => (
+                <div key={sig.id} className="border rounded-md p-3">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mb-1">
+                    <span>{new Date(sig.signedAt).toLocaleString()}</span>
+                    <span>• {sig.action}</span>
+                    <span>• {sig.signedBy}</span>
+                  </div>
+                  <div className="text-sm">Reason: {sig.reason}</div>
+                  <div className="mt-1 font-mono text-xs text-muted-foreground">{sig.digitalSignature}</div>
+                </div>
+              ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

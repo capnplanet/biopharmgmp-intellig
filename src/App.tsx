@@ -14,6 +14,7 @@ import { CapaReview } from '@/components/CapaReview'
 import { CapaTimeline } from '@/components/CapaTimeline'
 import { DeviationDetails } from '@/components/DeviationDetails'
 import { ChangeControlDetails } from '@/components/ChangeControlDetails'
+import { InvestigationWorkflow } from '@/components/InvestigationWorkflow'
 import { startDigitalTwin } from '@/lib/digitalTwin'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
@@ -94,6 +95,13 @@ function App() {
       }
       case 'quality':
         // Render sub-pages for quality route overlays
+        if ((route || '').startsWith('investigation/')) {
+          const parts = (route || '').split('/').filter(Boolean)
+          const [, investigationId] = parts
+          if (investigationId) {
+            return <InvestigationWorkflow id={investigationId} onBack={() => setRoute('')} />
+          }
+        }
         if ((route || '').startsWith('capa/')) {
           const parts = (route || '').split('/').filter(Boolean)
           // Expected: capa/:id/review or capa/:id/timeline

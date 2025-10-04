@@ -7,18 +7,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { 
-  Warning, 
-  MagnifyingGlass, 
-  CheckCircle, 
+import { Progress } from '@/components/ui/progress'
+import {
+  Warning,
+  MagnifyingGlass,
+  CheckCircle,
   Clock,
   Plus,
   FileText,
-  Robot
+  Robot,
+  ListChecks
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { buildInvestigationSources, sourcesToString } from '@/data/archive'
-import type { ChangeControl } from '@/components/ChangeControlDetails'
+import type { CAPA, ChangeControl, Deviation, Investigation } from '@/types/quality'
+import { calculateInvestigationProgress, createInvestigationFromDeviation, normalizeInvestigation } from '@/utils/investigation'
 import { useAuditLogger } from '@/hooks/use-audit'
 
 type WindowSpark = {
@@ -30,49 +33,6 @@ const getSpark = (): WindowSpark | undefined => {
   // Safely access window.spark without introducing 'any' types
   const w = window as unknown as { spark?: WindowSpark }
   return w.spark
-}
-
-interface Deviation {
-  id: string
-  title: string
-  description: string
-  severity: 'low' | 'medium' | 'high' | 'critical'
-  status: 'open' | 'investigating' | 'resolved' | 'closed'
-  batchId: string
-  reportedBy: string
-  reportedDate: Date
-  assignedTo?: string
-  rootCause?: string
-  correctiveActions?: string[]
-  effectivenessCheck?: {
-    dueDate: Date
-    status: 'pending' | 'complete'
-    result?: string
-  }
-}
-
-interface CAPA {
-  id: string
-  title: string
-  description: string
-  type: 'corrective' | 'preventive'
-  priority: 'low' | 'medium' | 'high'
-  status: 'draft' | 'approved' | 'implementing' | 'complete'
-  dueDate: Date
-  assignedTo: string
-  relatedDeviations: string[]
-  actions: {
-    id: string
-    description: string
-    responsible: string
-    dueDate: Date
-    status: 'pending' | 'complete'
-  }[]
-  effectivenessCheck?: {
-    dueDate: Date
-    status: 'pending' | 'complete'
-    result?: string
-  }
 }
 
 const mockDeviations: Deviation[] = [
@@ -193,9 +153,196 @@ const mockCAPAs: CAPA[] = [
   }
 ]
 
+const mockInvestigations: Investigation[] = [
+  {
+    id: 'DEV-2024-001',
+    deviationId: 'DEV-2024-001',
+    title: 'Investigation - Temperature Excursion in Bioreactor',
+    severity: 'high',
+    lead: 'Quality Team A',
+    status: 'analysis',
+    riskLevel: 'high',
+    startedOn: new Date('2024-01-16T10:00:00Z'),
+    targetCompletion: new Date('2024-01-20T00:00:00Z'),
+    relatedCapas: ['CAPA-2024-001'],
+    timeline: [
+      {
+        id: 'DEV-2024-001-timeline-1',
+        timestamp: new Date('2024-01-16T09:40:00Z'),
+        summary: 'Deviation triaged and investigation initiated',
+        actor: 'Sarah Chen'
+      },
+      {
+        id: 'DEV-2024-001-timeline-2',
+        timestamp: new Date('2024-01-16T10:05:00Z'),
+        summary: 'Containment actions implemented',
+        actor: 'Manufacturing'
+      },
+      {
+        id: 'DEV-2024-001-timeline-3',
+        timestamp: new Date('2024-01-16T12:15:00Z'),
+        summary: 'Preliminary root-cause hypothesis drafted',
+        actor: 'Quality Team A'
+      }
+    ],
+    stages: [
+      {
+        id: 'containment',
+        title: 'Immediate Containment',
+        description: 'Stabilize process conditions and segregate impacted product.',
+        gate: 'containment',
+        tasks: [
+          {
+            id: 'DEV-2024-001-containment-1',
+            title: 'Quarantine impacted batch BTH-2024-003',
+            description: 'Tag and segregate work-in-progress to prevent unintended release.',
+            owner: 'Manufacturing',
+            dueDate: new Date('2024-01-16T10:30:00Z'),
+            status: 'complete',
+            completedOn: new Date('2024-01-16T10:20:00Z'),
+            notes: 'Batch status updated to QUARANTINE in MES.'
+          },
+          {
+            id: 'DEV-2024-001-containment-2',
+            title: 'Stabilize reactor BIO-002 temperature loop',
+            description: 'Return fermentation temperature to 37°C and monitor for oscillations.',
+            owner: 'Engineering',
+            dueDate: new Date('2024-01-16T10:45:00Z'),
+            status: 'complete',
+            completedOn: new Date('2024-01-16T10:32:00Z'),
+            notes: 'Manual override applied; PID retune pending.'
+          }
+        ]
+      },
+      {
+        id: 'root-cause',
+        title: 'Root Cause Analysis',
+        description: 'Collect data and confirm technical hypothesis.',
+        gate: 'root-cause',
+        tasks: [
+          {
+            id: 'DEV-2024-001-root-cause-1',
+            title: 'Extract historian and MES data for BIO-002',
+            description: 'Pull temperature, agitation, and valve position trends covering the excursion.',
+            owner: 'Data Analytics',
+            dueDate: new Date('2024-01-16T13:00:00Z'),
+            status: 'in-progress',
+            notes: 'Trend review identified oscillatory control output.'
+          },
+          {
+            id: 'DEV-2024-001-root-cause-2',
+            title: 'Facilitate 5-Why workshop',
+            description: 'Cross-functional session to document most probable root cause and contributing factors.',
+            owner: 'Quality Team A',
+            dueDate: new Date('2024-01-17T09:00:00Z'),
+            status: 'pending'
+          }
+        ]
+      },
+      {
+        id: 'corrective',
+        title: 'Corrective & Preventive Planning',
+        description: 'Define CAPA scope and product disposition.',
+        gate: 'corrective',
+        tasks: [
+          {
+            id: 'DEV-2024-001-corrective-1',
+            title: 'Draft CAPA for PID retune and hardware upgrade',
+            description: 'Summarize engineering changes and training updates needed to prevent recurrence.',
+            owner: 'Engineering',
+            dueDate: new Date('2024-01-18T12:00:00Z'),
+            status: 'pending'
+          },
+          {
+            id: 'DEV-2024-001-corrective-2',
+            title: 'Document batch disposition decision',
+            description: 'Complete risk assessment and QA release recommendation.',
+            owner: 'Quality Assurance',
+            dueDate: new Date('2024-01-19T17:00:00Z'),
+            status: 'pending'
+          }
+        ]
+      }
+    ],
+    effectivenessReview: {
+      dueDate: new Date('2024-02-15T00:00:00Z'),
+      status: 'scheduled',
+      notes: '30-day process performance review after CAPA implementation.'
+    }
+  },
+  {
+    id: 'DEV-2024-002',
+    deviationId: 'DEV-2024-002',
+    title: 'Investigation - Documentation Discrepancy',
+    severity: 'medium',
+    lead: 'Document Control',
+    status: 'triage',
+    riskLevel: 'medium',
+    startedOn: new Date('2024-01-16T15:00:00Z'),
+    targetCompletion: new Date('2024-01-19T00:00:00Z'),
+    timeline: [
+      {
+        id: 'DEV-2024-002-timeline-1',
+        timestamp: new Date('2024-01-16T14:20:00Z'),
+        summary: 'Deviation submitted by manufacturing',
+        actor: 'Mike Rodriguez'
+      },
+      {
+        id: 'DEV-2024-002-timeline-2',
+        timestamp: new Date('2024-01-16T15:10:00Z'),
+        summary: 'Investigation lead assigned',
+        actor: 'Quality Systems'
+      }
+    ],
+    stages: [
+      {
+        id: 'containment',
+        title: 'Record Containment',
+        description: 'Protect data integrity and gather contemporaneous records.',
+        gate: 'containment',
+        tasks: [
+          {
+            id: 'DEV-2024-002-containment-1',
+            title: 'Lock batch record for review',
+            description: 'Restrict editing access to the affected record while investigation is active.',
+            owner: 'Document Control',
+            dueDate: new Date('2024-01-16T15:30:00Z'),
+            status: 'in-progress'
+          },
+          {
+            id: 'DEV-2024-002-containment-2',
+            title: 'Collect automated sensor logs',
+            description: 'Download pH sensor outputs from SCADA to compare with manual entries.',
+            owner: 'Automation',
+            dueDate: new Date('2024-01-16T18:00:00Z'),
+            status: 'pending'
+          }
+        ]
+      },
+      {
+        id: 'root-cause',
+        title: 'Root Cause Confirmation',
+        description: 'Compare manual vs automated entries to locate transcription error.',
+        gate: 'root-cause',
+        tasks: [
+          {
+            id: 'DEV-2024-002-root-cause-1',
+            title: 'Interview shift operator',
+            description: 'Review manual entry process, training records, and any distractions during recording.',
+            owner: 'Manufacturing Supervisor',
+            dueDate: new Date('2024-01-17T10:00:00Z'),
+            status: 'pending'
+          }
+        ]
+      }
+    ]
+  }
+]
+
 export function QualityManagement() {
   const [deviations, setDeviations] = useKV<Deviation[]>('deviations', mockDeviations)
   const [capas, setCAPAs] = useKV<CAPA[]>('capas', mockCAPAs)
+  const [investigations, setInvestigations] = useKV<Investigation[]>('investigations', mockInvestigations)
   const [, setRoute] = useKV<string>('route', '')
   const [changeControls, setChangeControls] = useKV<ChangeControl[]>('change-controls', [
     {
@@ -265,6 +412,9 @@ export function QualityManagement() {
     if (capas && capas.length > 0 && typeof capas[0].dueDate !== 'object') {
       setCAPAs((capas || []).map(normalizeCAPA))
     }
+    if (investigations && investigations.length > 0 && typeof investigations[0].startedOn !== 'object') {
+      setInvestigations((investigations || []).map(normalizeInvestigation))
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -290,6 +440,39 @@ export function QualityManagement() {
       complete: 'bg-green-100 text-green-800'
     }
     return colors[status as keyof typeof colors] || colors.open
+  }
+
+  const ensureInvestigationForDeviation = (deviation: Deviation) => {
+    setInvestigations(current => {
+      const list = current || []
+      if (list.some(inv => inv.deviationId === deviation.id)) {
+        return list
+      }
+      const newInvestigation = createInvestigationFromDeviation(deviation)
+  log('Investigation Created', 'deviation', `Workflow initialized for ${deviation.id}`, { recordId: deviation.id })
+      return [newInvestigation, ...list]
+    })
+  }
+
+  const formatInvestigationStatus = (status: Investigation['status']) => {
+    const labels: Record<Investigation['status'], string> = {
+      triage: 'Triage',
+      analysis: 'Analysis',
+      'root-cause': 'Root Cause',
+      'corrective-actions': 'Corrective Actions',
+      effectiveness: 'Effectiveness',
+      closed: 'Closed'
+    }
+    return labels[status] ?? status
+  }
+
+  const getRiskBadgeColor = (risk: Investigation['riskLevel']) => {
+    const colors = {
+      low: 'bg-emerald-100 text-emerald-800',
+      medium: 'bg-amber-100 text-amber-800',
+      high: 'bg-rose-100 text-rose-800'
+    }
+    return colors[risk]
   }
 
   const generateAIAnalysis = async (deviation: Deviation) => {
@@ -365,16 +548,39 @@ export function QualityManagement() {
     }
   }
 
-  const updateDeviationStatus = (deviationId: string, newStatus: Deviation['status']) => {
-    setDeviations(currentDeviations => 
-      (currentDeviations || []).map(dev => 
-        dev.id === deviationId 
+  const updateDeviationStatus = (deviation: Deviation, newStatus: Deviation['status']) => {
+    setDeviations(currentDeviations =>
+      (currentDeviations || []).map(dev =>
+        dev.id === deviation.id
           ? { ...dev, status: newStatus }
           : dev
       )
     )
-    toast.success(`Deviation ${deviationId} status updated to ${newStatus}`)
-    log('Deviation Status Updated', 'deviation', `Set status to ${newStatus}`, { recordId: deviationId })
+
+    if (newStatus === 'investigating') {
+      ensureInvestigationForDeviation(deviation)
+      setInvestigations(current =>
+        (current || []).map(inv =>
+          inv.deviationId === deviation.id
+            ? { ...inv, status: 'analysis' }
+            : inv
+        )
+      )
+    }
+
+    if (newStatus === 'resolved' || newStatus === 'closed') {
+      const statusUpdate = newStatus === 'resolved' ? 'effectiveness' : 'closed'
+      setInvestigations(current =>
+        (current || []).map(inv =>
+          inv.deviationId === deviation.id
+            ? { ...inv, status: statusUpdate }
+            : inv
+        )
+      )
+    }
+
+    toast.success(`Deviation ${deviation.id} status updated to ${newStatus}`)
+    log('Deviation Status Updated', 'deviation', `Set status to ${newStatus}`, { recordId: deviation.id })
   }
 
   return (
@@ -502,13 +708,13 @@ export function QualityManagement() {
                                 </Button>
                                 <Button 
                                   variant="outline"
-                                  onClick={() => updateDeviationStatus(deviation.id, 'investigating')}
+                                  onClick={() => updateDeviationStatus(deviation, 'investigating')}
                                 >
                                   Start Investigation
                                 </Button>
                                 <Button 
                                   variant="outline"
-                                  onClick={() => updateDeviationStatus(deviation.id, 'resolved')}
+                                  onClick={() => updateDeviationStatus(deviation, 'resolved')}
                                 >
                                   Mark Resolved
                                 </Button>
@@ -528,6 +734,18 @@ export function QualityManagement() {
                           </div>
                         </DialogContent>
                       </Dialog>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          ensureInvestigationForDeviation(deviation)
+                          setRoute(`investigation/${deviation.id}`)
+                          log('Open Investigation Workflow', 'deviation', `Opened workflow for ${deviation.id}`, { recordId: deviation.id })
+                        }}
+                      >
+                        <ListChecks className="h-4 w-4 mr-2" />
+                        Open Workflow
+                      </Button>
                       
                       {deviation.severity === 'high' || deviation.severity === 'critical' ? (
                         <Button variant="destructive" size="sm" className="pulse-critical">
@@ -553,29 +771,55 @@ export function QualityManagement() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {(deviations || []).filter(d => d.status === 'investigating').map(deviation => (
-                  <div key={deviation.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <div className="font-medium">{deviation.id} - {deviation.title}</div>
-                      <div className="text-sm text-muted-foreground">
-                        Assigned to: {deviation.assignedTo || 'Unassigned'}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        <FileText className="h-4 w-4 mr-2" />
-                        View Progress
-                      </Button>
-                      <Button 
-                        size="sm"
-                        onClick={() => generateAIAnalysis(deviation)}
-                      >
-                        <Robot className="h-4 w-4 mr-2" />
-                        AI Assist
-                      </Button>
-                    </div>
+                {((investigations || []).filter(inv => inv.status !== 'closed')).length === 0 ? (
+                  <div className="text-sm text-muted-foreground">
+                    No active investigations. Launch an investigation from the Deviations tab to track progress here.
                   </div>
-                ))}
+                ) : (
+                  (investigations || [])
+                    .filter(inv => inv.status !== 'closed')
+                    .map(inv => {
+                      const relatedDeviation = (deviations || []).find(d => d.id === inv.deviationId)
+                      const { totalTasks, completedTasks, inProgressTasks, progress } = calculateInvestigationProgress(inv)
+                      return (
+                        <div key={inv.id} className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between p-4 border rounded-lg">
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-medium">{inv.deviationId} — {relatedDeviation?.title ?? inv.title}</span>
+                              <Badge>{formatInvestigationStatus(inv.status)}</Badge>
+                              <Badge className={getRiskBadgeColor(inv.riskLevel)}>Risk: {inv.riskLevel}</Badge>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              Lead: {inv.lead || relatedDeviation?.assignedTo || 'Unassigned'} • Due {formatDate(inv.targetCompletion)}
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="min-w-[160px]">
+                                <Progress value={progress} />
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {completedTasks}/{totalTasks} tasks complete
+                                {inProgressTasks > 0 ? ` • ${inProgressTasks} in progress` : ''}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => setRoute(`investigation/${inv.id}`)}>
+                              <FileText className="h-4 w-4 mr-2" />
+                              View Workflow
+                            </Button>
+                            <Button
+                              size="sm"
+                              disabled={!relatedDeviation}
+                              onClick={() => relatedDeviation && generateAIAnalysis(relatedDeviation)}
+                            >
+                              <Robot className="h-4 w-4 mr-2" />
+                              AI Assist
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })
+                )}
               </div>
             </CardContent>
           </Card>

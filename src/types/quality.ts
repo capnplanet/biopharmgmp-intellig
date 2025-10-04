@@ -20,6 +20,7 @@ export interface Deviation {
   rootCause?: string
   correctiveActions?: string[]
   effectivenessCheck?: EffectivenessCheck
+  signatures?: ESignatureRecord[]
 }
 
 export type CAPAType = "corrective" | "preventive"
@@ -46,6 +47,7 @@ export interface CAPA {
   relatedDeviations: string[]
   actions: CapaAction[]
   effectivenessCheck?: EffectivenessCheck
+  signatures?: ESignatureRecord[]
 }
 
 export type InvestigationTaskStatus = "pending" | "in-progress" | "complete"
@@ -104,6 +106,7 @@ export interface Investigation {
     status: "pending" | "scheduled" | "complete"
     notes?: string
   }
+  signatures?: ESignatureRecord[]
 }
 
 export type ChangeControlStatus =
@@ -123,4 +126,14 @@ export interface ChangeControl {
   impactedBatches: string[]
   impactedEquipment: string[]
   riskLevel: "low" | "medium" | "high"
+  signatures?: ESignatureRecord[]
+}
+
+export interface ESignatureRecord {
+  id: string
+  action: string
+  signedBy: string
+  signedAt: Date
+  reason: string
+  digitalSignature: string
 }
