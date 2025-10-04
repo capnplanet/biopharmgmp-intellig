@@ -9,12 +9,19 @@ import {
   type ControllerProps,
   type FieldPath,
   type FieldValues,
+  type FormProviderProps,
 } from "react-hook-form"
 
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 
-const Form = FormProvider
+type FormProps<TFieldValues extends FieldValues = FieldValues> = FormProviderProps<TFieldValues>
+
+function Form<TFieldValues extends FieldValues = FieldValues>({
+  ...props
+}: FormProps<TFieldValues>) {
+  return <FormProvider {...props} />
+}
 
 type FormFieldContextValue<
   TFieldValues extends FieldValues = FieldValues,
@@ -40,7 +47,7 @@ const FormField = <
   )
 }
 
-const useFormField = () => {
+function useFormField() {
   const fieldContext = useContext(FormFieldContext)
   const itemContext = useContext(FormItemContext)
   const { getFieldState } = useFormContext()
@@ -153,13 +160,4 @@ function FormMessage({ className, ...props }: ComponentProps<"p">) {
   )
 }
 
-export {
-  useFormField,
-  Form,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormDescription,
-  FormMessage,
-  FormField,
-}
+export { Form, FormItem, FormLabel, FormControl, FormDescription, FormMessage, FormField }
