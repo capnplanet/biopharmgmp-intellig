@@ -25,6 +25,7 @@ import type { AuditEvent, AuditOutcome } from '@/hooks/use-audit'
 import { ChartContainer, ChartLegendInline, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { exportAuditEventsCSV, exportAuditEventsJSON, tryExportAuditEvents } from '@/utils/auditExport'
 import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Cell } from 'recharts'
+import { useAuditLogger } from '@/hooks/use-audit'
 
 const mockAuditEvents: AuditEvent[] = [
   {
@@ -162,6 +163,7 @@ const modulePalette: Record<AuditEvent['module'], string> = {
 }
 
 export function AuditTrail() {
+  const { log } = useAuditLogger()
   const [auditEvents, setAuditEvents] = useKV<AuditEvent[]>('audit-events', mockAuditEvents)
   const [filteredEvents, setFilteredEvents] = useState<AuditEvent[]>(auditEvents || [])
   const [searchTerm, setSearchTerm] = useState('')
@@ -723,9 +725,17 @@ export function AuditTrail() {
                     <p className="text-sm text-muted-foreground mb-4">
                       Create regulatory-compliant archives for long-term storage
                     </p>
-                    <Button disabled>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        log('Navigate Archive Library', 'navigation', 'User opened archive library from audit trail', {
+                          recordId: 'archive-library',
+                        })
+                        window.location.hash = '#quality/archive'
+                      }}
+                    >
                       <FileText className="h-4 w-4 mr-2" />
-                      Create Archive (Coming Soon)
+                      Open Archive Library
                     </Button>
                   </div>
                 </div>

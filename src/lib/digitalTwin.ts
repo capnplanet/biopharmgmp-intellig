@@ -77,6 +77,12 @@ let simAccum = 0
 
 // Internal state for transient events (e.g., equipment alerts)
 const eqAlertDecay: Record<string, number> = {}
+const batchWarningDecay: Record<string, number> = {}
+
+const TRANSIENT_EVENT_PROB = 0.006
+const WARNING_RECOVERY_PROB = 0.05
+const MIN_WARNING_TICKS = 2
+const MAX_WARNING_TICKS = 5
 
 function tick() {
   const dtSec = opts.simSecondsPerTick
@@ -112,17 +118,25 @@ function tick() {
     // Volume tends to target slowly (e.g., feed)
     p.volume.current = step(p.volume.current, p.volume.target, 0.02, 0.5)
 
+    const warningTicksRemaining = batchWarningDecay[b.id] || 0
+
     // Occasionally introduce a transient deviation for realism
-    if (Math.random() < 0.02) {
+    if (Math.random() < TRANSIENT_EVENT_PROB) {
       const which = Math.floor(Math.random() * 3)
-      if (which === 0) p.temperature.current += 0.4 + 0.2 * Math.random()
-      if (which === 1) p.pressure.current += (Math.random() < 0.5 ? -1 : 1) * (0.08 + 0.04 * Math.random())
-      if (which === 2) p.pH.current += (Math.random() < 0.5 ? -1 : 1) * (0.15 + 0.05 * Math.random())
-      // Flag status to warning briefly
-      if (b.status === 'running') b.status = 'warning'
-    } else if (b.status === 'warning' && Math.random() < 0.15) {
-      // Clear warning naturally
-      b.status = 'running'
+      if (which === 0) p.temperature.current += 0.3 + 0.15 * Math.random()
+      if (which === 1) p.pressure.current += (Math.random() < 0.5 ? -1 : 1) * (0.05 + 0.03 * Math.random())
+      if (which === 2) p.pH.current += (Math.random() < 0.5 ? -1 : 1) * (0.1 + 0.04 * Math.random())
+      if (b.status === 'running') {
+        b.status = 'warning'
+        batchWarningDecay[b.id] = MIN_WARNING_TICKS + Math.floor(Math.random() * (MAX_WARNING_TICKS - MIN_WARNING_TICKS + 1))
+      }
+    } else if (b.status === 'warning') {
+      if (warningTicksRemaining > 0) {
+        batchWarningDecay[b.id] = warningTicksRemaining - 1
+      } else if (Math.random() < WARNING_RECOVERY_PROB) {
+        b.status = 'running'
+        delete batchWarningDecay[b.id]
+      }
     }
   }
 

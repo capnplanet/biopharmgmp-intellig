@@ -14,6 +14,7 @@ import { CapaReview } from '@/components/CapaReview'
 import { CapaTimeline } from '@/components/CapaTimeline'
 import { DeviationDetails } from '@/components/DeviationDetails'
 import { ChangeControlDetails } from '@/components/ChangeControlDetails'
+import { ArchiveView } from '@/components/ArchiveView'
 import { InvestigationWorkflow } from '@/components/InvestigationWorkflow'
 import { startDigitalTwin } from '@/lib/digitalTwin'
 import { AutomationBridge } from '@/components/AutomationBridge'
@@ -125,6 +126,11 @@ function App() {
           if (devId) {
             return <DeviationDetails id={devId} onBack={() => setRoute('')} />
           }
+        }
+        if ((route || '').startsWith('archive')) {
+          const parts = (route || '').split('/').filter(Boolean)
+          const batchId = parts.length >= 2 ? parts[1] : undefined
+          return <ArchiveView batchId={batchId} onBack={() => setRoute('')} />
         }
         if ((route || '').startsWith('cc/')) {
           const parts = (route || '').split('/').filter(Boolean)

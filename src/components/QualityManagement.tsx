@@ -21,7 +21,8 @@ import {
   ListChecks,
   PlayCircle,
   SealCheck,
-  CopySimple
+  CopySimple,
+  LinkSimple
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { buildInvestigationSources, sourcesToString } from '@/data/archive'
@@ -406,6 +407,16 @@ export function QualityManagement() {
     if (!d) return ''
     const dt = d instanceof Date ? d : new Date(d)
     return isNaN(dt.getTime()) ? '' : dt.toLocaleDateString()
+  }
+
+  const formatDateTime = (value: Date | string | undefined) => {
+    if (!value) return ''
+    const dt = value instanceof Date ? value : new Date(value)
+    if (Number.isNaN(dt.getTime())) return ''
+    return new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(dt)
   }
 
   // Hydrate date fields if they were persisted as strings
@@ -1063,71 +1074,286 @@ export function QualityManagement() {
               </Card>
             )}
 
-            {(deviations || []).map((deviation) => (
-              <Card key={deviation.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="font-mono font-medium">{deviation.id}</span>
-                        <Badge className={getSeverityColor(deviation.severity)}>
-                          {deviation.severity}
-                        </Badge>
-                        <Badge className={getStatusColor(deviation.status)}>
-                          {deviation.status}
-                        </Badge>
+            {(deviations || []).map((deviation) => {
+              const automationMetadata = (deviation.metadata ?? {}) as {
+                trigger?: string
+                parameter?: AutomationSuggestion['parameter']
+                currentValue?: number
+                target?: number
+                bounds?: { min: number; max: number }
+                compliance?: number
+                productionContext?: {
+                  stage?: string
+                  status?: string
+                  progress?: number
+                  equipment?: string[]
+                  timeline?: Array<{
+                    stage?: string
+                    startTime?: string
+                    endTime?: string
+                    status?: string
+                  }>
+                }
+                alcoa?: {
+                  observedAt?: string
+                  recordedAt?: string
+                  recordedBy?: string
+                  dataSource?: string
+                  dataIntegrityChecksum?: string
+                }
+              }
+              const parameter = automationMetadata.parameter
+              const parameterLabel = parameter ? (parameterLabels[parameter] ?? parameter) : undefined
+              const parameterUnit = parameter ? (parameterUnits[parameter] ?? '') : ''
+              const measurement = {
+                currentValue: typeof automationMetadata.currentValue === 'number' ? automationMetadata.currentValue : undefined,
+                target: typeof automationMetadata.target === 'number' ? automationMetadata.target : undefined,
+                bounds: automationMetadata.bounds,
+                compliance: typeof automationMetadata.compliance === 'number' ? automationMetadata.compliance : undefined,
+              }
+              const hasMeasurement =
+                measurement.currentValue !== undefined ||
+                measurement.target !== undefined ||
+                measurement.bounds !== undefined ||
+                measurement.compliance !== undefined
+              const compliancePercent =
+                typeof measurement.compliance === 'number'
+                  ? Math.round(Math.max(0, Math.min(1, measurement.compliance)) * 100)
+                  : undefined
+              const productionContext = automationMetadata.productionContext
+              const timelineEntries = Array.isArray(productionContext?.timeline)
+                ? (productionContext?.timeline as Array<{
+                  stage?: string
+                  startTime?: string
+                  endTime?: string
+                  status?: string
+                }>)
+                : []
+              const progressValue = typeof productionContext?.progress === 'number'
+                ? Math.max(0, Math.min(100, productionContext.progress))
+                : undefined
+              const alcoa = automationMetadata.alcoa
+
+              const openArchiveView = () => {
+                setRoute(`archive/${deviation.batchId}`)
+                log('Open Batch Archive', 'archive', `Archive view opened for ${deviation.batchId}`, {
+                  recordId: deviation.batchId,
+                })
+              }
+
+              return (
+                <Card key={deviation.id} className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="font-mono font-medium">{deviation.id}</span>
+                          <Badge className={getSeverityColor(deviation.severity)}>
+                            {deviation.severity}
+                          </Badge>
+                          <Badge className={getStatusColor(deviation.status)}>
+                            {deviation.status}
+                          </Badge>
+                        </div>
+                        <h3 className="font-semibold mb-2">{deviation.title}</h3>
+                        <p className="text-sm text-muted-foreground mb-3">{deviation.description}</p>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span>Batch: {deviation.batchId}</span>
+                          <span>Reported by: {deviation.reportedBy}</span>
+                          <span>Date: {formatDate(deviation.reportedDate)}</span>
+                        </div>
                       </div>
-                      <h3 className="font-semibold mb-2">{deviation.title}</h3>
-                      <p className="text-sm text-muted-foreground mb-3">{deviation.description}</p>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span>Batch: {deviation.batchId}</span>
-                        <span>Reported by: {deviation.reportedBy}</span>
-                        <span>Date: {formatDate(deviation.reportedDate)}</span>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" onClick={() => setSelectedDeviation(deviation)}>
-                            <MagnifyingGlass className="h-4 w-4 mr-2" />
-                            Investigate
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-4xl">
-                          <DialogHeader>
-                            <DialogTitle>Deviation Investigation - {deviation.id}</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-6">
-                            <div className="grid gap-4">
-                              <div>
-                                <Label>Title</Label>
-                                <div className="font-medium">{deviation.title}</div>
-                              </div>
-                              <div>
-                                <Label>Description</Label>
-                                <div>{deviation.description}</div>
-                              </div>
-                              <div className="grid grid-cols-3 gap-4">
+                      <div className="flex gap-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm" onClick={() => setSelectedDeviation(deviation)}>
+                              <MagnifyingGlass className="h-4 w-4 mr-2" />
+                              Investigate
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-4xl">
+                            <DialogHeader>
+                              <DialogTitle>Deviation Investigation - {deviation.id}</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-6">
+                              <div className="grid gap-4">
                                 <div>
-                                  <Label>Severity</Label>
-                                  <Badge className={getSeverityColor(deviation.severity)}>
-                                    {deviation.severity}
-                                  </Badge>
+                                  <Label>Title</Label>
+                                  <div className="font-medium">{deviation.title}</div>
                                 </div>
                                 <div>
-                                  <Label>Status</Label>
-                                  <Badge className={getStatusColor(deviation.status)}>
-                                    {deviation.status}
-                                  </Badge>
+                                  <Label>Description</Label>
+                                  <div>{deviation.description}</div>
                                 </div>
-                                <div>
-                                  <Label>Batch ID</Label>
-                                  <div className="font-mono">{deviation.batchId}</div>
+                                <div className="grid grid-cols-3 gap-4">
+                                  <div>
+                                    <Label>Severity</Label>
+                                    <Badge className={getSeverityColor(deviation.severity)}>
+                                      {deviation.severity}
+                                    </Badge>
+                                  </div>
+                                  <div>
+                                    <Label>Status</Label>
+                                    <Badge className={getStatusColor(deviation.status)}>
+                                      {deviation.status}
+                                    </Badge>
+                                  </div>
+                                  <div>
+                                    <Label>Batch ID</Label>
+                                    <div className="font-mono">{deviation.batchId}</div>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            
-                            <div className="space-y-4">
+
+                              {(hasMeasurement || productionContext || alcoa) && (
+                                <div className="space-y-4">
+                                  {hasMeasurement && (
+                                    <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
+                                      <div className="flex items-center justify-between">
+                                        <Label className="text-xs uppercase tracking-wide text-muted-foreground/80">
+                                          Process Parameter Snapshot
+                                        </Label>
+                                        {compliancePercent !== undefined && (
+                                          <Badge variant="outline" className="text-xs">
+                                            Compliance {compliancePercent}%
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <div className="text-sm text-muted-foreground">
+                                        {parameterLabel ? (
+                                          <span className="font-semibold text-foreground">{parameterLabel}</span>
+                                        ) : (
+                                          <span>Process Parameter</span>
+                                        )}
+                                      </div>
+                                      <div className="grid gap-1 text-sm">
+                                        {measurement.currentValue !== undefined && (
+                                          <span>Current: <strong>{measurement.currentValue.toFixed(2)} {parameterUnit}</strong></span>
+                                        )}
+                                        {measurement.target !== undefined && (
+                                          <span>Target: {measurement.target.toFixed(2)} {parameterUnit}</span>
+                                        )}
+                                        {measurement.bounds && (
+                                          <span>
+                                            Limits: {measurement.bounds.min.toFixed(2)}–{measurement.bounds.max.toFixed(2)} {parameterUnit}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {automationMetadata.trigger && (
+                                        <div className="text-xs text-muted-foreground/80">
+                                          Triggered by {automationMetadata.trigger}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {productionContext && (
+                                    <div className="rounded-lg border border-dashed bg-background/80 p-4 space-y-4">
+                                      <div className="flex flex-wrap items-start justify-between gap-4">
+                                        <div className="space-y-1">
+                                          <div className="flex items-center gap-2">
+                                            <Label className="text-xs uppercase tracking-wide text-muted-foreground/80">
+                                              Production Context
+                                            </Label>
+                                            <Button
+                                              variant="link"
+                                              className="px-0 h-auto text-xs"
+                                              onClick={openArchiveView}
+                                            >
+                                              <LinkSimple className="h-3 w-3 mr-1" />
+                                              View archive record
+                                            </Button>
+                                          </div>
+                                          <div className="text-sm text-muted-foreground">
+                                            Stage: <span className="font-medium text-foreground">{productionContext.stage || 'Unknown'}</span>
+                                          </div>
+                                          <div className="text-sm text-muted-foreground">
+                                            Status: <span className="font-medium text-foreground">{productionContext.status || 'Unknown'}</span>
+                                          </div>
+                                          {productionContext.equipment && productionContext.equipment.length > 0 && (
+                                            <div className="text-xs text-muted-foreground/80">
+                                              Equipment: {productionContext.equipment.join(', ')}
+                                            </div>
+                                          )}
+                                        </div>
+                                        {progressValue !== undefined && (
+                                          <div className="min-w-[200px] space-y-1">
+                                            <div className="text-xs text-muted-foreground">
+                                              Progress {Math.round(progressValue)}%
+                                            </div>
+                                            <Progress value={progressValue} />
+                                          </div>
+                                        )}
+                                      </div>
+                                      {timelineEntries.length > 0 && (
+                                        <div className="space-y-2">
+                                          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                                            Batch Timeline
+                                          </div>
+                                          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                            {timelineEntries.map((step, index) => (
+                                              <div
+                                                key={`${step?.stage || 'stage'}-${index}`}
+                                                className="rounded-md border bg-muted/30 p-3 text-xs space-y-1"
+                                              >
+                                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                                  <span className="font-medium text-foreground">{step?.stage || 'Stage'}</span>
+                                                  {step?.status && (
+                                                    <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                                      {step.status}
+                                                    </Badge>
+                                                  )}
+                                                </div>
+                                                <div className="text-[11px] text-muted-foreground">
+                                                  Start: {formatDateTime(step?.startTime)}
+                                                </div>
+                                                {step?.endTime && (
+                                                  <div className="text-[11px] text-muted-foreground">
+                                                    End: {formatDateTime(step.endTime)}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {alcoa && (
+                                    <div className="rounded-lg border bg-muted/40 p-4 space-y-2">
+                                      <Label className="text-xs uppercase tracking-wide text-muted-foreground/80">
+                                        ALCOA++ Record Trace
+                                      </Label>
+                                      <div className="grid gap-1 text-xs text-muted-foreground">
+                                        <div>
+                                          <span className="font-semibold text-foreground">Observed:</span> {formatDateTime(alcoa.observedAt)}
+                                        </div>
+                                        <div>
+                                          <span className="font-semibold text-foreground">Recorded:</span> {formatDateTime(alcoa.recordedAt)}
+                                        </div>
+                                        {alcoa.recordedBy && (
+                                          <div>
+                                            <span className="font-semibold text-foreground">Recorded By:</span> {alcoa.recordedBy}
+                                          </div>
+                                        )}
+                                        {alcoa.dataSource && (
+                                          <div>
+                                            <span className="font-semibold text-foreground">Source:</span> {alcoa.dataSource}
+                                          </div>
+                                        )}
+                                        {alcoa.dataIntegrityChecksum && (
+                                          <div className="text-[11px] text-muted-foreground break-all">
+                                            <span className="font-semibold text-foreground">Checksum:</span> {alcoa.dataIntegrityChecksum}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="space-y-4">
                               <div className="flex gap-2 flex-wrap items-center">
                                 <Tooltip>
                                   <TooltipTrigger asChild>
@@ -1333,7 +1559,8 @@ export function QualityManagement() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            )
+          })}
           </div>
         </TabsContent>
 

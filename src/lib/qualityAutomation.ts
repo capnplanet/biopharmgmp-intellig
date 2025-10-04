@@ -35,7 +35,13 @@ const PARAMETER_UNITS: Record<string, string> = {
 const activeTriggers = new Map<string, string>()
 const trendState = new Map<string, { lastValue: number; counter: number }>()
 const deviationLookup = new Map<string, string>()
+const oosStreaks = new Map<string, number>()
+const eventCadence = new Map<string, number>()
 let initialized = false
+
+const OOS_REQUIRED_STREAK = 3
+const OOT_REQUIRED_COUNTER = 6
+const EVENT_COOLDOWN_MS = 5 * 60 * 1000 // 5 real minutes between same-parameter events
 
 const createDeviationId = (batchId: string, trigger: AutomationTrigger, parameter: string) => {
   const ts = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14)
@@ -95,6 +101,25 @@ const buildDeviation = (snapshot: TwinSnapshot, batchIndex: number, trigger: Aut
         max: measurement.max,
       },
       compliance: measurement.compliance,
+      productionContext: {
+        stage: batch.stage,
+        progress: batch.progress,
+        status: batch.status,
+        equipment: batch.equipment,
+        timeline: batch.timeline.map(item => ({
+          stage: item.stage,
+          startTime: item.startTime instanceof Date ? item.startTime.toISOString() : new Date(item.startTime).toISOString(),
+          endTime: item.endTime ? (item.endTime instanceof Date ? item.endTime.toISOString() : new Date(item.endTime).toISOString()) : undefined,
+          status: item.status,
+        })),
+      },
+      alcoa: {
+        observedAt: snapshot.timestamp.toISOString(),
+        recordedAt: new Date().toISOString(),
+        recordedBy: 'Digital Twin Monitor',
+        dataSource: 'Digital Twin Snapshot',
+        dataIntegrityChecksum: `${batch.id}-${parameter}-${trigger}`,
+      },
     },
   }
 
@@ -143,6 +168,15 @@ const emitProposal = (detail: AutomationProposalDetail) => {
   window.dispatchEvent(new CustomEvent<AutomationProposalDetail>('quality:automation-proposal', { detail }))
 }
 
+const canEmitEvent = (key: string, timestamp: number) => {
+  const lastEmitted = eventCadence.get(key)
+  if (lastEmitted && timestamp - lastEmitted < EVENT_COOLDOWN_MS) {
+    return false
+  }
+  eventCadence.set(key, timestamp)
+  return true
+}
+
 const processSnapshot = (snapshot: TwinSnapshot) => {
   snapshot.batches.forEach((batch, index) => {
     const parameters = batch.parameters
@@ -159,7 +193,10 @@ const processSnapshot = (snapshot: TwinSnapshot) => {
       const compliance = Math.min(1, Math.max(0, (spec.max - spec.min - Math.abs(reading.current - reading.target)) / (spec.max - spec.min)))
 
       if (outOfSpec) {
-        if (!activeTriggers.has(key)) {
+        const streak = (oosStreaks.get(key) || 0) + 1
+        oosStreaks.set(key, streak)
+
+        if (!activeTriggers.has(key) && streak >= OOS_REQUIRED_STREAK && canEmitEvent(key, snapshot.timestamp.getTime())) {
           const measurement = {
             value: reading.current,
             target: reading.target,
@@ -187,6 +224,7 @@ const processSnapshot = (snapshot: TwinSnapshot) => {
         if (activeTriggers.has(key)) {
           activeTriggers.delete(key)
         }
+        oosStreaks.delete(key)
 
         // Trend detection for OOT
         const state = trendState.get(trendKey) || { lastValue: reading.current, counter: 0 }
@@ -204,7 +242,7 @@ const processSnapshot = (snapshot: TwinSnapshot) => {
         state.lastValue = reading.current
         trendState.set(trendKey, state)
 
-        if (state.counter >= 3 && !activeTriggers.has(trendKey)) {
+        if (state.counter >= OOT_REQUIRED_COUNTER && !activeTriggers.has(trendKey) && canEmitEvent(trendKey, snapshot.timestamp.getTime())) {
           const measurement = {
             value: reading.current,
             target: reading.target,
