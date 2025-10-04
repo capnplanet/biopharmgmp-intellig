@@ -5,18 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from '@phosphor-icons/react'
 import { useAuditLogger } from '@/hooks/use-audit'
-
-export type ChangeControl = {
-  id: string
-  title: string
-  description: string
-  status: 'draft' | 'in-review' | 'approved' | 'implemented' | 'closed'
-  requestedBy: string
-  requestedDate: Date
-  impactedBatches: string[]
-  impactedEquipment: string[]
-  riskLevel: 'low' | 'medium' | 'high'
-}
+import type { ChangeControl } from '@/types/quality'
 
 export function ChangeControlDetails({ id, onBack }: { id: string; onBack: () => void }) {
   const [ccs] = useKV<ChangeControl[]>('change-controls', [])

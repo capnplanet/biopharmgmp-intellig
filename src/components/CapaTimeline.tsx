@@ -5,26 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Clock, ArrowLeft } from '@phosphor-icons/react'
 import { useAuditLogger } from '@/hooks/use-audit'
-
-type CAPA = {
-  id: string
-  title: string
-  description: string
-  type: 'corrective' | 'preventive'
-  priority: 'low' | 'medium' | 'high'
-  status: 'draft' | 'approved' | 'implementing' | 'complete'
-  dueDate: Date
-  assignedTo: string
-  relatedDeviations: string[]
-  actions: {
-    id: string
-    description: string
-    responsible: string
-    dueDate: Date
-    status: 'pending' | 'complete'
-  }[]
-  effectivenessCheck?: { dueDate: Date; status: 'pending' | 'complete'; result?: string }
-}
+import type { CAPA } from '@/types/quality'
 
 export function CapaTimeline({ id, onBack }: { id: string, onBack: () => void }) {
   const [capas] = useKV<CAPA[]>('capas')

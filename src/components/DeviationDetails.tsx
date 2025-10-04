@@ -5,21 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { MagnifyingGlass, Robot, ArrowLeft } from '@phosphor-icons/react'
 import { useAuditLogger } from '@/hooks/use-audit'
-
-type Deviation = {
-  id: string
-  title: string
-  description: string
-  severity: 'low' | 'medium' | 'high' | 'critical'
-  status: 'open' | 'investigating' | 'resolved' | 'closed'
-  batchId: string
-  reportedBy: string
-  reportedDate: Date
-  assignedTo?: string
-  rootCause?: string
-  correctiveActions?: string[]
-  effectivenessCheck?: { dueDate: Date; status: 'pending' | 'complete'; result?: string }
-}
+import type { Deviation } from '@/types/quality'
 
 export function DeviationDetails({ id, onBack, onInvestigate }: { id: string; onBack: () => void; onInvestigate?: (d: Deviation) => void }) {
   const [deviations] = useKV<Deviation[]>('deviations')
