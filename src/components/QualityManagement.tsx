@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ESignaturePrompt, type SignatureResult } from '@/components/ESignaturePrompt'
 import {
   Warning,
   MagnifyingGlass,
@@ -16,11 +18,16 @@ import {
   Plus,
   FileText,
   Robot,
-  ListChecks
+  ListChecks,
+  PlayCircle,
+  SealCheck,
+  CopySimple
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { buildInvestigationSources, sourcesToString } from '@/data/archive'
-import type { CAPA, ChangeControl, Deviation, Investigation } from '@/types/quality'
+import { notifyQualityEventResolved } from '@/lib/qualityAutomation'
+import type { AutomationSuggestion } from '@/types/automation'
+import type { CAPA, ChangeControl, Deviation, ESignatureRecord, Investigation } from '@/types/quality'
 import { calculateInvestigationProgress, createInvestigationFromDeviation, normalizeInvestigation } from '@/utils/investigation'
 import { useAuditLogger } from '@/hooks/use-audit'
 
@@ -28,6 +35,8 @@ type WindowSpark = {
   llmPrompt: (strings: TemplateStringsArray, ...expr: unknown[]) => unknown
   llm: (prompt: unknown, model: string) => Promise<string>
 }
+
+type QualityTab = 'deviations' | 'investigations' | 'capa' | 'change-control'
 
 const getSpark = (): WindowSpark | undefined => {
   // Safely access window.spark without introducing 'any' types
@@ -45,7 +54,17 @@ const mockDeviations: Deviation[] = [
     batchId: 'BTH-2024-003',
     reportedBy: 'Sarah Chen',
     reportedDate: new Date('2024-01-16T09:30:00Z'),
-    assignedTo: 'Quality Team A'
+    assignedTo: 'Quality Team A',
+    signatures: [
+      {
+        id: 'DEV-2024-001-sign-1',
+        action: 'Initial Assessment Approval',
+        signedBy: 'qa.signer@biopharm.com',
+        signedAt: new Date('2024-01-16T09:45:00Z'),
+        reason: 'Containment plan verified',
+        digitalSignature: 'SHA256:1111111111111111111111111111111111111111111111111111111111111111'
+      }
+    ]
   },
   {
     id: 'DEV-2024-002',
@@ -152,6 +171,11 @@ const mockCAPAs: CAPA[] = [
     }
   }
 ]
+
+const deviationSignatureDemo = {
+  username: 'qa.signer@biopharm.com',
+  password: 'DemoPass123!'
+}
 
 const mockInvestigations: Investigation[] = [
   {
@@ -343,6 +367,7 @@ export function QualityManagement() {
   const [deviations, setDeviations] = useKV<Deviation[]>('deviations', mockDeviations)
   const [capas, setCAPAs] = useKV<CAPA[]>('capas', mockCAPAs)
   const [investigations, setInvestigations] = useKV<Investigation[]>('investigations', mockInvestigations)
+  const [automationQueue = [], setAutomationQueue] = useKV<AutomationSuggestion[]>('automation-queue', [])
   const [, setRoute] = useKV<string>('route', '')
   const [changeControls, setChangeControls] = useKV<ChangeControl[]>('change-controls', [
     {
@@ -369,10 +394,13 @@ export function QualityManagement() {
     }
   ])
   const { log } = useAuditLogger()
-  const [, setSelectedDeviation] = useState<Deviation | null>(null)
+  const [selectedDeviation, setSelectedDeviation] = useState<Deviation | null>(null)
   const [investigationNotes, setInvestigationNotes] = useState('')
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false)
   const [aiAnalysis, setAiAnalysis] = useState('')
+  const [activeTab, setActiveTab] = useState<'deviations' | 'investigations' | 'capa' | 'change-control'>('deviations')
+  const pendingAutomation = (automationQueue || []).filter(item => item.status === 'pending')
+  const automationHistory = (automationQueue || []).filter(item => item.status !== 'pending')
 
   const formatDate = (d: Date | string | undefined) => {
     if (!d) return ''
@@ -391,6 +419,12 @@ export function QualityManagement() {
             dueDate: new Date(d.effectivenessCheck.dueDate as unknown as string),
           }
         : undefined,
+      signatures: d.signatures
+        ? d.signatures.map(sig => ({
+            ...sig,
+            signedAt: new Date(sig.signedAt as unknown as string)
+          }))
+        : undefined,
     })
 
     const normalizeCAPA = (c: CAPA): CAPA => ({
@@ -403,7 +437,13 @@ export function QualityManagement() {
       effectivenessCheck: c.effectivenessCheck ? {
         ...c.effectivenessCheck,
         dueDate: new Date(c.effectivenessCheck.dueDate as unknown as string)
-      } : undefined
+      } : undefined,
+      signatures: c.signatures
+        ? c.signatures.map(sig => ({
+            ...sig,
+            signedAt: new Date(sig.signedAt as unknown as string)
+          }))
+        : undefined
     })
 
     if (deviations && deviations.length > 0 && typeof deviations[0].reportedDate !== 'object') {
@@ -442,16 +482,177 @@ export function QualityManagement() {
     return colors[status as keyof typeof colors] || colors.open
   }
 
+  const parameterLabels: Record<AutomationSuggestion['parameter'], string> = {
+    temperature: 'Temperature',
+    pressure: 'Pressure',
+    pH: 'pH',
+    volume: 'Volume'
+  }
+
+  const parameterUnits: Record<AutomationSuggestion['parameter'], string> = {
+    temperature: '°C',
+    pressure: 'bar',
+    pH: 'pH',
+    volume: 'L'
+  }
+
+  const createDeviationSignature = (deviation: Deviation, action: string, signature: SignatureResult): ESignatureRecord => ({
+    id: `${deviation.id}-${signature.timestamp.getTime()}`,
+    action,
+    signedBy: signature.userId,
+    signedAt: signature.timestamp,
+    reason: signature.reason,
+    digitalSignature: signature.digitalSignature
+  })
+
+  const copySignatureHash = async (hash: string) => {
+    try {
+      await navigator.clipboard.writeText(hash)
+      toast.success('Signature hash copied to clipboard')
+    } catch (error) {
+      console.error(error)
+      toast.error('Unable to copy signature hash')
+    }
+  }
+
   const ensureInvestigationForDeviation = (deviation: Deviation) => {
     setInvestigations(current => {
       const list = current || []
       if (list.some(inv => inv.deviationId === deviation.id)) {
         return list
       }
-      const newInvestigation = createInvestigationFromDeviation(deviation)
-  log('Investigation Created', 'deviation', `Workflow initialized for ${deviation.id}`, { recordId: deviation.id })
+  const newInvestigation = createInvestigationFromDeviation(deviation)
+  log('Investigation Created', 'workflow', `Workflow initialized for ${deviation.id}`, { recordId: deviation.id })
       return [newInvestigation, ...list]
     })
+  }
+
+  const markAutomationSuggestion = (suggestionId: string, updates: Partial<AutomationSuggestion>) => {
+    setAutomationQueue(current => {
+      const list = current || []
+      return list.map(item => (item.id === suggestionId ? { ...item, ...updates } : item))
+    })
+  }
+
+  const handleAutomationApproval = async (suggestion: AutomationSuggestion, signature: SignatureResult) => {
+    const deviation = (deviations || []).find(dev => dev.id === suggestion.deviationId)
+    if (!deviation) {
+      toast.error('Associated deviation not found for automation recommendation')
+      return
+    }
+
+    ensureInvestigationForDeviation(deviation)
+
+    const signatureRecordId = `${deviation.id}-${signature.timestamp.getTime()}`
+    updateDeviationStatus(deviation, 'investigating', {
+      signature,
+      action: 'Automation Plan Approved',
+      mutateDeviation: (current) => ({
+        ...current,
+        assignedTo: suggestion.assignee,
+        metadata: {
+          ...(current.metadata || {}),
+          automationSuggestionId: suggestion.id,
+          automationDecision: 'accepted',
+          automationDecisionAt: signature.timestamp.toISOString(),
+          automationDecisionBy: signature.userId,
+          automationSummary: suggestion.summary,
+          automationMeasurement: suggestion.measurement,
+        },
+      }),
+    })
+
+    setInvestigations(current => {
+      const list = current || []
+      const timestamp = signature.timestamp
+      return list.map(inv => {
+        if (inv.deviationId !== suggestion.deviationId) return inv
+        const timelineEntry = {
+          id: `${inv.id}-automation-${timestamp.getTime()}`,
+          timestamp,
+          summary: 'Automation plan approved and investigation escalated',
+          actor: signature.userId,
+          details: suggestion.summary,
+        }
+        return {
+          ...inv,
+          lead: suggestion.assignee,
+          timeline: [timelineEntry, ...inv.timeline],
+        }
+      })
+    })
+
+    markAutomationSuggestion(suggestion.id, {
+      status: 'accepted',
+      decision: 'accepted',
+      decisionBy: signature.userId,
+      decisionReason: signature.reason,
+      resolvedAt: signature.timestamp.toISOString(),
+      decisionSignatureId: signatureRecordId,
+    })
+
+    log('AI Recommendation Accepted', 'ai', `Automation suggestion ${suggestion.id} approved for deviation ${deviation.id}.`, {
+      recordId: deviation.id,
+      digitalSignature: signature.digitalSignature,
+      userOverride: {
+        id: signature.userId,
+        role: 'Quality Approver',
+        ipAddress: '127.0.0.1',
+        sessionId: `sess-esign-${deviation.id.slice(-4)}`,
+      },
+    })
+
+    toast.success(`Automation plan ${suggestion.id} approved and investigation launched`)
+  }
+
+  const handleAutomationDismissal = async (suggestion: AutomationSuggestion, signature: SignatureResult) => {
+    const deviation = (deviations || []).find(dev => dev.id === suggestion.deviationId)
+    if (!deviation) {
+      toast.error('Associated deviation not found for automation recommendation')
+      return
+    }
+
+    setDeviations(current => {
+      const list = current || []
+      return list.map(dev => {
+        if (dev.id !== suggestion.deviationId) return dev
+        const record = createDeviationSignature(dev, 'Automation Plan Dismissed', signature)
+        return {
+          ...dev,
+          signatures: [...(dev.signatures || []), record],
+          metadata: {
+            ...(dev.metadata || {}),
+            automationSuggestionId: suggestion.id,
+            automationDecision: 'dismissed',
+            automationDecisionAt: signature.timestamp.toISOString(),
+            automationDecisionBy: signature.userId,
+            automationDecisionReason: signature.reason,
+          },
+        }
+      })
+    })
+
+    markAutomationSuggestion(suggestion.id, {
+      status: 'dismissed',
+      decision: 'dismissed',
+      decisionBy: signature.userId,
+      decisionReason: signature.reason,
+      resolvedAt: signature.timestamp.toISOString(),
+      decisionSignatureId: `${suggestion.deviationId}-${signature.timestamp.getTime()}`,
+    })
+
+    log('AI Recommendation Dismissed', 'ai', `Automation suggestion ${suggestion.id} dismissed for deviation ${suggestion.deviationId}. Reason: ${signature.reason}`, {
+      recordId: suggestion.deviationId,
+      digitalSignature: signature.digitalSignature,
+      userOverride: {
+        id: signature.userId,
+        role: 'Quality Approver',
+        ipAddress: '127.0.0.1',
+        sessionId: `sess-esign-${suggestion.deviationId.slice(-4)}`,
+      },
+    })
+
+    toast.warning(`Automation plan ${suggestion.id} dismissed`)
   }
 
   const formatInvestigationStatus = (status: Investigation['status']) => {
@@ -476,13 +677,19 @@ export function QualityManagement() {
   }
 
   const generateAIAnalysis = async (deviation: Deviation) => {
+    setSelectedDeviation(deviation)
+    if (!isAIAssistantOpen) {
+      log('AI Assistant Opened', 'ai', `AI assistant opened for deviation ${deviation.id}`, { recordId: deviation.id })
+    }
     setIsAIAssistantOpen(true)
     setAiAnalysis('Analyzing deviation data and batch records...')
-    
+
+    log('AI Analysis Requested', 'ai', `Requested AI analysis for deviation ${deviation.id}`, { recordId: deviation.id })
+
     try {
-  const spark = getSpark()
-  const llmPrompt = spark?.llmPrompt
-  if (!llmPrompt || !spark?.llm) throw new Error('AI helpers not available')
+      const spark = getSpark()
+      const llmPrompt = spark?.llmPrompt
+      if (!llmPrompt || !spark?.llm) throw new Error('AI helpers not available')
       const sources = buildInvestigationSources(deviation.batchId)
       const prompt = llmPrompt`
         You are a pharmaceutical quality expert AI assistant specializing in GMP compliance and root cause analysis. Analyze this deviation using the provided SOURCES to generate a comprehensive, actionable investigation report.
@@ -538,23 +745,55 @@ export function QualityManagement() {
         FORMAT: Use clear headings, bullet points, and maintain professional tone suitable for regulatory review.
       `
       const analysis = await spark.llm(prompt, 'gpt-4o')
-      log('AI Analysis Generated', 'quality', `AI analysis for deviation ${deviation.id}`, { recordId: deviation.id })
+      log('AI Analysis Generated', 'ai', `AI analysis for deviation ${deviation.id}`, { recordId: deviation.id })
       const sourcesList = '\n\nSources:\n' + sources.map(s => `${s.id} — ${s.title}`).join('\n')
       setAiAnalysis(analysis + sourcesList)
-    } catch {
-      setAiAnalysis('Error generating analysis. Please try again.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      setAiAnalysis(`Error generating analysis. Please try again.\n\nDetails: ${message}`)
       toast.error('Failed to generate AI analysis')
-      log('AI Analysis Error', 'quality', `AI analysis failed for deviation ${deviation.id}`, { recordId: deviation.id, outcome: 'failure' })
+      log('AI Analysis Error', 'ai', `AI analysis failed for deviation ${deviation.id}: ${message}`, {
+        recordId: deviation.id,
+        outcome: 'failure'
+      })
     }
   }
 
-  const updateDeviationStatus = (deviation: Deviation, newStatus: Deviation['status']) => {
+  const closeAiAssistant = () => {
+    if (!isAIAssistantOpen) return
+    setIsAIAssistantOpen(false)
+    log(
+      'AI Assistant Closed',
+      'ai',
+      selectedDeviation
+        ? `AI assistant closed after reviewing ${selectedDeviation.id}`
+        : 'AI assistant closed',
+      {
+        recordId: selectedDeviation?.id,
+      }
+    )
+  }
+
+  const updateDeviationStatus = (
+    deviation: Deviation,
+    newStatus: Deviation['status'],
+    options?: { signature?: SignatureResult; action?: string; mutateDeviation?: (current: Deviation) => Deviation }
+  ) => {
+    const { signature, action = `Status updated to ${newStatus}`, mutateDeviation } = options || {}
+
     setDeviations(currentDeviations =>
-      (currentDeviations || []).map(dev =>
-        dev.id === deviation.id
-          ? { ...dev, status: newStatus }
-          : dev
-      )
+      (currentDeviations || []).map(dev => {
+        if (dev.id !== deviation.id) return dev
+        let updated: Deviation = { ...dev, status: newStatus }
+        if (mutateDeviation) {
+          updated = mutateDeviation(updated)
+        }
+        if (signature) {
+          const record = createDeviationSignature(deviation, action, signature)
+          updated.signatures = [...(dev.signatures || []), record]
+        }
+        return updated
+      })
     )
 
     if (newStatus === 'investigating') {
@@ -577,10 +816,39 @@ export function QualityManagement() {
             : inv
         )
       )
+
+      if (newStatus === 'closed') {
+        notifyQualityEventResolved(deviation.id)
+        const metadata = deviation.metadata as Record<string, unknown> | undefined
+        const automationId = typeof metadata?.automationSuggestionId === 'string' ? metadata.automationSuggestionId : undefined
+        if (automationId) {
+          markAutomationSuggestion(automationId, {
+            deviationClosedAt: new Date().toISOString(),
+          })
+        }
+      }
     }
 
+    const module = signature ? 'workflow' : 'deviation'
+    const logAction = signature ? action : 'Deviation Status Updated'
+    const logDetails = signature
+      ? `${deviation.id}: ${action}. Reason: ${signature.reason}`
+      : `${deviation.id} set to ${newStatus}`
+    const userOverride = signature
+      ? {
+          id: signature.userId,
+          role: 'Quality Approver',
+          ipAddress: '127.0.0.1',
+          sessionId: `sess-esign-${deviation.id.slice(-4)}`,
+        }
+      : undefined
+
     toast.success(`Deviation ${deviation.id} status updated to ${newStatus}`)
-    log('Deviation Status Updated', 'deviation', `Set status to ${newStatus}`, { recordId: deviation.id })
+    log(logAction, module, logDetails, {
+      recordId: deviation.id,
+      digitalSignature: signature?.digitalSignature,
+      userOverride,
+    })
   }
 
   return (
@@ -590,7 +858,15 @@ export function QualityManagement() {
         <p className="text-muted-foreground">Manage deviations, investigations, CAPAs, and change controls</p>
       </div>
 
-      <Tabs defaultValue="deviations" className="w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          if (value === activeTab) return
+          setActiveTab(value as QualityTab)
+          log(`Navigate to ${value}`, 'navigation', `Switched to ${value} tab`, { recordId: value })
+        }}
+        className="w-full"
+      >
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="deviations">Deviations</TabsTrigger>
           <TabsTrigger value="investigations">Investigations</TabsTrigger>
@@ -632,7 +908,161 @@ export function QualityManagement() {
             </Button>
           </div>
 
+          {pendingAutomation.length > 0 && (
+            <Card className="border border-dashed border-primary/60 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-primary">
+                  <Robot className="h-5 w-5" />
+                  Digital Twin Automation Queue
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {pendingAutomation.length} AI recommendation{pendingAutomation.length > 1 ? 's' : ''} require quality approval before execution.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {pendingAutomation.map((suggestion) => {
+                  const measurement = suggestion.measurement
+                  const label = parameterLabels[suggestion.parameter]
+                  const unit = parameterUnits[suggestion.parameter]
+                  const deviation = (deviations || []).find(dev => dev.id === suggestion.deviationId)
+                  const currentValue = measurement ? `${measurement.currentValue.toFixed(2)} ${unit}` : '—'
+                  const targetValue = measurement ? `${measurement.target.toFixed(2)} ${unit}` : '—'
+                  const boundsDisplay = measurement?.bounds ? `${measurement.bounds.min.toFixed(2)}–${measurement.bounds.max.toFixed(2)} ${unit}` : undefined
+                  const deltaDisplay = measurement ? `${(measurement.currentValue - measurement.target).toFixed(2)} ${unit}` : '—'
+
+                  return (
+                    <div key={suggestion.id} className="rounded-lg border bg-background/70 shadow-sm">
+                      <div className="border-b p-4 flex flex-wrap justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-amber-100 text-amber-900 border-amber-300 uppercase" >
+                              {suggestion.trigger}
+                            </Badge>
+                            <span className="font-semibold text-sm text-muted-foreground">Batch {deviation?.batchId}</span>
+                          </div>
+                          <h4 className="font-medium text-lg leading-tight">{suggestion.summary}</h4>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          <div>Detected: {new Date(suggestion.createdAt).toLocaleString()}</div>
+                          <div>Assignee: <span className="font-semibold text-foreground">{suggestion.assignee}</span></div>
+                        </div>
+                      </div>
+
+                      <div className="p-4 grid gap-4 md:grid-cols-[2fr,1fr]">
+                        <div className="space-y-3">
+                          <div>
+                            <h5 className="text-sm font-semibold text-muted-foreground">Recommended Actions</h5>
+                            <ul className="mt-2 space-y-2 text-sm list-disc list-inside">
+                              {suggestion.actions.map((action, index) => (
+                                <li key={index}>{action}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          {suggestion.trigger === 'OOT' && (
+                            <div className="rounded-md border border-dashed border-amber-300 bg-amber-50/70 text-amber-900 p-3 text-sm">
+                              Trend alert: trajectory indicates imminent specification breach. Approve to pre-emptively escalate investigation.
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-3">
+                          <div className="rounded-md border bg-muted/40 p-3 text-sm">
+                            <div className="font-semibold mb-2 text-muted-foreground">{label} telemetry</div>
+                            <div className="flex flex-col gap-1">
+                              <span>Current: <strong>{currentValue}</strong></span>
+                              <span>Target: {targetValue}</span>
+                              {boundsDisplay && (
+                                <span>Limits: {boundsDisplay}</span>
+                              )}
+                              <span>Deviation: {deltaDisplay}</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-3">
+                            <ESignaturePrompt
+                              trigger={(
+                                <Button className="flex items-center gap-2">
+                                  <CheckCircle className="h-4 w-4" />
+                                  Approve Plan
+                                </Button>
+                              )}
+                              title={`Approve automation plan for ${suggestion.deviationId}`}
+                              statement={`Approve digital twin recommendation ${suggestion.id} for deviation ${suggestion.deviationId}`}
+                              demoCredentials={deviationSignatureDemo}
+                              onConfirm={async (result) => {
+                                await handleAutomationApproval(suggestion, result)
+                              }}
+                            />
+                            <ESignaturePrompt
+                              trigger={(
+                                <Button variant="outline" className="flex items-center gap-2">
+                                  <Warning className="h-4 w-4" />
+                                  Dismiss Plan
+                                </Button>
+                              )}
+                              title={`Dismiss automation plan ${suggestion.id}`}
+                              statement={`Dismiss digital twin recommendation ${suggestion.id} for deviation ${suggestion.deviationId}`}
+                              demoCredentials={deviationSignatureDemo}
+                              onConfirm={async (result) => {
+                                await handleAutomationDismissal(suggestion, result)
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid gap-4">
+            {automationHistory.length > 0 && (
+              <Card className="border border-dashed">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ListChecks className="h-4 w-4" />
+                    Automation decisions audit trail
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Captures quality approvals and rejections of AI-assisted plans for traceability.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {automationHistory.map(entry => {
+                    const decisionTimestamp = entry.resolvedAt ?? entry.createdAt
+                    return (
+                      <div key={entry.id} className="border rounded-md p-3 bg-muted/50">
+                        <div className="flex flex-wrap justify-between gap-2 text-sm">
+                          <div className="font-medium text-foreground">
+                            {entry.id} — {entry.status.toUpperCase()} • {entry.deviationId}
+                          </div>
+                          <div className="text-muted-foreground">
+                            Decision: {new Date(decisionTimestamp).toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="mt-1 text-sm text-muted-foreground">
+                          By {entry.decisionBy || 'Unknown'} • Confidence {entry.aiConfidence}
+                        </div>
+                        {entry.decisionReason && (
+                          <div className="mt-2 text-sm">Reason: {entry.decisionReason}</div>
+                        )}
+                        {entry.decisionSignatureId && (
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            Signature ID: {entry.decisionSignatureId}
+                          </div>
+                        )}
+                        {entry.deviationClosedAt && (
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            Closed: {new Date(entry.deviationClosedAt).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </CardContent>
+              </Card>
+            )}
+
             {(deviations || []).map((deviation) => (
               <Card key={deviation.id} className="cursor-pointer hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
@@ -698,26 +1128,102 @@ export function QualityManagement() {
                             </div>
                             
                             <div className="space-y-4">
-                              <div className="flex gap-2">
-                                <Button 
-                                  onClick={() => generateAIAnalysis(deviation)}
-                                  className="flex items-center gap-2"
-                                >
-                                  <Robot className="h-4 w-4" />
-                                  AI Root Cause Analysis
-                                </Button>
-                                <Button 
-                                  variant="outline"
-                                  onClick={() => updateDeviationStatus(deviation, 'investigating')}
-                                >
-                                  Start Investigation
-                                </Button>
-                                <Button 
-                                  variant="outline"
-                                  onClick={() => updateDeviationStatus(deviation, 'resolved')}
-                                >
-                                  Mark Resolved
-                                </Button>
+                              <div className="flex gap-2 flex-wrap items-center">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      onClick={() => generateAIAnalysis(deviation)}
+                                      className="flex items-center gap-2"
+                                    >
+                                      <Robot className="h-4 w-4" />
+                                      AI Root Cause Analysis
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Generate a guided root cause narrative with inline citations.
+                                  </TooltipContent>
+                                </Tooltip>
+
+                                {deviation.status === 'open' && (
+                                  <ESignaturePrompt
+                                    trigger={(
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button variant="outline" className="flex items-center gap-2">
+                                            <PlayCircle className="h-4 w-4" />
+                                            Start Investigation
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          Capture QA authorization before transitioning into analysis.
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )}
+                                    title="Launch Investigation"
+                                    statement={`Authorize investigation start for ${deviation.id}`}
+                                    demoCredentials={deviationSignatureDemo}
+                                    onConfirm={async (result) => {
+                                      updateDeviationStatus(deviation, 'investigating', {
+                                        signature: result,
+                                        action: 'Investigation Initiated',
+                                      })
+                                    }}
+                                  />
+                                )}
+
+                                {deviation.status !== 'resolved' && deviation.status !== 'closed' && (
+                                  <ESignaturePrompt
+                                    trigger={(
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button variant="outline" className="flex items-center gap-2">
+                                            <CheckCircle className="h-4 w-4" />
+                                            Mark Resolved
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          Document QA approval of the remediation and evidence summary.
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )}
+                                    title="Resolve Deviation"
+                                    statement={`Resolution approval for ${deviation.id}`}
+                                    demoCredentials={deviationSignatureDemo}
+                                    onConfirm={async (result) => {
+                                      updateDeviationStatus(deviation, 'resolved', {
+                                        signature: result,
+                                        action: 'Deviation Resolution Approved',
+                                      })
+                                    }}
+                                  />
+                                )}
+
+                                {deviation.status === 'resolved' && (
+                                  <ESignaturePrompt
+                                    trigger={(
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button variant="outline" className="flex items-center gap-2">
+                                            <SealCheck className="h-4 w-4" />
+                                            Close Deviation
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          Final QA closeout with effectiveness verification captured.
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )}
+                                    title="Close Deviation"
+                                    statement={`Final closure authorization for ${deviation.id}`}
+                                    demoCredentials={deviationSignatureDemo}
+                                    onConfirm={async (result) => {
+                                      updateDeviationStatus(deviation, 'closed', {
+                                        signature: result,
+                                        action: 'Deviation Closed',
+                                      })
+                                    }}
+                                  />
+                                )}
                               </div>
                               
                               <div>
@@ -730,6 +1236,76 @@ export function QualityManagement() {
                                   className="min-h-32"
                                 />
                               </div>
+
+                              {(deviation.signatures && deviation.signatures.length > 0) && (
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <Label>Electronic Signatures</Label>
+                                    <Badge variant="outline" className="text-xs">
+                                      {deviation.signatures.length} captured
+                                    </Badge>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {deviation.signatures.map((signature, index) => {
+                                      const signedAt = signature.signedAt instanceof Date
+                                        ? signature.signedAt
+                                        : new Date(signature.signedAt)
+                                      return (
+                                        <div
+                                          key={signature.id}
+                                          className="rounded-lg border bg-muted/40 p-4 shadow-sm"
+                                        >
+                                          <div className="flex items-start justify-between gap-3">
+                                            <div className="flex items-start gap-3">
+                                              <div className="rounded-full bg-primary/10 p-2 text-primary">
+                                                <SealCheck className="h-4 w-4" />
+                                              </div>
+                                              <div className="space-y-1">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="font-medium leading-tight">{signature.action}</span>
+                                                  <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                                                    Step {index + 1}
+                                                  </Badge>
+                                                </div>
+                                                <div className="text-sm text-muted-foreground">
+                                                  Signed by <span className="font-medium">{signature.signedBy}</span>
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                  {signedAt.toLocaleString()}
+                                                </div>
+                                              </div>
+                                            </div>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-8 w-8"
+                                                  onClick={() => copySignatureHash(signature.digitalSignature)}
+                                                >
+                                                  <CopySimple className="h-4 w-4" />
+                                                </Button>
+                                              </TooltipTrigger>
+                                              <TooltipContent>Copy signature hash</TooltipContent>
+                                            </Tooltip>
+                                          </div>
+                                          {signature.reason && (
+                                            <div className="mt-3 rounded-md border border-dashed border-muted-foreground/40 bg-background/80 p-3 text-sm text-muted-foreground">
+                                              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                                                Justification
+                                              </div>
+                                              <p className="mt-1 leading-relaxed">{signature.reason}</p>
+                                            </div>
+                                          )}
+                                          <div className="mt-3 text-[11px] font-mono text-muted-foreground break-all">
+                                            Hash: {signature.digitalSignature}
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </DialogContent>
@@ -740,7 +1316,7 @@ export function QualityManagement() {
                         onClick={() => {
                           ensureInvestigationForDeviation(deviation)
                           setRoute(`investigation/${deviation.id}`)
-                          log('Open Investigation Workflow', 'deviation', `Opened workflow for ${deviation.id}`, { recordId: deviation.id })
+                          log('Open Investigation Workflow', 'workflow', `Opened workflow for ${deviation.id}`, { recordId: deviation.id })
                         }}
                       >
                         <ListChecks className="h-4 w-4 mr-2" />
@@ -966,7 +1542,16 @@ export function QualityManagement() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={isAIAssistantOpen} onOpenChange={setIsAIAssistantOpen}>
+      <Dialog
+        open={isAIAssistantOpen}
+        onOpenChange={(next) => {
+          if (next) {
+            setIsAIAssistantOpen(true)
+          } else {
+            closeAiAssistant()
+          }
+        }}
+      >
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -982,7 +1567,7 @@ export function QualityManagement() {
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsAIAssistantOpen(false)}>
+              <Button variant="outline" onClick={closeAiAssistant}>
                 Close
               </Button>
               <Button onClick={() => {

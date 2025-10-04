@@ -1,4 +1,4 @@
-import { buildInvestigationSources, type InvestigationSource } from '@/data/archive'
+import { buildInvestigationSources } from '@/data/archive'
 
 export interface ValidationResult {
   isCompliant: boolean
@@ -150,7 +150,12 @@ export function runArchiveValidationSuite(): {
     result: ValidationResult | ReturnType<typeof validateContentAlignment>
   }>
 } {
-  const testResults = []
+  const testResults: Array<{
+    testName: string
+    batchId: string
+    deviationId?: string
+    result: ValidationResult | ReturnType<typeof validateContentAlignment>
+  }> = []
   
   // Test critical deviation BTH-2024-003
   const bth003Completeness = validateArchiveCompleteness('BTH-2024-003')

@@ -24,6 +24,53 @@ export type TwinHandle = {
   getSpeed: () => number
 }
 
+export type TwinSnapshot = {
+  timestamp: Date
+  batches: typeof batches
+  equipmentTelemetry: typeof equipmentTelemetry
+}
+
+type TwinListener = (snapshot: TwinSnapshot) => void
+
+const listeners = new Set<TwinListener>()
+
+export function subscribeToTwin(listener: TwinListener) {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+const cloneSnapshot = (): TwinSnapshot => {
+  const cloneBatch = (batch: typeof batches[number]) => ({
+    ...batch,
+    startTime: new Date(batch.startTime),
+    parameters: {
+      temperature: { ...batch.parameters.temperature },
+      pressure: { ...batch.parameters.pressure },
+      pH: { ...batch.parameters.pH },
+      volume: { ...batch.parameters.volume },
+    },
+    cppBounds: {
+      temperature: { ...batch.cppBounds.temperature },
+      pressure: { ...batch.cppBounds.pressure },
+      pH: { ...batch.cppBounds.pH },
+      volume: { ...batch.cppBounds.volume },
+    },
+    timeline: batch.timeline.map(item => ({
+      ...item,
+      startTime: new Date(item.startTime),
+      endTime: item.endTime ? new Date(item.endTime) : undefined,
+    })),
+  })
+
+  const cloneEquipment = (item: typeof equipmentTelemetry[number]) => ({ ...item })
+
+  return {
+    timestamp: new Date(),
+    batches: batches.map(cloneBatch),
+    equipmentTelemetry: equipmentTelemetry.map(cloneEquipment),
+  }
+}
+
 let timer: number | undefined
 let opts: TwinOptions = { tickMs: 2000, simSecondsPerTick: 60, monitorEverySimSeconds: 30 }
 let simAccum = 0
@@ -117,6 +164,17 @@ function tick() {
   if (simAccum >= opts.monitorEverySimSeconds) {
     simAccum = 0
     try { sampleAndRecordPredictions() } catch { /* no-op */ }
+  }
+
+  if (listeners.size > 0) {
+    const snapshot = cloneSnapshot()
+    listeners.forEach(listener => {
+      try {
+        listener(snapshot)
+      } catch (error) {
+        console.error('Twin listener error', error)
+      }
+    })
   }
 }
 

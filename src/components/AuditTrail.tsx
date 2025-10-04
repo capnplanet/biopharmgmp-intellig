@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -6,31 +6,25 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
-  FileText, 
-  Download, 
+import {
+  FileText,
+  Download,
   MagnifyingGlass,
   Calendar,
   User,
   Gear,
-  Shield
+  Shield,
+  FlowArrow,
+  Brain,
+  Compass,
+  FingerprintSimple,
+  CopySimple
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
-
-interface AuditEvent {
-  id: string
-  timestamp: Date
-  userId: string
-  userRole: string
-  action: string
-  module: 'batch' | 'quality' | 'equipment' | 'system' | 'deviation' | 'capa'
-  details: string
-  recordId?: string
-  ipAddress: string
-  sessionId: string
-  outcome: 'success' | 'failure' | 'warning'
-  digitalSignature?: string
-}
+import type { AuditEvent, AuditOutcome } from '@/hooks/use-audit'
+import { ChartContainer, ChartLegendInline, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import { exportAuditEventsCSV, exportAuditEventsJSON, tryExportAuditEvents } from '@/utils/auditExport'
+import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Cell } from 'recharts'
 
 const mockAuditEvents: AuditEvent[] = [
   {
@@ -99,8 +93,73 @@ const mockAuditEvents: AuditEvent[] = [
     ipAddress: '192.168.1.200',
     sessionId: 'sess-failed-001',
     outcome: 'failure'
+  },
+  {
+    id: 'AUD-2024-006',
+    timestamp: new Date('2024-01-16T11:45:00Z'),
+    userId: 'qa.signer@biopharm.com',
+    userRole: 'Quality Approver',
+    action: 'Deviation Resolved',
+    module: 'workflow',
+    details: 'Resolution approved for deviation DEV-2024-001 with e-signature',
+    recordId: 'DEV-2024-001',
+    ipAddress: '192.168.1.150',
+    sessionId: 'sess-workflow-001',
+    outcome: 'success',
+    digitalSignature: 'SHA256:c0ffee2543cdeedfadebabe1234567890abcdef1234567890abcdef12345678'
+  },
+  {
+    id: 'AUD-2024-007',
+    timestamp: new Date('2024-01-16T11:00:00Z'),
+    userId: 'sarah.chen@company.com',
+    userRole: 'Quality Analyst',
+    action: 'AI Analysis Generated',
+    module: 'ai',
+    details: 'Generated AI-assisted root cause analysis for DEV-2024-001',
+    recordId: 'DEV-2024-001',
+    ipAddress: '192.168.1.142',
+    sessionId: 'sess-ai-001',
+    outcome: 'success'
+  },
+  {
+    id: 'AUD-2024-008',
+    timestamp: new Date('2024-01-16T10:05:00Z'),
+    userId: 'sarah.chen@company.com',
+    userRole: 'Quality Analyst',
+    action: 'Tab Navigated',
+    module: 'navigation',
+    details: 'Switched from Deviations to CAPA tab',
+    ipAddress: '192.168.1.142',
+    sessionId: 'sess-a8b9c0d1e2f3',
+    outcome: 'success'
+  },
+  {
+    id: 'AUD-2024-009',
+    timestamp: new Date('2024-01-15T16:50:00Z'),
+    userId: 'dr.jennifer.lee@company.com',
+    userRole: 'Quality Manager',
+    action: 'Change Control Created',
+    module: 'change-control',
+    details: 'Created change control CC-2025-001 for PID retune',
+    recordId: 'CC-2025-001',
+    ipAddress: '192.168.1.75',
+    sessionId: 'sess-1a2b3c4d5e6f',
+    outcome: 'success'
   }
 ]
+
+const modulePalette: Record<AuditEvent['module'], string> = {
+  batch: '#6366F1',
+  quality: '#0EA5E9',
+  equipment: '#8B5CF6',
+  system: '#64748B',
+  deviation: '#F97316',
+  capa: '#EC4899',
+  workflow: '#22C55E',
+  navigation: '#14B8A6',
+  ai: '#06B6D4',
+  'change-control': '#F59E0B'
+}
 
 export function AuditTrail() {
   const [auditEvents, setAuditEvents] = useKV<AuditEvent[]>('audit-events', mockAuditEvents)
@@ -109,6 +168,115 @@ export function AuditTrail() {
   const [selectedModule, setSelectedModule] = useState<string>('all')
   const [selectedOutcome, setSelectedOutcome] = useState<string>('all')
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
+
+  const stats = useMemo(() => {
+    const totals: Record<AuditOutcome, number> = {
+      success: 0,
+      failure: 0,
+      warning: 0
+    }
+    let signed = 0
+    let aiEvents = 0
+    let workflowEvents = 0
+    const modules = new Set<AuditEvent['module']>()
+
+    for (const event of filteredEvents) {
+      modules.add(event.module)
+      if (event.digitalSignature) signed += 1
+      if (event.module === 'ai') aiEvents += 1
+      if (event.module === 'workflow') workflowEvents += 1
+      totals[event.outcome] = (totals[event.outcome] || 0) + 1
+    }
+
+    return {
+      total: filteredEvents.length,
+      signed,
+      moduleCount: modules.size,
+      aiEvents,
+      workflowEvents,
+      outcomes: totals,
+    }
+  }, [filteredEvents])
+
+  const signedPercent = stats.total > 0 ? Math.round((stats.signed / stats.total) * 100) : 0
+
+  const moduleBreakdown = useMemo(() => {
+    const counts = new Map<AuditEvent['module'], number>()
+    for (const event of filteredEvents) {
+      counts.set(event.module, (counts.get(event.module) || 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .map(([module, count]) => ({
+        module,
+        count,
+        color: modulePalette[module] || '#94A3B8',
+      }))
+      .sort((a, b) => b.count - a.count)
+  }, [filteredEvents])
+
+  const moduleChartConfig = useMemo<ChartConfig>(() => {
+    return moduleBreakdown.reduce((acc, item) => {
+      acc[item.module] = {
+        label: item.module.replace('-', ' '),
+        color: item.color,
+      }
+      return acc
+    }, {} as ChartConfig)
+  }, [moduleBreakdown])
+
+  const moduleLegendItems = useMemo(
+    () =>
+      moduleBreakdown.map((item) => ({
+        key: item.module,
+        label: item.module.replace('-', ' '),
+        color: item.color,
+      })),
+    [moduleBreakdown]
+  )
+
+  const summaryCards = useMemo(
+    () => [
+      {
+        label: 'Events',
+        value: stats.total,
+        hint: 'records in scope',
+        Icon: FileText,
+        accent: 'text-primary',
+      },
+      {
+        label: 'Signed actions',
+        value: stats.signed,
+        hint: `${signedPercent}% with electronic signature`,
+        Icon: FingerprintSimple,
+        accent: 'text-emerald-600',
+      },
+      {
+        label: 'Modules',
+        value: stats.moduleCount,
+        hint: 'unique functional areas touched',
+        Icon: Compass,
+        accent: 'text-sky-600',
+      },
+      {
+        label: 'Workflow events',
+        value: stats.workflowEvents,
+        hint: `${stats.aiEvents} AI assist${stats.aiEvents === 1 ? '' : 's'}`,
+        Icon: FlowArrow,
+        accent: 'text-amber-600',
+      },
+    ],
+    [signedPercent, stats.aiEvents, stats.moduleCount, stats.signed, stats.total, stats.workflowEvents]
+  )
+
+  const copyHash = async (hash: string) => {
+    try {
+      await navigator.clipboard.writeText(hash)
+      toast.success('Signature hash copied to clipboard')
+    } catch (error) {
+      console.error(error)
+      toast.error('Unable to copy signature hash')
+    }
+  }
 
   // hydrate timestamps if persisted as strings
   useEffect(() => {
@@ -164,48 +332,37 @@ export function AuditTrail() {
     setFilteredEvents(auditEvents || [])
   }
 
-  const exportToCSV = () => {
-    const csvHeaders = [
-      'ID', 'Timestamp', 'User ID', 'User Role', 'Action', 'Module', 
-      'Details', 'Record ID', 'IP Address', 'Session ID', 'Outcome', 'Digital Signature'
-    ]
-    
-    const csvData = filteredEvents.map(event => [
-      event.id,
-      event.timestamp.toISOString(),
-      event.userId,
-      event.userRole,
-      event.action,
-      event.module,
-      `"${event.details}"`,
-      event.recordId || '',
-      event.ipAddress,
-      event.sessionId,
-      event.outcome,
-      event.digitalSignature || ''
-    ])
-
-    const csvContent = [
-      csvHeaders.join(','),
-      ...csvData.map(row => row.join(','))
-    ].join('\n')
-
-    const blob = new Blob([csvContent], { type: 'text/csv' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `audit-trail-${new Date().toISOString().split('T')[0]}.csv`
-    link.click()
-    window.URL.revokeObjectURL(url)
-    
-    toast.success('Audit trail exported to CSV')
+  const exportFiltered = (format: 'csv' | 'json') => {
+    try {
+      if (!filteredEvents.length) {
+        toast.error('No filtered events to export')
+        return
+      }
+      if (format === 'csv') {
+        exportAuditEventsCSV(filteredEvents, { fileName: 'audit-trail-filtered.csv' })
+      } else {
+        exportAuditEventsJSON(filteredEvents, { fileName: 'audit-trail-filtered.json' })
+      }
+      toast.success(`Filtered audit events exported as ${format.toUpperCase()}`)
+    } catch (error) {
+      console.error(error)
+      toast.error('Failed to export filtered audit events')
+    }
   }
 
-  const exportToExcel = () => {
-    // For now, we'll export as CSV with .xlsx extension
-    // In a real implementation, you'd use a library like xlsx or exceljs
-    exportToCSV()
-    toast.success('Audit trail exported to Excel format')
+  const exportAll = (format: 'csv' | 'json') => {
+    try {
+      const events = auditEvents || []
+      if (!events.length) {
+        toast.error('No audit events available to export')
+        return
+      }
+      tryExportAuditEvents(format, events)
+      toast.success(`Full audit log exported as ${format.toUpperCase()}`)
+    } catch (error) {
+      console.error(error)
+      toast.error('Failed to export full audit log')
+    }
   }
 
   const getOutcomeBadge = (outcome: string) => {
@@ -224,7 +381,11 @@ export function AuditTrail() {
       equipment: Gear,
       system: User,
       deviation: Shield,
-      capa: FileText
+      capa: FileText,
+      workflow: FlowArrow,
+      navigation: Compass,
+      ai: Brain,
+      'change-control': Gear
     }
     return icons[module as keyof typeof icons] || FileText
   }
@@ -278,6 +439,10 @@ export function AuditTrail() {
                     <option value="equipment">Equipment</option>
                     <option value="system">System</option>
                     <option value="deviation">Deviation</option>
+                    <option value="workflow">Workflow</option>
+                    <option value="navigation">Navigation</option>
+                    <option value="ai">AI Assistance</option>
+                    <option value="change-control">Change Control</option>
                     <option value="capa">CAPA</option>
                   </select>
                 </div>
@@ -330,18 +495,91 @@ export function AuditTrail() {
             </CardContent>
           </Card>
 
+            <Card>
+              <CardHeader>
+                <CardTitle>At-a-Glance Metrics</CardTitle>
+                <p className="text-sm text-muted-foreground">Statistics update automatically with your filters.</p>
+              </CardHeader>
+              <CardContent>
+                {stats.total === 0 ? (
+                  <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    No audit entries match the current filters.
+                  </div>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    {summaryCards.map(({ label, value, hint, Icon, accent }) => (
+                      <div key={label} className="rounded-xl border bg-muted/40 p-4 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-muted-foreground">{label}</span>
+                          <Icon className={`h-5 w-5 ${accent}`} />
+                        </div>
+                        <div className="mt-2 text-3xl font-semibold">{value.toLocaleString()}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">{hint}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {stats.total > 0 && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span className="font-medium uppercase tracking-wide">Outcomes</span>
+                    <Badge variant="outline">Success: {stats.outcomes.success}</Badge>
+                    <Badge variant="outline">Warnings: {stats.outcomes.warning}</Badge>
+                    <Badge variant="outline">Failures: {stats.outcomes.failure}</Badge>
+                    <span className="ml-auto text-muted-foreground/70">
+                      Signed coverage: {signedPercent}%
+                    </span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {moduleBreakdown.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Events by Module</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer
+                    className="h-64"
+                    config={moduleChartConfig}
+                  >
+                    <BarChart data={moduleBreakdown} margin={{ left: 12, right: 12, top: 8, bottom: 0 }}>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                      <XAxis dataKey="module" axisLine={false} tickLine={false} tickFormatter={(value) => value.replace('-', ' ')} />
+                      <YAxis allowDecimals={false} width={32} tickLine={false} axisLine={false} />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                        {moduleBreakdown.map((item) => (
+                          <Cell key={item.module} fill={item.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ChartContainer>
+                  <ChartLegendInline className="mt-3" items={moduleLegendItems} />
+                </CardContent>
+              </Card>
+            )}
+
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Audit Events ({filteredEvents.length})</CardTitle>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={exportToCSV}>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => exportFiltered('csv')}>
                     <Download className="h-4 w-4 mr-2" />
-                    Export CSV
+                    Export Filtered CSV
                   </Button>
-                  <Button variant="outline" size="sm" onClick={exportToExcel}>
+                  <Button variant="outline" size="sm" onClick={() => exportFiltered('json')}>
                     <Download className="h-4 w-4 mr-2" />
-                    Export Excel
+                    Export Filtered JSON
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => exportAll('csv')}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export Full CSV
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => exportAll('json')}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export Full JSON
                   </Button>
                 </div>
               </div>
@@ -364,6 +602,11 @@ export function AuditTrail() {
                               <Badge variant="outline">
                                 {event.module}
                               </Badge>
+                              {event.digitalSignature && (
+                                <Badge variant="secondary" className="uppercase text-[10px] tracking-wide">
+                                  Signed
+                                </Badge>
+                              )}
                             </div>
                             <div className="font-medium">{event.action}</div>
                             <div className="text-sm text-muted-foreground mb-2">{event.details}</div>
@@ -380,8 +623,16 @@ export function AuditTrail() {
                               <div>Session: {event.sessionId.slice(-8)}</div>
                             </div>
                             {event.digitalSignature && (
-                              <div className="mt-2 text-xs font-mono text-muted-foreground">
-                                Digital Signature: {event.digitalSignature.slice(0, 32)}...
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-mono text-muted-foreground">
+                                <span className="break-all">Signature Hash: {event.digitalSignature}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => copyHash(event.digitalSignature!)}
+                                >
+                                  <CopySimple className="h-3.5 w-3.5" />
+                                </Button>
                               </div>
                             )}
                           </div>

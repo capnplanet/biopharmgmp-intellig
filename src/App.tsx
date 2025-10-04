@@ -16,6 +16,8 @@ import { DeviationDetails } from '@/components/DeviationDetails'
 import { ChangeControlDetails } from '@/components/ChangeControlDetails'
 import { InvestigationWorkflow } from '@/components/InvestigationWorkflow'
 import { startDigitalTwin } from '@/lib/digitalTwin'
+import { AutomationBridge } from '@/components/AutomationBridge'
+import { initializeQualityAutomation } from '@/lib/qualityAutomation'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Play, Pause } from '@phosphor-icons/react'
@@ -72,6 +74,10 @@ function App() {
       }
     }
   }, [activeTab, route])
+
+  useEffect(() => {
+    initializeQualityAutomation()
+  }, [])
 
   const renderContent = () => {
     switch (activeTab) {
@@ -147,6 +153,7 @@ function App() {
         setActiveTab(tab)
       }} />
       <main className="flex-1 overflow-hidden">
+        <AutomationBridge />
         {renderContent()}
         {/* Digital Twin Controls (floating) */}
         <TwinControls />

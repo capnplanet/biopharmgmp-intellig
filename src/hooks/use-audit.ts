@@ -2,7 +2,17 @@ import { useKV } from '@github/spark/hooks'
 import { useCurrentUser } from '@/hooks/use-current-user'
 
 export type AuditOutcome = 'success' | 'failure' | 'warning'
-export type AuditModule = 'batch' | 'quality' | 'equipment' | 'system' | 'deviation' | 'capa' | 'change-control'
+export type AuditModule =
+  | 'batch'
+  | 'quality'
+  | 'equipment'
+  | 'system'
+  | 'deviation'
+  | 'capa'
+  | 'change-control'
+  | 'navigation'
+  | 'workflow'
+  | 'ai'
 
 export type AuditEvent = {
   id: string

@@ -21,6 +21,8 @@ export interface Deviation {
   correctiveActions?: string[]
   effectivenessCheck?: EffectivenessCheck
   signatures?: ESignatureRecord[]
+  origin?: "manual" | "digital-twin" | "ai"
+  metadata?: Record<string, unknown>
 }
 
 export type CAPAType = "corrective" | "preventive"

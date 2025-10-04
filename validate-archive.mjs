@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 
-import { runArchiveValidationSuite, validateArchiveCompleteness } from '../src/utils/archiveValidation.js'
+import { runArchiveValidationSuite } from '../src/utils/archiveValidation.js'
 import { buildInvestigationSources } from '../src/data/archive.js'
 
 console.log('🔍 Manufacturing Archive Validation Suite')
