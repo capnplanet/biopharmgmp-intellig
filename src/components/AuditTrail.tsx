@@ -704,16 +704,16 @@ export function AuditTrail() {
                   <div className="p-4 border rounded-lg">
                     <h3 className="font-medium mb-2">Quick Export</h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Export current filtered audit events to CSV or Excel format
+                      Export current filtered audit events for offline analysis
                     </p>
                     <div className="flex gap-2">
-                      <Button variant="outline" onClick={exportToCSV}>
+                      <Button variant="outline" onClick={() => exportFiltered('csv')}>
                         <Download className="h-4 w-4 mr-2" />
                         CSV Export
                       </Button>
-                      <Button variant="outline" onClick={exportToExcel}>
+                      <Button variant="outline" onClick={() => exportFiltered('json')}>
                         <Download className="h-4 w-4 mr-2" />
-                        Excel Export
+                        JSON Export
                       </Button>
                     </div>
                   </div>

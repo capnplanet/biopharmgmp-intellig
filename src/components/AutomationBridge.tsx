@@ -12,6 +12,12 @@ export function AutomationBridge() {
   const { log } = useAuditLogger()
 
   useEffect(() => {
+    if (!suggestions) {
+      setSuggestions([])
+    }
+  }, [suggestions, setSuggestions])
+
+  useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<AutomationProposalDetail>).detail
       if (!detail) return
