@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { getSpark } from '@/lib/spark'
 import { useOperationsAssistant } from '@/hooks/use-operations-assistant'
-import { Robot, Sparkle, PaperPlaneTilt, X, Question, ListBullets } from '@phosphor-icons/react'
+import { Robot, Sparkle, PaperPlaneTilt, X, Question, ListBullets, ArrowCounterClockwise } from '@phosphor-icons/react'
 
 const MAX_MESSAGES = 12
 const MAX_SUGGESTIONS = 3
@@ -179,6 +179,12 @@ export function FloatingOperationsAssistant() {
     }
   }, [suggestedPrompts, setSuggestedPrompts])
 
+  const handleClearChat = useCallback(() => {
+    setMessages(() => [])
+    setInput('')
+    applySuggestions(defaultSuggestedPrompts.slice())
+  }, [setMessages, applySuggestions])
+
   useEffect(() => {
     if (!messages.length) {
       applySuggestions(defaultSuggestedPrompts.slice())
@@ -279,7 +285,7 @@ export function FloatingOperationsAssistant() {
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
       {open && (
-        <Card className="w-[380px] shadow-2xl border-primary/20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+  <Card className="w-[380px] max-h-[80vh] shadow-2xl border-primary/20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 flex flex-col">
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -291,8 +297,27 @@ export function FloatingOperationsAssistant() {
                   Answers questions across production, analytics, equipment, quality, and automation using the latest digital-twin snapshot.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-[10px] uppercase tracking-wide">Live</Badge>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={handleClearChat}
+                          aria-label="Clear conversation"
+                          disabled={loading || messages.length === 0}
+                        >
+                          <ArrowCounterClockwise className="h-3.5 w-3.5" />
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" align="end" className="text-xs">
+                      Reset chat and suggested prompts
+                    </TooltipContent>
+                  </Tooltip>
                 <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Close operations assistant">
                   <X className="h-4 w-4" />
                 </Button>
@@ -303,8 +328,8 @@ export function FloatingOperationsAssistant() {
               <span className="whitespace-pre-line leading-5">{latestSummary}</span>
             </div>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <ScrollArea className="h-56 rounded-md border bg-background/60">
+          <CardContent className="flex flex-1 flex-col gap-3 overflow-hidden">
+            <ScrollArea className="flex-1 rounded-md border bg-background/60">
               <div className="space-y-3 p-3">
                 {messages.length === 0 && !loading ? (
                   <div className="text-xs text-muted-foreground space-y-2">
