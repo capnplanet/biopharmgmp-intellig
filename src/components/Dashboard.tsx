@@ -1,8 +1,18 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useKV } from '@github/spark/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  ChartContainer,
+  ChartLegendInline,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from '@/components/ui/chart'
 import { 
   TestTube, 
   Gear, 
@@ -11,11 +21,18 @@ import {
   Clock,
   TrendUp,
   Info,
-  XCircle
+  XCircle,
+  DownloadSimple
 } from '@phosphor-icons/react'
 import { formatDistanceToNow } from 'date-fns'
 import { useAlerts } from '@/hooks/use-alerts'
 import type { AlertSeverity } from '@/types/alerts'
+import { subscribeToTwin, startDigitalTwin } from '@/lib/digitalTwin'
+import { batches as seedBatches, equipmentTelemetry as seedEquipmentTelemetry, getCPPCompliance } from '@/data/seed'
+import type { BatchData, EquipmentTelemetry } from '@/data/seed'
+import type { AutomationSuggestion } from '@/types/automation'
+import type { CAPA, ChangeControl, Deviation, Investigation } from '@/types/quality'
+import { Area, Bar, BarChart, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 
 interface KPICardProps {
   title: string
@@ -52,60 +69,48 @@ function KPICard({ title, value, change, status = 'normal', icon: Icon }: KPICar
   )
 }
 
-interface BatchStatus {
-  id: string
-  product: string
-  stage: string
-  progress: number
-  status: 'running' | 'complete' | 'warning' | 'error'
-  startTime: Date
-}
+type EquipmentDisplayStatus = 'online' | 'offline' | 'maintenance' | 'warning' | 'error'
 
-interface EquipmentStatus {
+type EquipmentSnapshot = {
   id: string
   name: string
   type: string
-  status: 'online' | 'offline' | 'maintenance' | 'error'
+  status: EquipmentDisplayStatus
   utilization: number
+  vibrationRMS: number
+}
+
+type TwinHistoryPoint = {
+  timestamp: string
+  activeBatches: number
+  warningBatches: number
+  cppCompliance: number
+}
+
+const equipmentCatalog: Record<string, { name: string; type: string }> = {
+  'BIO-001': { name: 'Bioreactor 1', type: 'Fermentation' },
+  'BIO-002': { name: 'Bioreactor 2', type: 'Fermentation' },
+  'CHR-001': { name: 'Chromatography Skid A', type: 'Purification' },
+  'CHR-002': { name: 'Chromatography Skid B', type: 'Purification' },
+  'DRY-001': { name: 'Spray Dryer 1', type: 'Drying' },
+  'DRY-002': { name: 'Spray Dryer 2', type: 'Drying' },
+  'FIL-001': { name: 'Filter Train 1', type: 'Filtration' },
+  'FIL-002': { name: 'Filter Train 2', type: 'Filtration' },
+  'REA-001': { name: 'Reactor 1', type: 'Synthesis' },
+  'CRY-001': { name: 'Crystallizer 1', type: 'Crystallization' },
 }
 
 export function Dashboard() {
-  const [activeBatches] = useState<BatchStatus[]>([
-    {
-      id: 'BTH-2024-001',
-      product: 'Monoclonal Antibody X1',
-      stage: 'Fermentation',
-      progress: 78,
-      status: 'running',
-      startTime: new Date('2024-01-15T08:00:00Z')
-    },
-    {
-      id: 'BTH-2024-002',
-      product: 'Small Molecule API-Y',
-      stage: 'Crystallization',
-      progress: 45,
-      status: 'running',
-      startTime: new Date('2024-01-16T14:30:00Z')
-    },
-    {
-      id: 'BTH-2024-003',
-      product: 'Protein Therapeutic Z',
-      stage: 'Purification',
-      progress: 92,
-      status: 'warning',
-      startTime: new Date('2024-01-14T10:15:00Z')
-    }
-  ])
-
-  const [equipment] = useState<EquipmentStatus[]>([
-    { id: 'BIO-001', name: 'Bioreactor 1', type: 'Fermentation', status: 'online', utilization: 85 },
-    { id: 'CHR-001', name: 'Chromatography Skid A', type: 'Purification', status: 'online', utilization: 67 },
-    { id: 'DRY-001', name: 'Spray Dryer 1', type: 'Drying', status: 'maintenance', utilization: 0 },
-    { id: 'MIX-001', name: 'High Shear Mixer', type: 'Blending', status: 'online', utilization: 45 }
-  ])
-
+  const [batchState, setBatchState] = useState<BatchData[]>(seedBatches)
+  const [equipmentTelemetryState, setEquipmentTelemetryState] = useState<EquipmentTelemetry[]>(seedEquipmentTelemetry)
+  const [twinHistory, setTwinHistory] = useState<TwinHistoryPoint[]>([])
   const [currentTime, setCurrentTime] = useState(new Date())
   const { alerts } = useAlerts()
+  const [deviations = []] = useKV<Deviation[]>('deviations', [])
+  const [automationQueue = []] = useKV<AutomationSuggestion[]>('automation-queue', [])
+  const [capas = []] = useKV<CAPA[]>('capas', [])
+  const [changeControls = []] = useKV<ChangeControl[]>('change-controls', [])
+  const [investigations = []] = useKV<Investigation[]>('investigations', [])
 
   const recentAlerts = useMemo(() => {
     return [...(alerts ?? [])]
@@ -113,12 +118,263 @@ export function Dashboard() {
       .slice(0, 6)
   }, [alerts])
 
+  const activeBatches = useMemo(() => batchState.filter(batch => batch.status === 'running' || batch.status === 'warning'), [batchState])
+
+  const equipment = useMemo<EquipmentSnapshot[]>(() => {
+    return equipmentTelemetryState.map(item => {
+      const meta = equipmentCatalog[item.id] ?? { name: item.id, type: 'Equipment' }
+      const utilization = Math.min(100, Math.round(((item.uptimeHours % 720) / 720) * 100))
+      let status: EquipmentDisplayStatus = 'online'
+      if (item.vibrationAlert) {
+        status = 'warning'
+      } else if (utilization < 20) {
+        status = 'maintenance'
+      }
+      return {
+        id: item.id,
+        name: meta.name,
+        type: meta.type,
+        status,
+        utilization,
+        vibrationRMS: Number(item.vibrationRMS.toFixed(2)),
+      }
+    })
+  }, [equipmentTelemetryState])
+
+  const warningBatchCount = useMemo(() => batchState.filter(batch => batch.status === 'warning').length, [batchState])
+  const averageCompliance = useMemo(() => {
+    if (!batchState.length) return 0
+    const value = batchState.reduce((acc, batch) => acc + getCPPCompliance(batch), 0) / batchState.length
+    return Number((value * 100).toFixed(1))
+  }, [batchState])
+  const onlineEquipment = useMemo(() => equipment.filter(item => item.status === 'online').length, [equipment])
+  const equipmentWarningCount = useMemo(() => equipment.filter(item => item.status === 'warning').length, [equipment])
+  const meanVibration = useMemo(() => {
+    if (!equipment.length) return 0
+    const avg = equipment.reduce((acc, item) => acc + item.vibrationRMS, 0) / equipment.length
+    return Number(avg.toFixed(2))
+  }, [equipment])
+  const openDeviationCount = useMemo(
+    () => deviations.filter(dev => dev.status === 'open' || dev.status === 'investigating').length,
+    [deviations]
+  )
+  const criticalDeviationCount = useMemo(
+    () => deviations.filter(dev => dev.severity === 'critical' && dev.status !== 'closed').length,
+    [deviations]
+  )
+  const automationPending = useMemo(
+    () => automationQueue.filter(item => item.status === 'pending').length,
+    [automationQueue]
+  )
+  const automationResolved = useMemo(
+    () => automationQueue.filter(item => item.status === 'accepted').length,
+    [automationQueue]
+  )
+  const capaActive = useMemo(
+    () => capas.filter(item => item.status !== 'complete').length,
+    [capas]
+  )
+  const activeChangeControls = useMemo(
+    () => changeControls.filter(item => item.status !== 'closed').length,
+    [changeControls]
+  )
+  const activeInvestigationCount = useMemo(
+    () => investigations.filter(item => item.status !== 'closed').length,
+    [investigations]
+  )
+
+  const twinSeries = useMemo(() => {
+    const source = twinHistory.length
+      ? twinHistory
+      : [{
+          timestamp: new Date().toISOString(),
+          activeBatches: activeBatches.length,
+          warningBatches: warningBatchCount,
+          cppCompliance: averageCompliance,
+        }]
+    return source.map(point => ({
+      time: new Date(point.timestamp).toLocaleTimeString(),
+      active: point.activeBatches,
+      warnings: point.warningBatches,
+      compliance: Number(point.cppCompliance.toFixed(2)),
+    }))
+  }, [twinHistory, activeBatches.length, warningBatchCount, averageCompliance])
+
+  const deviationSeverityData = useMemo(() => {
+    const buckets: Record<'low' | 'medium' | 'high' | 'critical', number> = {
+      low: 0,
+      medium: 0,
+      high: 0,
+      critical: 0,
+    }
+    deviations.forEach(dev => {
+      if (dev.status === 'closed') return
+      buckets[dev.severity] += 1
+    })
+    return Object.entries(buckets).map(([severity, count]) => ({
+      severity,
+      label: `${severity.charAt(0).toUpperCase()}${severity.slice(1)}`,
+      count,
+    }))
+  }, [deviations])
+
+  const capaStatusData = useMemo(() => {
+    const buckets: Record<string, number> = {}
+    capas.forEach(capa => {
+      buckets[capa.status] = (buckets[capa.status] ?? 0) + 1
+    })
+    return Object.entries(buckets).map(([status, count]) => ({
+      status,
+      label: status.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+      count,
+    }))
+  }, [capas])
+
+  const twinChartConfig: ChartConfig = {
+    active: { label: 'Active Batches', color: '#2563eb' },
+    warnings: { label: 'Warning Batches', color: '#f59e0b' },
+    compliance: { label: 'CPP Compliance %', color: '#16a34a' },
+  }
+
+  const deviationChartConfig: ChartConfig = {
+    count: { label: 'Open Deviations', color: '#9333ea' },
+  }
+
+  const capaChartConfig: ChartConfig = {
+    count: { label: 'CAPA Records', color: '#0ea5e9' },
+  }
+
+  const hasDeviationData = useMemo(() => deviationSeverityData.some(item => item.count > 0), [deviationSeverityData])
+  const hasCapaData = useMemo(() => capaStatusData.some(item => item.count > 0), [capaStatusData])
+
+  const exportSummary = useMemo(() => ({
+    activeBatches: activeBatches.length,
+    warningBatches: warningBatchCount,
+    averageCppCompliance: averageCompliance,
+    onlineEquipment,
+    equipmentWarnings: equipmentWarningCount,
+    meanVibrationRms: meanVibration,
+    openDeviations: openDeviationCount,
+    criticalDeviations: criticalDeviationCount,
+    automationPending,
+    automationAccepted: automationResolved,
+    capaActive,
+    changeControlsActive: activeChangeControls,
+    investigationsActive: activeInvestigationCount,
+  }), [
+    activeBatches.length,
+    warningBatchCount,
+    averageCompliance,
+    onlineEquipment,
+    equipmentWarningCount,
+    meanVibration,
+    openDeviationCount,
+    criticalDeviationCount,
+    automationPending,
+    automationResolved,
+    capaActive,
+    activeChangeControls,
+    activeInvestigationCount,
+  ])
+
+  const exportDataset = useMemo(() => ({
+    timeSeries: twinHistory,
+    deviationSeverity: deviationSeverityData,
+    capaStatus: capaStatusData,
+  }), [twinHistory, deviationSeverityData, capaStatusData])
+
+  const handleExport = useCallback((format: 'json' | 'csv') => {
+    const timestamp = new Date().toISOString()
+    if (format === 'json') {
+      const jsonPayload = {
+        generatedAt: timestamp,
+        summary: exportSummary,
+        dataset: exportDataset,
+      }
+      const blob = new Blob([JSON.stringify(jsonPayload, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `dashboard-metrics-${timestamp}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      return
+    }
+
+    const csvLines: string[] = []
+    csvLines.push('Metric,Value')
+    for (const [metric, value] of Object.entries(exportSummary)) {
+      csvLines.push(`${metric},${value}`)
+    }
+    csvLines.push('')
+    csvLines.push('Timestamp,Active Batches,Warning Batches,CPP Compliance %')
+    if (exportDataset.timeSeries.length === 0) {
+      csvLines.push(`${timestamp},${activeBatches.length},${warningBatchCount},${averageCompliance}`)
+    } else {
+      exportDataset.timeSeries.forEach(point => {
+        csvLines.push(`${point.timestamp},${point.activeBatches},${point.warningBatches},${point.cppCompliance}`)
+      })
+    }
+    csvLines.push('')
+    csvLines.push('Deviation Severity,Count')
+    exportDataset.deviationSeverity.forEach(item => {
+      csvLines.push(`${item.severity},${item.count}`)
+    })
+    csvLines.push('')
+    csvLines.push('CAPA Status,Count')
+    exportDataset.capaStatus.forEach(item => {
+      csvLines.push(`${item.status},${item.count}`)
+    })
+
+    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `dashboard-metrics-${timestamp}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, [
+    exportSummary,
+    exportDataset,
+    activeBatches.length,
+    warningBatchCount,
+    averageCompliance,
+  ])
+
   const severityStyles: Record<AlertSeverity, { container: string; iconClass: string; Icon: React.ComponentType<{ className?: string }> }> = {
     info: { container: 'bg-primary/10', iconClass: 'text-primary', Icon: Info },
     success: { container: 'bg-success/10', iconClass: 'text-success', Icon: CheckCircle },
     warning: { container: 'bg-warning/10', iconClass: 'text-warning', Icon: Warning },
     error: { container: 'bg-destructive/10', iconClass: 'text-destructive', Icon: XCircle }
   }
+
+  useEffect(() => {
+    const twin = startDigitalTwin()
+    twin.start()
+    const unsubscribe = subscribeToTwin(snapshot => {
+      setBatchState(snapshot.batches)
+      setEquipmentTelemetryState(snapshot.equipmentTelemetry)
+      const activeCount = snapshot.batches.filter(batch => batch.status === 'running' || batch.status === 'warning').length
+      const warningCount = snapshot.batches.filter(batch => batch.status === 'warning').length
+      const compliance = snapshot.batches.length
+        ? snapshot.batches.reduce((acc, batch) => acc + getCPPCompliance(batch), 0) / snapshot.batches.length
+        : 0
+      const point: TwinHistoryPoint = {
+        timestamp: snapshot.timestamp.toISOString(),
+        activeBatches: activeCount,
+        warningBatches: warningCount,
+        cppCompliance: Number((compliance * 100).toFixed(2)),
+      }
+      setTwinHistory(prev => [...prev.slice(-47), point])
+    })
+    return () => {
+      unsubscribe()
+    }
+  }, [])
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
@@ -146,9 +402,37 @@ export function Dashboard() {
           <h1 className="text-3xl font-bold">Manufacturing Dashboard</h1>
           <p className="text-muted-foreground">Real-time overview of GMP manufacturing operations</p>
         </div>
-        <div className="text-right">
-          <div className="text-sm text-muted-foreground">Current Time</div>
-          <div className="text-lg font-mono">{currentTime.toLocaleTimeString()}</div>
+        <div className="flex flex-col items-end gap-2">
+          <div className="text-right">
+            <div className="text-sm text-muted-foreground">Current Time</div>
+            <div className="text-lg font-mono">{currentTime.toLocaleTimeString()}</div>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="flex items-center gap-2">
+                <DownloadSimple className="h-4 w-4" />
+                Export KPIs
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault()
+                  handleExport('json')
+                }}
+              >
+                Export JSON
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault()
+                  handleExport('csv')
+                }}
+              >
+                Export CSV
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -158,14 +442,15 @@ export function Dashboard() {
             <div>
               <KPICard
                 title="Active Batches"
-                value={activeBatches.filter(b => b.status === 'running').length}
-                change="+2 from yesterday"
+                value={activeBatches.length}
+                change={`${warningBatchCount} with active warnings`}
+                status={warningBatchCount > 0 ? 'warning' : 'normal'}
                 icon={TestTube}
               />
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            Count of batches with status === 'running'. Updated by the live digital twin.
+            Batches currently running or flagged with warnings based on digital twin telemetry.
           </TooltipContent>
         </Tooltip>
         <Tooltip>
@@ -173,14 +458,15 @@ export function Dashboard() {
             <div>
               <KPICard
                 title="Equipment Online"
-                value={`${equipment.filter(e => e.status === 'online').length}/${equipment.length}`}
-                change="98.5% uptime"
+                value={`${onlineEquipment}/${equipment.length}`}
+                change={`Avg vibration ${meanVibration} mm/s`}
+                status={equipmentWarningCount > 0 ? 'warning' : onlineEquipment === 0 ? 'critical' : 'normal'}
                 icon={Gear}
               />
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            Online equipment over total equipment in this summary. Represents current availability.
+            Equipment availability vs total catalog. Mean vibration derived from last twin snapshot.
           </TooltipContent>
         </Tooltip>
         <Tooltip>
@@ -188,32 +474,201 @@ export function Dashboard() {
             <div>
               <KPICard
                 title="Open Deviations"
-                value="3"
-                change="2 pending investigation"
-                status="warning"
+                value={openDeviationCount}
+                change={`${criticalDeviationCount} critical`}
+                status={criticalDeviationCount > 0 ? 'critical' : openDeviationCount > 0 ? 'warning' : 'normal'}
                 icon={Warning}
               />
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            Number of deviation records currently open in the quality system (demo placeholder).
+            Open or investigating deviations synchronized with the quality management workspace.
           </TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <div>
               <KPICard
-                title="Quality Score"
-                value="97.8%"
-                change="+0.3% this week"
+                title="Automation Backlog"
+                value={automationPending}
+                change={`${automationResolved} approved in review`}
+                status={automationPending > 3 ? 'critical' : automationPending > 0 ? 'warning' : 'normal'}
+                icon={Clock}
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            Pending automation suggestions awaiting quality disposition vs accepted recommendations.
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>
+              <KPICard
+                title="CPP Compliance"
+                value={`${averageCompliance.toFixed(1)}%`}
+                change={`${activeInvestigationCount} active investigations`}
+                status={averageCompliance < 92 ? 'critical' : averageCompliance < 97 ? 'warning' : 'normal'}
                 icon={CheckCircle}
               />
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            Composite indicator (demo) aggregating CPP compliance and first pass yield. For illustration only.
+            Average percentage of critical process parameters within bounds across live batches.
           </TooltipContent>
         </Tooltip>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendUp className="h-5 w-5" />
+              Production Pulse
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ChartContainer className="h-64" config={twinChartConfig}>
+              <ComposedChart data={twinSeries} margin={{ left: 8, right: 16, top: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="time" tickLine={false} axisLine={false} minTickGap={32} />
+                <YAxis yAxisId="left" tickLine={false} axisLine={false} allowDecimals={false} width={40} />
+                <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} domain={[0, 100]} width={40} />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value, name) => {
+                        if (name === 'CPP Compliance %') {
+                          return <span>{Number(value).toFixed(1)}%</span>
+                        }
+                        return <span>{value}</span>
+                      }}
+                    />
+                  }
+                />
+                <Area
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="active"
+                  name="Active Batches"
+                  fill="var(--color-active)"
+                  stroke="var(--color-active)"
+                  fillOpacity={0.2}
+                  strokeWidth={2}
+                />
+                <Area
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="warnings"
+                  name="Warning Batches"
+                  fill="var(--color-warnings)"
+                  stroke="var(--color-warnings)"
+                  fillOpacity={0.3}
+                  strokeDasharray="4 3"
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="compliance"
+                  name="CPP Compliance %"
+                  stroke="var(--color-compliance)"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </ComposedChart>
+            </ChartContainer>
+            <ChartLegendInline
+              className="justify-start"
+              items={[
+                { key: 'active', label: 'Active Batches', color: 'var(--color-active)' },
+                { key: 'warnings', label: 'Warning Batches', color: 'var(--color-warnings)' },
+                { key: 'compliance', label: 'CPP Compliance %', color: 'var(--color-compliance)' },
+              ]}
+            />
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <div className="text-xs uppercase text-muted-foreground">Active</div>
+                <div className="text-lg font-semibold font-mono">{activeBatches.length}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase text-muted-foreground">Warnings</div>
+                <div className="text-lg font-semibold font-mono">{warningBatchCount}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase text-muted-foreground">Avg CPP %</div>
+                <div className="text-lg font-semibold font-mono">{averageCompliance.toFixed(1)}%</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Warning className="h-5 w-5 text-warning" />
+              Quality Oversight
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium text-muted-foreground">Deviation Severity Mix</h4>
+                <Badge variant="outline">{openDeviationCount} open</Badge>
+              </div>
+              {hasDeviationData ? (
+                <ChartContainer className="h-52" config={deviationChartConfig}>
+                  <BarChart data={deviationSeverityData} margin={{ left: 8, right: 16, top: 8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="label" axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} axisLine={false} tickLine={false} width={36} />
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          formatter={(value, _name, item) => (
+                            <span>{`${value} ${item?.payload?.severity ?? ''}`}</span>
+                          )}
+                        />
+                      }
+                    />
+                    <Bar dataKey="count" radius={[6, 6, 0, 0]} fill="var(--color-count)" />
+                  </BarChart>
+                </ChartContainer>
+              ) : (
+                <div className="h-52 flex items-center justify-center text-sm text-muted-foreground bg-muted/40 rounded-lg">
+                  No open deviations at this time.
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium text-muted-foreground">CAPA Status Load</h4>
+                <Badge variant="outline">{capaActive} active</Badge>
+              </div>
+              {hasCapaData ? (
+                <ChartContainer className="h-52" config={capaChartConfig}>
+                  <BarChart data={capaStatusData} margin={{ left: 8, right: 16, top: 8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="label" axisLine={false} tickLine={false} interval={0} angle={-20} textAnchor="end" height={60} />
+                    <YAxis allowDecimals={false} axisLine={false} tickLine={false} width={36} />
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          formatter={(value, _name, item) => (
+                            <span>{`${value} ${item?.payload?.status ?? ''}`}</span>
+                          )}
+                        />
+                      }
+                    />
+                    <Bar dataKey="count" radius={[6, 6, 0, 0]} fill="var(--color-count)" />
+                  </BarChart>
+                </ChartContainer>
+              ) : (
+                <div className="h-52 flex items-center justify-center text-sm text-muted-foreground bg-muted/40 rounded-lg">
+                  No CAPA workload recorded.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -269,6 +724,9 @@ export function Dashboard() {
                     </Badge>
                     <div className="text-sm text-muted-foreground font-mono">
                       {item.utilization}% util
+                    </div>
+                    <div className="text-xs text-muted-foreground font-mono">
+                      {item.vibrationRMS} mm/s RMS
                     </div>
                   </div>
                 </div>

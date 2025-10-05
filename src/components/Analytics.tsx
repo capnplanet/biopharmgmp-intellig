@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import * as React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { 
@@ -11,14 +12,22 @@ import {
   ChartLine, 
   Warning,
   CheckCircle,
-  Clock,
   Robot,
   Target,
   BookOpen,
   Info
 } from '@phosphor-icons/react'
-import { equipmentTelemetry, batches } from '@/data/seed'
+import { equipmentTelemetry, batches, equipmentCalibration, getCPPCompliance } from '@/data/seed'
 import { monitor, sampleAndRecordPredictions, predictQuality, predictDeviationRisk, predictEquipmentFailure, decisionThreshold, trainLogisticForModel, predictLogisticProb, getLogisticState, type ModelId } from '@/lib/modeling'
+import { useAlerts } from '@/hooks/use-alerts'
+import { useKV } from '@github/spark/hooks'
+import { subscribeToTwin, startDigitalTwin } from '@/lib/digitalTwin'
+import type { TwinSnapshot } from '@/lib/digitalTwin'
+import type { AutomationSuggestion } from '@/types/automation'
+import type { Deviation } from '@/types/quality'
+import { ChartContainer, ChartLegendInline, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import { Area, ComposedChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { formatDistanceToNow } from 'date-fns'
 
 interface PredictiveModel {
   id: string
@@ -65,6 +74,32 @@ const mockMetrics: QualityMetrics = {
     trend: 'up', 
     historical: [84.1, 85.3, 86.2, 86.8, 87.4] 
   }
+}
+
+type RiskHistoryPoint = {
+  timestamp: string
+  equipmentRisk: number
+  deviationRisk: number
+  qualityConfidence: number
+  alertCount: number
+}
+
+const equipmentCatalog = equipmentCalibration.reduce<Record<string, string>>((acc, item) => {
+  acc[item.id] = item.name
+  return acc
+}, {})
+
+const classifyRiskLevel = (value: number) => {
+  if (value >= 70) return { label: 'High', badge: 'bg-destructive text-destructive-foreground' as const }
+  if (value >= 40) return { label: 'Medium', badge: 'bg-warning text-warning-foreground' as const }
+  return { label: 'Low', badge: 'bg-success text-success-foreground' as const }
+}
+
+const classifyConfidenceLevel = (value: number) => {
+  if (value >= 90) return { label: 'Excellent', badge: 'bg-success text-success-foreground' as const }
+  if (value >= 75) return { label: 'Good', badge: 'bg-primary text-primary-foreground' as const }
+  if (value >= 60) return { label: 'Watch', badge: 'bg-warning text-warning-foreground' as const }
+  return { label: 'At Risk', badge: 'bg-destructive text-destructive-foreground' as const }
 }
 
 // Build functional models from current data using LR if available; fallback to lightweight predictors
@@ -292,15 +327,29 @@ export function Analytics() {
   const [models, setModels] = useState<PredictiveModel[]>(buildRuntimeModels())
   const [metrics] = useState<QualityMetrics>(mockMetrics)
   const [, setCurrentTime] = useState(new Date())
-  // Determine highest-risk equipment by current predictor
-  const topEq = React.useMemo(() => {
-    const scored = equipmentTelemetry.map(e => ({ id: e.id, p: predictEquipmentFailure(e).p }))
-    return scored.sort((a,b) => b.p - a.p)[0]?.id || 'BIO-002'
-  }, [])
-
+  const { alerts = [] } = useAlerts()
+  const [deviations = []] = useKV<Deviation[]>('deviations', [])
+  const [automationQueue = []] = useKV<AutomationSuggestion[]>('automation-queue', [])
+  const [riskHistory, setRiskHistory] = useState<RiskHistoryPoint[]>([])
+  const [latestTwin, setLatestTwin] = useState<TwinSnapshot>({
+    timestamp: new Date(),
+    batches,
+    equipmentTelemetry,
+  })
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000)
     return () => clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    const twin = startDigitalTwin()
+    twin.start()
+    const unsubscribe = subscribeToTwin(snapshot => {
+      setLatestTwin(snapshot)
+    })
+    return () => {
+      unsubscribe()
+    }
   }, [])
 
   // Minimal live monitoring: sample and record predictions periodically
@@ -330,6 +379,38 @@ export function Analytics() {
     return () => { clearTimeout(t0); clearInterval(id) }
   }, [])
 
+  useEffect(() => {
+    const equipmentModel = models.find(m => m.type === 'equipment_failure')
+    const deviationModel = models.find(m => m.type === 'deviation_risk')
+    const qualityModel = models.find(m => m.type === 'quality_prediction')
+    const eqValue = equipmentModel?.predictions?.[0]?.value ?? 0
+    const devValue = deviationModel?.predictions?.[0]?.value ?? 0
+    const qualValue = qualityModel?.predictions?.[0]?.value ?? 0
+    const now = new Date()
+    const entry: RiskHistoryPoint = {
+      timestamp: now.toISOString(),
+      equipmentRisk: Number(eqValue.toFixed(2)),
+      deviationRisk: Number(devValue.toFixed(2)),
+      qualityConfidence: Number(qualValue.toFixed(2)),
+      alertCount: alerts.length,
+    }
+    setRiskHistory(prev => {
+      const limit = 72
+      if (prev.length > 0) {
+        const last = prev[prev.length - 1]
+        const lastTs = new Date(last.timestamp).getTime()
+        if (now.getTime() - lastTs < 5000) {
+          const clone = [...prev]
+          clone[clone.length - 1] = entry
+          return clone
+        }
+      }
+      const next = [...prev, entry]
+      if (next.length > limit) next.shift()
+      return next
+    })
+  }, [models, alerts.length])
+
   // Simulated local retrain on in-memory data (stub):
   // In production, replace with a real, local training job that reads approved datasets and writes versioned model artifacts.
   const retrainLocally = async (modelId: string) => {
@@ -354,6 +435,102 @@ export function Analytics() {
       accuracy: Math.min(99, Math.max(50, (m.accuracy ?? 80) + (Math.random() * 2 - 1)))
     } : m))
   }
+
+  const equipmentRiskRanking = useMemo(() => {
+    const snapshot = latestTwin?.equipmentTelemetry ?? equipmentTelemetry
+    return snapshot
+      .map(item => {
+        const prediction = predictEquipmentFailure(item)
+        return {
+          id: item.id,
+          name: equipmentCatalog[item.id] ?? item.id,
+          risk: Number((prediction.p * 100).toFixed(1)),
+          vibrationRMS: Number(item.vibrationRMS.toFixed(2)),
+          alert: item.vibrationAlert,
+        }
+      })
+      .sort((a, b) => b.risk - a.risk)
+  }, [latestTwin])
+
+  const deviationRiskRanking = useMemo(() => {
+    const snapshot = latestTwin?.batches ?? batches
+    return snapshot
+      .map(batch => {
+        const prediction = predictDeviationRisk(batch)
+        return {
+          id: batch.id,
+          product: batch.product,
+          stage: batch.stage,
+          risk: Number((prediction.p * 100).toFixed(1)),
+          cppCompliance: Number((getCPPCompliance(batch) * 100).toFixed(1)),
+          status: batch.status,
+        }
+      })
+      .sort((a, b) => b.risk - a.risk)
+  }, [latestTwin])
+
+  const averageQualityConfidence = useMemo(() => {
+    const snapshot = latestTwin?.batches ?? batches
+    if (snapshot.length === 0) return 0
+    const total = snapshot.reduce((sum, batch) => sum + predictQuality(batch).p, 0)
+    return Number(((total / snapshot.length) * 100).toFixed(1))
+  }, [latestTwin])
+
+  const cppOutOfSpecCount = useMemo(() => {
+    const snapshot = latestTwin?.batches ?? batches
+    return snapshot.filter(batch => getCPPCompliance(batch) < 0.95).length
+  }, [latestTwin])
+
+  const alertSeveritySummary = useMemo(() => {
+    return alerts.reduce(
+      (acc, alert) => {
+        acc.total += 1
+        acc.bySeverity[alert.severity] = (acc.bySeverity[alert.severity] ?? 0) + 1
+        return acc
+      },
+      { total: 0, bySeverity: { info: 0, success: 0, warning: 0, error: 0 } as Record<'info' | 'success' | 'warning' | 'error', number> }
+    )
+  }, [alerts])
+
+  const openDeviationCount = useMemo(
+    () => deviations.filter(dev => dev.status === 'open' || dev.status === 'investigating').length,
+    [deviations]
+  )
+
+  const automationPendingCount = useMemo(
+    () => automationQueue.filter(item => item.status === 'pending').length,
+    [automationQueue]
+  )
+
+  const riskChartConfig: ChartConfig = useMemo(() => ({
+    equipment: { label: 'Equipment Risk %', color: '#ef4444' },
+    deviation: { label: 'Deviation Risk %', color: '#f97316' },
+    quality: { label: 'Quality Confidence %', color: '#22c55e' },
+  }), [])
+
+  const riskTrendSeries = useMemo(
+    () =>
+      riskHistory.map(point => ({
+        time: new Date(point.timestamp).toLocaleTimeString(),
+        equipment: Number(point.equipmentRisk.toFixed(1)),
+        deviation: Number(point.deviationRisk.toFixed(1)),
+        quality: Number(point.qualityConfidence.toFixed(1)),
+      })),
+    [riskHistory]
+  )
+
+  const lastTwinUpdate = useMemo(
+    () => formatDistanceToNow(new Date(latestTwin.timestamp), { addSuffix: true }),
+    [latestTwin.timestamp]
+  )
+
+  const topEquipmentRisk = equipmentRiskRanking[0]
+  const topDeviationRisk = deviationRiskRanking[0]
+  const topEquipmentList = equipmentRiskRanking.slice(0, 3)
+  const topDeviationList = deviationRiskRanking.slice(0, 3)
+  const equipmentRiskLevel = classifyRiskLevel(topEquipmentRisk?.risk ?? 0)
+  const deviationRiskLevel = classifyRiskLevel(topDeviationRisk?.risk ?? 0)
+  const qualityConfidenceLevel = classifyConfidenceLevel(averageQualityConfidence)
 
   function ExplainabilityPanel() {
     return (
@@ -632,38 +809,181 @@ export function Analytics() {
                 Risk Assessment Summary
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Warning className="h-4 w-4 text-red-600" />
-                    <span className="font-medium text-red-900">High Risk Alert</span>
-                  </div>
-                  <p className="text-sm text-red-800">
-                    Equipment failure risk is currently highest for {topEq} based on the live predictor. Consider inspection to mitigate potential disruption.
-                  </p>
-                </div>
-                
-                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="h-4 w-4 text-yellow-600" />
-                    <span className="font-medium text-yellow-900">Medium Risk - Monitoring Required</span>
-                  </div>
-                  <p className="text-sm text-yellow-800">
-                    Deviation risk analyzer indicates elevated probability of pH control issues. 
-                    Enhanced monitoring protocols activated for current batches.
-                  </p>
-                </div>
+            <CardContent className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm text-muted-foreground">Synced {lastTwinUpdate}</div>
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <Warning className="h-3 w-3 text-warning" />
+                  {alertSeveritySummary.total} Alerts in last window
+                </Badge>
+              </div>
 
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    <span className="font-medium text-green-900">Low Risk - Optimal Performance</span>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="p-4 border rounded-lg bg-destructive/5">
+                  <div className="flex items-center justify-between text-xs uppercase text-muted-foreground">
+                    <span>Equipment Failure Risk</span>
+                    <Badge className={equipmentRiskLevel.badge}>{equipmentRiskLevel.label}</Badge>
                   </div>
-                  <p className="text-sm text-green-800">
-                    Batch quality predictions show excellent performance indicators. 
-                    All current batches are on track to meet quality specifications.
+                  <div className="mt-2 text-2xl font-semibold font-mono">
+                    {(topEquipmentRisk?.risk ?? 0).toFixed(1)}%
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Highest: {topEquipmentRisk?.name ?? '—'} · {topEquipmentRisk ? `${topEquipmentRisk.vibrationRMS} mm/s` : '—'}
                   </p>
+                </div>
+                <div className="p-4 border rounded-lg bg-warning/5">
+                  <div className="flex items-center justify-between text-xs uppercase text-muted-foreground">
+                    <span>Deviation Risk</span>
+                    <Badge className={deviationRiskLevel.badge}>{deviationRiskLevel.label}</Badge>
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold font-mono">
+                    {(topDeviationRisk?.risk ?? 0).toFixed(1)}%
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Most exposed batch: {topDeviationRisk?.id ?? '—'} · CPP {topDeviationRisk ? `${topDeviationRisk.cppCompliance.toFixed(1)}%` : '—'}
+                  </p>
+                </div>
+                <div className="p-4 border rounded-lg bg-success/5">
+                  <div className="flex items-center justify-between text-xs uppercase text-muted-foreground">
+                    <span>Quality Confidence</span>
+                    <Badge className={qualityConfidenceLevel.badge}>{qualityConfidenceLevel.label}</Badge>
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold font-mono">
+                    {averageQualityConfidence.toFixed(1)}%
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    CPP out-of-spec lots: {cppOutOfSpecCount}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-3">
+                <div className="lg:col-span-2 space-y-3">
+                  {riskTrendSeries.length > 1 ? (
+                    <>
+                      <ChartContainer className="h-56" config={riskChartConfig}>
+                        <ComposedChart data={riskTrendSeries} margin={{ left: 8, right: 16, top: 8, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="time" axisLine={false} tickLine={false} minTickGap={28} />
+                          <YAxis domain={[0, 100]} axisLine={false} tickLine={false} width={42} />
+                          <ChartTooltip
+                            content={
+                              <ChartTooltipContent
+                                formatter={(value) => (
+                                  <span>{Number(value).toFixed(1)}%</span>
+                                )}
+                              />
+                            }
+                          />
+                          <Area type="monotone" dataKey="equipment" fill="var(--color-equipment)" stroke="var(--color-equipment)" fillOpacity={0.12} strokeWidth={2} />
+                          <Area type="monotone" dataKey="deviation" fill="var(--color-deviation)" stroke="var(--color-deviation)" fillOpacity={0.18} strokeWidth={2} strokeDasharray="4 3" />
+                          <Line type="monotone" dataKey="quality" stroke="var(--color-quality)" strokeWidth={2} dot={false} />
+                        </ComposedChart>
+                      </ChartContainer>
+                      <ChartLegendInline
+                        className="justify-start"
+                        items={[
+                          { key: 'equipment', label: 'Equipment Risk', color: 'var(--color-equipment)' },
+                          { key: 'deviation', label: 'Deviation Risk', color: 'var(--color-deviation)' },
+                          { key: 'quality', label: 'Quality Confidence', color: 'var(--color-quality)' },
+                        ]}
+                      />
+                    </>
+                  ) : (
+                    <div className="h-56 border rounded-lg bg-muted/40 flex items-center justify-center text-sm text-muted-foreground">
+                      Collecting data… risk trends will appear shortly.
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-3 p-4 border rounded-lg bg-muted/40">
+                  <h4 className="text-sm font-medium">Operations Pulse</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Open or investigating deviations</span>
+                      <span className="font-mono">{openDeviationCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Pending automation decisions</span>
+                      <span className="font-mono">{automationPendingCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Alerts (last sample)</span>
+                      <span className="font-mono">{alertSeveritySummary.total}</span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground border-t pt-2">
+                    Logistic models updating {formatDistanceToNow(models[0]?.lastTrained ?? new Date(), { addSuffix: true })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium">Top Equipment Watchlist</h4>
+                    <Badge variant="outline" className="text-[10px]">Live</Badge>
+                  </div>
+                  <div className="space-y-3">
+                    {topEquipmentList.map(item => (
+                      <div key={item.id} className="p-3 border rounded-lg bg-background">
+                        <div className="flex items-center justify-between text-sm font-medium">
+                          <span>{item.name}</span>
+                          <span className="font-mono">{item.risk.toFixed(1)}%</span>
+                        </div>
+                        <Progress value={item.risk} className="h-2 mt-2" />
+                        <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                          <span>Vibration {item.vibrationRMS} mm/s</span>
+                          <span>{item.alert ? 'Alert active' : 'Nominal'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium">Highest Deviation Risk Batches</h4>
+                    <Badge variant="outline" className="text-[10px]">AI Watch</Badge>
+                  </div>
+                  <div className="space-y-3">
+                    {topDeviationList.map(item => (
+                      <div key={item.id} className="p-3 border rounded-lg bg-background">
+                        <div className="flex items-center justify-between text-sm font-medium">
+                          <span>{item.id}</span>
+                          <span className="font-mono">{item.risk.toFixed(1)}%</span>
+                        </div>
+                        <Progress value={item.risk} className="h-2 mt-2" />
+                        <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{item.product} · {item.stage}</span>
+                          <span>CPP {item.cppCompliance.toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="p-4 border rounded-lg bg-muted/40">
+                  <h4 className="text-sm font-medium mb-3">Alert Composition</h4>
+                  <div className="space-y-2 text-sm">
+                    {(['error','warning','success','info'] as const).map(sev => (
+                      <div key={sev} className="flex items-center justify-between">
+                        <span className="capitalize text-muted-foreground">{sev}</span>
+                        <span className="font-mono">{alertSeveritySummary.bySeverity[sev]}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-3">
+                    Alerts reflect automation, quality, and equipment events recorded across the platform.
+                  </div>
+                </div>
+                <div className="p-4 border rounded-lg bg-muted/20">
+                  <h4 className="text-sm font-medium mb-3">Recommended Actions</h4>
+                  <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside">
+                    <li>Dispatch maintenance to {topEquipmentRisk?.name ?? 'high-risk equipment'} to investigate telemetry anomalies.</li>
+                    <li>Review SOP adherence for batches {topDeviationList.map(item => item.id).join(', ') || '—'} with elevated deviation probabilities.</li>
+                    <li>Continue monitoring CPP compliance; {cppOutOfSpecCount} batch(es) require parameter tuning.</li>
+                  </ul>
                 </div>
               </div>
             </CardContent>
