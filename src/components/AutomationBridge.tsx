@@ -66,7 +66,7 @@ export function AutomationBridge() {
 
     window.addEventListener('quality:automation-proposal', handler as EventListener)
     return () => window.removeEventListener('quality:automation-proposal', handler as EventListener)
-  }, [log, setDeviations, setSuggestions])
+  }, [log, recordAlert, setDeviations, setSuggestions])
 
   useEffect(() => {
     if (!suggestions?.length) return

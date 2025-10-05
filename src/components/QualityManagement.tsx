@@ -35,6 +35,8 @@ import {
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { notifyQualityEventResolved } from '@/lib/qualityAutomation'
+import { useAlerts } from '@/hooks/use-alerts'
+import type { AlertSeverity } from '@/types/alerts'
 import type { AutomationSuggestion } from '@/types/automation'
 import type { CAPA, ChangeControl, Deviation, ESignatureRecord, Investigation } from '@/types/quality'
 import { calculateInvestigationProgress, createInvestigationFromDeviation, normalizeInvestigation } from '@/utils/investigation'
@@ -393,6 +395,7 @@ export function QualityManagement() {
     }
   ])
   const { log } = useAuditLogger()
+  const { recordAlert } = useAlerts()
   const [investigationNotes, setInvestigationNotes] = useState('')
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [assistantMode, setAssistantMode] = useState<AssistantMode>('deviation')
@@ -405,6 +408,12 @@ export function QualityManagement() {
     deviation: 'Deviation Investigation Support',
     capa: 'CAPA Authoring Support',
     'change-control': 'Change Control Planning'
+  }
+  const deviationStatusAlertSeverity: Partial<Record<Deviation['status'], AlertSeverity>> = {
+    open: 'warning',
+    investigating: 'warning',
+    resolved: 'success',
+    closed: 'success',
   }
 
   const formatDate = (d: Date | string | undefined) => {
@@ -553,6 +562,15 @@ export function QualityManagement() {
     const deviation = (deviations || []).find(dev => dev.id === suggestion.deviationId)
     if (!deviation) {
       toast.error('Associated deviation not found for automation recommendation')
+      recordAlert('Automation approval failed', `Suggestion ${suggestion.id} is missing deviation ${suggestion.deviationId}.`, {
+        severity: 'error',
+        source: 'quality',
+        relatedRecordId: suggestion.deviationId,
+        context: {
+          suggestionId: suggestion.id,
+          action: 'approve',
+        },
+      })
       return
     }
 
@@ -618,12 +636,31 @@ export function QualityManagement() {
     })
 
     toast.success(`Automation plan ${suggestion.id} approved and investigation launched`)
+    recordAlert(`Automation plan ${suggestion.id} approved`, `Investigation launched for deviation ${deviation.id} by ${signature.userId}.`, {
+      severity: 'success',
+      source: 'quality',
+      relatedRecordId: deviation.id,
+      context: {
+        suggestionId: suggestion.id,
+        decisionReason: signature.reason,
+        signatureId: signatureRecordId,
+      },
+    })
   }
 
   const handleAutomationDismissal = async (suggestion: AutomationSuggestion, signature: SignatureResult) => {
     const deviation = (deviations || []).find(dev => dev.id === suggestion.deviationId)
     if (!deviation) {
       toast.error('Associated deviation not found for automation recommendation')
+      recordAlert('Automation dismissal failed', `Suggestion ${suggestion.id} is missing deviation ${suggestion.deviationId}.`, {
+        severity: 'error',
+        source: 'quality',
+        relatedRecordId: suggestion.deviationId,
+        context: {
+          suggestionId: suggestion.id,
+          action: 'dismiss',
+        },
+      })
       return
     }
 
@@ -668,6 +705,15 @@ export function QualityManagement() {
     })
 
     toast.warning(`Automation plan ${suggestion.id} dismissed`)
+    recordAlert(`Automation plan ${suggestion.id} dismissed`, `Dismissed for deviation ${suggestion.deviationId} by ${signature.userId}.`, {
+      severity: 'warning',
+      source: 'quality',
+      relatedRecordId: suggestion.deviationId,
+      context: {
+        suggestionId: suggestion.id,
+        decisionReason: signature.reason,
+      },
+    })
   }
 
   const formatInvestigationStatus = (status: Investigation['status']) => {
@@ -783,6 +829,21 @@ export function QualityManagement() {
       recordId: deviation.id,
       digitalSignature: signature?.digitalSignature,
       userOverride,
+    })
+    const alertSeverity = deviationStatusAlertSeverity[newStatus] ?? 'info'
+    const statusTitle = newStatus === 'closed' ? 'closed' : `status ${newStatus}`
+    const reasonDetails = signature?.reason ? ` Reason: ${signature.reason}` : ''
+    const actorDetails = signature?.userId ? ` by ${signature.userId}` : ''
+    recordAlert(`Deviation ${deviation.id} ${statusTitle}`, `${action}${actorDetails}.${reasonDetails}`, {
+      severity: alertSeverity,
+      source: 'quality',
+      relatedRecordId: deviation.id,
+      context: {
+        status: newStatus,
+        action,
+        actor: signature?.userId,
+        reason: signature?.reason,
+      },
     })
   }
 
