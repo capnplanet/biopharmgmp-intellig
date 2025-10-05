@@ -1,5 +1,5 @@
 import { useKV } from '@github/spark/hooks'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { Dashboard } from './components/Dashboard'
 import { BatchMonitoring } from './components/BatchMonitoring'
@@ -36,9 +36,31 @@ const normalizeQualityRoute = (value: string | undefined) => {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useKV<NavigationItem>('active-tab', 'dashboard')
-  // lightweight route overlay for per-batch pages under the Batches tab
-  const [route, setRoute] = useKV<string>('route', '')
+  const [activeTabKV, setActiveTabKV] = useKV<NavigationItem>('active-tab', 'dashboard')
+  const [routeKV, setRouteKV] = useKV<string>('route', '')
+
+  const [activeTab, setActiveTabState] = useState<NavigationItem>(activeTabKV ?? 'dashboard')
+  const [route, setRouteState] = useState<string>(routeKV ?? '')
+
+  useEffect(() => {
+    const next = activeTabKV ?? 'dashboard'
+    if (next !== activeTab) setActiveTabState(next)
+  }, [activeTabKV, activeTab])
+
+  useEffect(() => {
+    const next = routeKV ?? ''
+    if (next !== route) setRouteState(next)
+  }, [routeKV, route])
+
+  const setActiveTab = useCallback((tab: NavigationItem) => {
+    setActiveTabState(tab)
+    setActiveTabKV(tab)
+  }, [setActiveTabKV])
+
+  const setRoute = useCallback((value: string) => {
+    setRouteState(value)
+    setRouteKV(value)
+  }, [setRouteKV])
 
   // Hash deep linking: #<tab>[/<route>]
   useEffect(() => {
