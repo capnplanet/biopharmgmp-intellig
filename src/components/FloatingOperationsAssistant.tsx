@@ -3,7 +3,6 @@ import { useKV } from '@github/spark/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -45,7 +44,7 @@ const areSuggestionsEqual = (next: string[], current: string[]) =>
 
 export function FloatingOperationsAssistant() {
   const digest = useOperationsAssistant()
-  const [open = false, setOpen] = useKV<boolean>('operations-assistant-open', false)
+  const [open, setOpen] = useState(false)
   const [messages = [], setMessages] = useKV<AssistantMessage[]>('operations-assistant-history', [])
   const [suggestedPrompts = defaultSuggestedPrompts, setSuggestedPrompts] = useKV<string[]>('operations-assistant-suggestions', defaultSuggestedPrompts)
   const [input, setInput] = useState('')
@@ -285,7 +284,7 @@ export function FloatingOperationsAssistant() {
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
       {open && (
-  <Card className="w-[380px] max-h-[80vh] shadow-2xl border-primary/20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 flex flex-col">
+  <Card className="w-[380px] h-[min(80vh,38rem)] max-h-[80vh] overflow-hidden shadow-2xl border-primary/20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 flex flex-col">
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -328,8 +327,8 @@ export function FloatingOperationsAssistant() {
               <span className="whitespace-pre-line leading-5">{latestSummary}</span>
             </div>
           </CardHeader>
-          <CardContent className="flex flex-1 flex-col gap-3 overflow-hidden">
-            <ScrollArea className="flex-1 rounded-md border bg-background/60">
+          <CardContent className="flex flex-1 flex-col gap-3 overflow-hidden min-h-0 px-4 pb-4">
+            <div className="flex-1 min-h-0 max-h-full overflow-y-auto rounded-md border bg-background/60">
               <div className="space-y-3 p-3">
                 {messages.length === 0 && !loading ? (
                   <div className="text-xs text-muted-foreground space-y-2">
@@ -377,7 +376,7 @@ export function FloatingOperationsAssistant() {
                   </div>
                 )}
               </div>
-            </ScrollArea>
+            </div>
 
             {messages.some(message => message.role === 'assistant') && suggestedPrompts.length > 0 && (
               <div className="rounded-md border border-border/40 bg-muted/20 p-3">
