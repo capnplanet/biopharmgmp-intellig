@@ -8,11 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { getSpark } from '@/lib/spark'
 import { useOperationsAssistant } from '@/hooks/use-operations-assistant'
-import { Robot, Sparkle, PaperPlaneTilt, X, Question, ListBullets, ArrowCounterClockwise } from '@phosphor-icons/react'
-
-type FloatingOperationsAssistantProps = {
-  variant?: 'floating' | 'page'
-}
+import { Robot, Sparkle, PaperPlaneTilt, Question, ListBullets, ArrowCounterClockwise } from '@phosphor-icons/react'
 
 const MAX_MESSAGES = 12
 const MAX_SUGGESTIONS = 3
@@ -46,12 +42,8 @@ const FOLLOW_UP_KEYWORDS: Record<string, string[]> = {
 const areSuggestionsEqual = (next: string[], current: string[]) =>
   next.length === current.length && next.every((value, index) => value === current[index])
 
-export function FloatingOperationsAssistant({ variant = 'floating' }: FloatingOperationsAssistantProps) {
+export function FloatingOperationsAssistant() {
   const digest = useOperationsAssistant()
-  const isPage = variant === 'page'
-
-  const [floatingOpen, setFloatingOpen] = useState(false)
-  const open = isPage ? true : floatingOpen
 
   const [messages = [], setMessages] = useKV<AssistantMessage[]>('operations-assistant-history', [])
   const [suggestedPrompts = defaultSuggestedPrompts, setSuggestedPrompts] = useKV<string[]>('operations-assistant-suggestions', defaultSuggestedPrompts)
@@ -289,24 +281,16 @@ export function FloatingOperationsAssistant({ variant = 'floating' }: FloatingOp
     void askAssistant(input)
   }
 
-  const containerClasses = cn(
-    isPage
-      ? 'flex h-full w-full justify-center overflow-hidden bg-background px-4 py-6 sm:px-6'
-      : 'fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3'
-  )
+  const containerClasses = 'flex h-full w-full justify-center overflow-hidden bg-background px-4 py-6 sm:px-6'
 
-  const cardClasses = cn(
-    'overflow-hidden shadow-2xl border-primary/20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 flex flex-col',
-    isPage ? 'h-full w-full max-w-4xl border bg-background' : 'w-[min(90vw,380px)] h-[80vh] sm:h-[38rem] max-h-[80vh]'
-  )
+  const cardClasses = 'h-full w-full max-w-4xl overflow-hidden border bg-background shadow-2xl border-primary/20 backdrop-blur supports-[backdrop-filter]:bg-background/80 flex flex-col'
 
-  const cardStyle = isPage ? undefined : { height: 'min(80vh, 38rem)' }
-  const contentPadding = isPage ? 'px-6 pb-6' : 'px-4 pb-4'
+  const contentPadding = 'px-6 pb-6'
+  const suggestionContainerClasses = 'rounded-md border border-border/40 bg-muted/20 p-3 min-h-[8rem]'
 
   return (
     <div className={containerClasses}>
-      {(isPage || open) && (
-        <Card style={cardStyle} className={cardClasses}>
+      <Card className={cardClasses}>
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -339,11 +323,6 @@ export function FloatingOperationsAssistant({ variant = 'floating' }: FloatingOp
                     Reset chat and suggested prompts
                   </TooltipContent>
                 </Tooltip>
-                {!isPage && (
-                  <Button variant="ghost" size="icon" onClick={() => setFloatingOpen(false)} aria-label="Close operations assistant">
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
               </div>
             </div>
             <div className="mt-3 rounded-md border bg-muted/40 text-xs text-muted-foreground p-2 flex items-start gap-2">
@@ -403,7 +382,7 @@ export function FloatingOperationsAssistant({ variant = 'floating' }: FloatingOp
             </div>
 
             {messages.some(message => message.role === 'assistant') && suggestedPrompts.length > 0 && (
-              <div className="rounded-md border border-border/40 bg-muted/20 p-3">
+              <div className={suggestionContainerClasses}>
                 <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80">
                   Suggested follow-ups
                 </div>
@@ -454,26 +433,6 @@ export function FloatingOperationsAssistant({ variant = 'floating' }: FloatingOp
             </form>
           </CardContent>
         </Card>
-      )}
-
-      {!isPage && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              size="lg"
-              className="h-12 w-12 rounded-full shadow-lg"
-              variant="default"
-              onClick={() => setFloatingOpen((previous) => !previous)}
-              aria-label={open ? 'Close operations assistant' : 'Open operations assistant'}
-            >
-              {open ? <X className="h-5 w-5" /> : <Robot className="h-5 w-5" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="left" className="text-xs">
-            {open ? 'Hide operations copilot' : 'Ask the operations copilot'}
-          </TooltipContent>
-        </Tooltip>
-      )}
     </div>
   )
 }
