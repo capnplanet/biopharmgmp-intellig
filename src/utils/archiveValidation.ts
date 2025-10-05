@@ -1,3 +1,4 @@
+import { BATCH_IDS, DEVIATION_IDS } from '@/data/identifiers'
 import { buildInvestigationSources } from '@/data/archive'
 
 export interface ValidationResult {
@@ -54,14 +55,14 @@ export function validateArchiveCompleteness(batchId: string): ValidationResult {
   
   // Check for operator logs on critical deviations
   const hasOperatorLogs = sources.some(s => s.type === 'operator-log')
-  if (batchId === 'BTH-2024-003' && !hasOperatorLogs) {
+  if (batchId === BATCH_IDS.warning && !hasOperatorLogs) {
     issues.push('Critical temperature deviation lacks operator log context')
     recommendations.push('Include operator observations and actions for critical deviations')
   }
   
   // Check for trend analysis on process excursions
   const hasTrendData = sources.some(s => s.type === 'trend-data')
-  if (batchId === 'BTH-2024-003' && !hasTrendData) {
+  if (batchId === BATCH_IDS.warning && !hasTrendData) {
     issues.push('Process excursion lacks statistical trend analysis')
     recommendations.push('Include control chart and trend analysis for process deviations')
   }
@@ -108,7 +109,7 @@ export function validateContentAlignment(deviationId: string, batchId: string): 
   let alignmentScore = 0
   
   // Temperature excursion specific checks
-  if (deviationId === 'DEV-2024-001') {
+  if (deviationId === DEVIATION_IDS.temperatureExcursion) {
     const hasTemperatureData = sources.some(s => s.content.includes('temperature') || s.content.includes('Temperature'))
     const hasEquipmentData = sources.some(s => s.content.includes('BIO-002'))
     const hasMaintenanceHistory = sources.some(s => s.type === 'maintenance-log')
@@ -121,7 +122,7 @@ export function validateContentAlignment(deviationId: string, batchId: string): 
   }
   
   // Material deviation specific checks
-  if (deviationId === 'DEV-2024-003') {
+  if (deviationId === DEVIATION_IDS.materialOutOfSpec) {
     const hasMaterialData = sources.some(s => s.type === 'material-record')
     const hasSupplierInfo = sources.some(s => s.content.includes('supplier') || s.content.includes('Supplier'))
     const hasImpactAssessment = sources.some(s => s.content.includes('impact') || s.content.includes('Impact'))
@@ -156,57 +157,53 @@ export function runArchiveValidationSuite(): {
     deviationId?: string
     result: ValidationResult | ReturnType<typeof validateContentAlignment>
   }> = []
-  
-  // Test critical deviation BTH-2024-003
-  const bth003Completeness = validateArchiveCompleteness('BTH-2024-003')
+
+  const warningCompleteness = validateArchiveCompleteness(BATCH_IDS.warning)
   testResults.push({
-    testName: 'BTH-2024-003 Completeness',
-    batchId: 'BTH-2024-003',
-    result: bth003Completeness
+    testName: `${BATCH_IDS.warning} Completeness`,
+    batchId: BATCH_IDS.warning,
+    result: warningCompleteness,
   })
-  
-  const bth003Alignment = validateContentAlignment('DEV-2024-001', 'BTH-2024-003')
+
+  const warningAlignment = validateContentAlignment(DEVIATION_IDS.temperatureExcursion, BATCH_IDS.warning)
   testResults.push({
-    testName: 'DEV-2024-001 Content Alignment',
-    batchId: 'BTH-2024-003',
-    deviationId: 'DEV-2024-001',
-    result: bth003Alignment
+    testName: `${DEVIATION_IDS.temperatureExcursion} Content Alignment`,
+    batchId: BATCH_IDS.warning,
+    deviationId: DEVIATION_IDS.temperatureExcursion,
+    result: warningAlignment,
   })
-  
-  // Test material deviation BTH-2024-001
-  const bth001Completeness = validateArchiveCompleteness('BTH-2024-001')
+
+  const monoclonalCompleteness = validateArchiveCompleteness(BATCH_IDS.monoclonal)
   testResults.push({
-    testName: 'BTH-2024-001 Completeness',
-    batchId: 'BTH-2024-001',
-    result: bth001Completeness
+    testName: `${BATCH_IDS.monoclonal} Completeness`,
+    batchId: BATCH_IDS.monoclonal,
+    result: monoclonalCompleteness,
   })
-  
-  const bth001Alignment = validateContentAlignment('DEV-2024-003', 'BTH-2024-001')
+
+  const monoclonalAlignment = validateContentAlignment(DEVIATION_IDS.materialOutOfSpec, BATCH_IDS.monoclonal)
   testResults.push({
-    testName: 'DEV-2024-003 Content Alignment',
-    batchId: 'BTH-2024-001',
-    deviationId: 'DEV-2024-003',
-    result: bth001Alignment
+    testName: `${DEVIATION_IDS.materialOutOfSpec} Content Alignment`,
+    batchId: BATCH_IDS.monoclonal,
+    deviationId: DEVIATION_IDS.materialOutOfSpec,
+    result: monoclonalAlignment,
   })
-  
-  // Test normal batch BTH-2024-002
-  const bth002Completeness = validateArchiveCompleteness('BTH-2024-002')
+
+  const smallMoleculeCompleteness = validateArchiveCompleteness(BATCH_IDS.smallMolecule)
   testResults.push({
-    testName: 'BTH-2024-002 Completeness',
-    batchId: 'BTH-2024-002',
-    result: bth002Completeness
+    testName: `${BATCH_IDS.smallMolecule} Completeness`,
+    batchId: BATCH_IDS.smallMolecule,
+    result: smallMoleculeCompleteness,
   })
-  
+
   const overallCompliance = testResults.every(test => {
     if ('isCompliant' in test.result) {
       return test.result.isCompliant
-    } else {
-      return test.result.isAligned
     }
+    return test.result.isAligned
   })
-  
+
   return {
     overallCompliance,
-    testResults
+    testResults,
   }
 }

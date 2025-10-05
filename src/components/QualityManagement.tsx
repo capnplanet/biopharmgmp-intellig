@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ESignaturePrompt, type SignatureResult } from '@/components/ESignaturePrompt'
 import { batches } from '@/data/seed'
+import { BATCH_IDS, CAPA_IDS, CHANGE_CONTROL_IDS, DEVIATION_IDS, MATERIAL_LOTS } from '@/data/identifiers'
 import {
   Warning,
   MagnifyingGlass,
@@ -35,6 +36,7 @@ import {
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { notifyQualityEventResolved } from '@/lib/qualityAutomation'
+import { daysAgo, daysAhead } from '@/lib/timeframe'
 import { useAlerts } from '@/hooks/use-alerts'
 import type { AlertSeverity } from '@/types/alerts'
 import type { AutomationSuggestion } from '@/types/automation'
@@ -48,45 +50,45 @@ type QualityTab = 'deviations' | 'investigations' | 'capa' | 'change-control'
 
 const mockDeviations: Deviation[] = [
   {
-    id: 'DEV-2024-001',
+    id: DEVIATION_IDS.temperatureExcursion,
     title: 'Temperature Excursion in Bioreactor',
     description: 'Temperature exceeded upper control limit of 37.5°C, reaching 38.2°C for 15 minutes during fermentation phase.',
     severity: 'high',
     status: 'investigating',
-    batchId: 'BTH-2024-003',
+    batchId: BATCH_IDS.warning,
     reportedBy: 'Sarah Chen',
-    reportedDate: new Date('2024-01-16T09:30:00Z'),
+    reportedDate: daysAgo(0, 9.5),
     assignedTo: 'Quality Team A',
     signatures: [
       {
-        id: 'DEV-2024-001-sign-1',
+        id: `${DEVIATION_IDS.temperatureExcursion}-sign-1`,
         action: 'Initial Assessment Approval',
         signedBy: 'qa.signer@biopharm.com',
-        signedAt: new Date('2024-01-16T09:45:00Z'),
+        signedAt: daysAgo(0, 9.75),
         reason: 'Containment plan verified',
         digitalSignature: 'SHA256:1111111111111111111111111111111111111111111111111111111111111111'
       }
     ]
   },
   {
-    id: 'DEV-2024-002',
+    id: DEVIATION_IDS.documentationDiscrepancy,
     title: 'Documentation Discrepancy',
     description: 'Batch record shows conflicting pH values between manual recording and automated system.',
     severity: 'medium',
     status: 'open',
-    batchId: 'BTH-2024-002',
+    batchId: BATCH_IDS.smallMolecule,
     reportedBy: 'Mike Rodriguez',
-    reportedDate: new Date('2024-01-16T14:15:00Z')
+    reportedDate: daysAgo(0, 14.25)
   },
   {
-    id: 'DEV-2024-003',
+    id: DEVIATION_IDS.materialOutOfSpec,
     title: 'Raw Material Out of Spec',
-    description: 'Incoming raw material lot RM-240115-A failed moisture content specification (5.2% vs 5.0% max).',
+    description: `Incoming raw material lot ${MATERIAL_LOTS.moistureSensitive} failed moisture content specification (5.2% vs 5.0% max).`,
     severity: 'critical',
     status: 'resolved',
-    batchId: 'BTH-2024-001',
+    batchId: BATCH_IDS.monoclonal,
     reportedBy: 'Quality Control',
-    reportedDate: new Date('2024-01-15T11:20:00Z'),
+    reportedDate: daysAgo(1, 11.33),
     assignedTo: 'Quality Team B',
     rootCause: 'Supplier storage conditions not maintained during transport',
     correctiveActions: [
@@ -95,7 +97,7 @@ const mockDeviations: Deviation[] = [
       'Implement additional incoming inspection for this material'
     ],
     effectivenessCheck: {
-      dueDate: new Date('2024-02-15T00:00:00Z'),
+      dueDate: daysAhead(40),
       status: 'pending'
     }
   }
@@ -103,72 +105,71 @@ const mockDeviations: Deviation[] = [
 
 const mockCAPAs: CAPA[] = [
   {
-    id: 'CAPA-2024-001',
+    id: CAPA_IDS.temperatureControlUpgrade,
     title: 'Bioreactor Temperature Control System Upgrade',
     description: 'Implement enhanced temperature control system to prevent future excursions',
     type: 'preventive',
     priority: 'high',
     status: 'approved',
-    dueDate: new Date('2024-03-01T00:00:00Z'),
+    dueDate: daysAhead(60),
     assignedTo: 'Engineering Team',
-    relatedDeviations: ['DEV-2024-001'],
+    relatedDeviations: [DEVIATION_IDS.temperatureExcursion],
     actions: [
       {
         id: 'ACT-001',
         description: 'Procure upgraded temperature control hardware',
         responsible: 'Procurement',
-        dueDate: new Date('2024-02-01T00:00:00Z'),
+        dueDate: daysAhead(30),
         status: 'pending'
       },
       {
         id: 'ACT-002',
         description: 'Install and validate new control system',
         responsible: 'Engineering',
-        dueDate: new Date('2024-02-15T00:00:00Z'),
+        dueDate: daysAhead(45),
         status: 'pending'
       }
     ],
     effectivenessCheck: {
-      dueDate: new Date('2024-03-30T00:00:00Z'),
+      dueDate: daysAhead(75),
       status: 'pending'
     }
-  }
-  ,
+  },
   {
-    id: 'CAPA-2024-002',
+    id: CAPA_IDS.chromatographyCalibration,
     title: 'Chromatography Skid Calibration (CRY-001) Program',
     description: 'Address overdue calibration on CRY-001 and due-soon filters (FIL-001) with risk assessment and schedule tightening.',
     type: 'preventive',
     priority: 'medium',
     status: 'draft',
-    dueDate: new Date('2025-02-15T00:00:00Z'),
+    dueDate: daysAhead(135),
     assignedTo: 'Metrology Team',
     relatedDeviations: [],
     actions: [
-      { id: 'ACT-003', description: 'Perform calibration on CRY-001', responsible: 'Metrology', dueDate: new Date('2025-01-10T00:00:00Z'), status: 'pending' },
-      { id: 'ACT-004', description: 'Schedule filter train FIL-001 calibration and verification', responsible: 'Maintenance', dueDate: new Date('2025-01-20T00:00:00Z'), status: 'pending' }
+      { id: 'ACT-003', description: 'Perform calibration on CRY-001', responsible: 'Metrology', dueDate: daysAhead(110), status: 'pending' },
+      { id: 'ACT-004', description: 'Schedule filter train FIL-001 calibration and verification', responsible: 'Maintenance', dueDate: daysAhead(120), status: 'pending' }
     ],
     effectivenessCheck: {
-      dueDate: new Date('2025-03-01T00:00:00Z'),
+      dueDate: daysAhead(150),
       status: 'pending'
     }
   },
   {
-    id: 'CAPA-2024-003',
+    id: CAPA_IDS.vibrationMonitoring,
     title: 'Vibration Monitoring Enhancement (BIO-002, FIL-002)',
     description: 'Implement continuous vibration monitoring and alert thresholds for BIO-002 and FIL-002 to prevent equipment-related deviations.',
     type: 'preventive',
     priority: 'high',
     status: 'approved',
-    dueDate: new Date('2025-03-15T00:00:00Z'),
+    dueDate: daysAhead(165),
     assignedTo: 'Engineering Team',
-    relatedDeviations: ['DEV-2024-001'],
+    relatedDeviations: [DEVIATION_IDS.temperatureExcursion],
     actions: [
-  { id: 'ACT-005', description: 'Install accelerometers on BIO-002 & FIL-002', responsible: 'Engineering', dueDate: new Date('2025-02-10T00:00:00Z'), status: 'pending' },
-      { id: 'ACT-006', description: 'Define and validate vibration RMS alert thresholds', responsible: 'Quality & Engineering', dueDate: new Date('2025-02-20T00:00:00Z'), status: 'pending' }
+      { id: 'ACT-005', description: 'Install accelerometers on BIO-002 & FIL-002', responsible: 'Engineering', dueDate: daysAhead(140), status: 'pending' },
+      { id: 'ACT-006', description: 'Define and validate vibration RMS alert thresholds', responsible: 'Quality & Engineering', dueDate: daysAhead(150), status: 'pending' }
     ],
     effectivenessCheck: {
-      dueDate: new Date('2025-04-15T00:00:00Z'),
+      dueDate: daysAhead(195),
       status: 'pending'
     }
   }
@@ -181,32 +182,32 @@ const deviationSignatureDemo = {
 
 const mockInvestigations: Investigation[] = [
   {
-    id: 'DEV-2024-001',
-    deviationId: 'DEV-2024-001',
+    id: DEVIATION_IDS.temperatureExcursion,
+    deviationId: DEVIATION_IDS.temperatureExcursion,
     title: 'Investigation - Temperature Excursion in Bioreactor',
     severity: 'high',
     lead: 'Quality Team A',
     status: 'analysis',
     riskLevel: 'high',
-    startedOn: new Date('2024-01-16T10:00:00Z'),
-    targetCompletion: new Date('2024-01-20T00:00:00Z'),
-    relatedCapas: ['CAPA-2024-001'],
+    startedOn: daysAgo(0, 10),
+    targetCompletion: daysAhead(3),
+    relatedCapas: [CAPA_IDS.temperatureControlUpgrade],
     timeline: [
       {
-        id: 'DEV-2024-001-timeline-1',
-        timestamp: new Date('2024-01-16T09:40:00Z'),
+        id: `${DEVIATION_IDS.temperatureExcursion}-timeline-1`,
+        timestamp: daysAgo(0, 9.67),
         summary: 'Deviation triaged and investigation initiated',
         actor: 'Sarah Chen'
       },
       {
-        id: 'DEV-2024-001-timeline-2',
-        timestamp: new Date('2024-01-16T10:05:00Z'),
+        id: `${DEVIATION_IDS.temperatureExcursion}-timeline-2`,
+        timestamp: daysAgo(0, 10.08),
         summary: 'Containment actions implemented',
         actor: 'Manufacturing'
       },
       {
-        id: 'DEV-2024-001-timeline-3',
-        timestamp: new Date('2024-01-16T12:15:00Z'),
+        id: `${DEVIATION_IDS.temperatureExcursion}-timeline-3`,
+        timestamp: daysAgo(0, 12.25),
         summary: 'Preliminary root-cause hypothesis drafted',
         actor: 'Quality Team A'
       }
@@ -219,23 +220,23 @@ const mockInvestigations: Investigation[] = [
         gate: 'containment',
         tasks: [
           {
-            id: 'DEV-2024-001-containment-1',
-            title: 'Quarantine impacted batch BTH-2024-003',
+            id: `${DEVIATION_IDS.temperatureExcursion}-containment-1`,
+            title: `Quarantine impacted batch ${BATCH_IDS.warning}`,
             description: 'Tag and segregate work-in-progress to prevent unintended release.',
             owner: 'Manufacturing',
-            dueDate: new Date('2024-01-16T10:30:00Z'),
+            dueDate: daysAgo(0, 10.5),
             status: 'complete',
-            completedOn: new Date('2024-01-16T10:20:00Z'),
+            completedOn: daysAgo(0, 10.33),
             notes: 'Batch status updated to QUARANTINE in MES.'
           },
           {
-            id: 'DEV-2024-001-containment-2',
+            id: `${DEVIATION_IDS.temperatureExcursion}-containment-2`,
             title: 'Stabilize reactor BIO-002 temperature loop',
             description: 'Return fermentation temperature to 37°C and monitor for oscillations.',
             owner: 'Engineering',
-            dueDate: new Date('2024-01-16T10:45:00Z'),
+            dueDate: daysAgo(0, 10.75),
             status: 'complete',
-            completedOn: new Date('2024-01-16T10:32:00Z'),
+            completedOn: daysAgo(0, 10.53),
             notes: 'Manual override applied; PID retune pending.'
           }
         ]
@@ -247,20 +248,20 @@ const mockInvestigations: Investigation[] = [
         gate: 'root-cause',
         tasks: [
           {
-            id: 'DEV-2024-001-root-cause-1',
+            id: `${DEVIATION_IDS.temperatureExcursion}-root-cause-1`,
             title: 'Extract historian and MES data for BIO-002',
             description: 'Pull temperature, agitation, and valve position trends covering the excursion.',
             owner: 'Data Analytics',
-            dueDate: new Date('2024-01-16T13:00:00Z'),
+            dueDate: daysAgo(0, 13),
             status: 'in-progress',
             notes: 'Trend review identified oscillatory control output.'
           },
           {
-            id: 'DEV-2024-001-root-cause-2',
+            id: `${DEVIATION_IDS.temperatureExcursion}-root-cause-2`,
             title: 'Facilitate 5-Why workshop',
             description: 'Cross-functional session to document most probable root cause and contributing factors.',
             owner: 'Quality Team A',
-            dueDate: new Date('2024-01-17T09:00:00Z'),
+            dueDate: daysAhead(1, 9),
             status: 'pending'
           }
         ]
@@ -272,50 +273,50 @@ const mockInvestigations: Investigation[] = [
         gate: 'corrective',
         tasks: [
           {
-            id: 'DEV-2024-001-corrective-1',
+            id: `${DEVIATION_IDS.temperatureExcursion}-corrective-1`,
             title: 'Draft CAPA for PID retune and hardware upgrade',
             description: 'Summarize engineering changes and training updates needed to prevent recurrence.',
             owner: 'Engineering',
-            dueDate: new Date('2024-01-18T12:00:00Z'),
+            dueDate: daysAhead(1, 12),
             status: 'pending'
           },
           {
-            id: 'DEV-2024-001-corrective-2',
+            id: `${DEVIATION_IDS.temperatureExcursion}-corrective-2`,
             title: 'Document batch disposition decision',
             description: 'Complete risk assessment and QA release recommendation.',
             owner: 'Quality Assurance',
-            dueDate: new Date('2024-01-19T17:00:00Z'),
+            dueDate: daysAhead(2, 17),
             status: 'pending'
           }
         ]
       }
     ],
     effectivenessReview: {
-      dueDate: new Date('2024-02-15T00:00:00Z'),
+      dueDate: daysAhead(40),
       status: 'scheduled',
       notes: '30-day process performance review after CAPA implementation.'
     }
   },
   {
-    id: 'DEV-2024-002',
-    deviationId: 'DEV-2024-002',
+    id: DEVIATION_IDS.documentationDiscrepancy,
+    deviationId: DEVIATION_IDS.documentationDiscrepancy,
     title: 'Investigation - Documentation Discrepancy',
     severity: 'medium',
     lead: 'Document Control',
     status: 'triage',
     riskLevel: 'medium',
-    startedOn: new Date('2024-01-16T15:00:00Z'),
-    targetCompletion: new Date('2024-01-19T00:00:00Z'),
+    startedOn: daysAgo(0, 15),
+    targetCompletion: daysAhead(2),
     timeline: [
       {
-        id: 'DEV-2024-002-timeline-1',
-        timestamp: new Date('2024-01-16T14:20:00Z'),
+        id: `${DEVIATION_IDS.documentationDiscrepancy}-timeline-1`,
+        timestamp: daysAgo(0, 14.33),
         summary: 'Deviation submitted by manufacturing',
         actor: 'Mike Rodriguez'
       },
       {
-        id: 'DEV-2024-002-timeline-2',
-        timestamp: new Date('2024-01-16T15:10:00Z'),
+        id: `${DEVIATION_IDS.documentationDiscrepancy}-timeline-2`,
+        timestamp: daysAgo(0, 15.17),
         summary: 'Investigation lead assigned',
         actor: 'Quality Systems'
       }
@@ -328,19 +329,19 @@ const mockInvestigations: Investigation[] = [
         gate: 'containment',
         tasks: [
           {
-            id: 'DEV-2024-002-containment-1',
+            id: `${DEVIATION_IDS.documentationDiscrepancy}-containment-1`,
             title: 'Lock batch record for review',
             description: 'Restrict editing access to the affected record while investigation is active.',
             owner: 'Document Control',
-            dueDate: new Date('2024-01-16T15:30:00Z'),
+            dueDate: daysAgo(0, 15.5),
             status: 'in-progress'
           },
           {
-            id: 'DEV-2024-002-containment-2',
+            id: `${DEVIATION_IDS.documentationDiscrepancy}-containment-2`,
             title: 'Collect automated sensor logs',
             description: 'Download pH sensor outputs from SCADA to compare with manual entries.',
             owner: 'Automation',
-            dueDate: new Date('2024-01-16T18:00:00Z'),
+            dueDate: daysAgo(0, 18),
             status: 'pending'
           }
         ]
@@ -352,16 +353,97 @@ const mockInvestigations: Investigation[] = [
         gate: 'root-cause',
         tasks: [
           {
-            id: 'DEV-2024-002-root-cause-1',
+            id: `${DEVIATION_IDS.documentationDiscrepancy}-root-cause-1`,
             title: 'Interview shift operator',
             description: 'Review manual entry process, training records, and any distractions during recording.',
             owner: 'Manufacturing Supervisor',
-            dueDate: new Date('2024-01-17T10:00:00Z'),
+            dueDate: daysAhead(1, 10),
             status: 'pending'
           }
         ]
       }
     ]
+  },
+  {
+    id: DEVIATION_IDS.materialOutOfSpec,
+    deviationId: DEVIATION_IDS.materialOutOfSpec,
+    title: 'Investigation - Raw Material Out of Specification',
+    severity: 'critical',
+    lead: 'Quality Control',
+    status: 'closed',
+    riskLevel: 'high',
+    startedOn: daysAgo(1, 11.5),
+    targetCompletion: daysAgo(0, 2),
+    relatedCapas: [CAPA_IDS.chromatographyCalibration],
+    timeline: [
+      {
+        id: `${DEVIATION_IDS.materialOutOfSpec}-timeline-1`,
+        timestamp: daysAgo(1, 11.33),
+        summary: `Incoming material ${MATERIAL_LOTS.moistureSensitive} moisture failure documented`,
+        actor: 'Quality Control'
+      },
+      {
+        id: `${DEVIATION_IDS.materialOutOfSpec}-timeline-2`,
+        timestamp: daysAgo(1, 12.17),
+        summary: 'Supplier notified and replacement lot requested',
+        actor: 'Procurement'
+      },
+      {
+        id: `${DEVIATION_IDS.materialOutOfSpec}-timeline-3`,
+        timestamp: daysAgo(0, 9),
+        summary: 'Effectiveness check scheduled and additional inspection points added',
+        actor: 'Quality Assurance'
+      }
+    ],
+    stages: [
+      {
+        id: 'containment',
+        title: 'Material Containment',
+        description: 'Ensure suspect raw material is segregated and dispositioned.',
+        gate: 'containment',
+        tasks: [
+          {
+            id: `${DEVIATION_IDS.materialOutOfSpec}-containment-1`,
+            title: 'Quarantine raw material lot',
+            description: `Isolate lot ${MATERIAL_LOTS.moistureSensitive} and tag for supplier investigation.`,
+            owner: 'Warehouse',
+            dueDate: daysAgo(1, 13),
+            status: 'complete',
+            completedOn: daysAgo(1, 12.75)
+          },
+          {
+            id: `${DEVIATION_IDS.materialOutOfSpec}-containment-2`,
+            title: 'Notify supplier quality team',
+            description: 'Request formal investigation and transportation temperature logs.',
+            owner: 'Quality Control',
+            dueDate: daysAgo(1, 15),
+            status: 'complete',
+            completedOn: daysAgo(1, 14.5)
+          }
+        ]
+      },
+      {
+        id: 'root-cause',
+        title: 'Supplier Engagement',
+        description: 'Work with supplier to confirm root cause and corrective action.',
+        gate: 'root-cause',
+        tasks: [
+          {
+            id: `${DEVIATION_IDS.materialOutOfSpec}-root-cause-1`,
+            title: 'Review supplier CA/PA plan',
+            description: 'Assess adequacy of supplier corrective action commitments.',
+            owner: 'Supplier Quality',
+            dueDate: daysAhead(5),
+            status: 'pending'
+          }
+        ]
+      }
+    ],
+    effectivenessReview: {
+      dueDate: daysAhead(45),
+      status: 'scheduled',
+      notes: 'Monitor incoming moisture trend for replacement lots.'
+    }
   }
 ]
 
@@ -372,24 +454,24 @@ export function QualityManagement() {
   const [automationQueue = [], setAutomationQueue] = useKV<AutomationSuggestion[]>('automation-queue', [])
   const [changeControls = []] = useKV<ChangeControl[]>('change-controls', [
     {
-      id: 'CC-2025-001',
+      id: CHANGE_CONTROL_IDS.pidRetune,
       title: 'Implement new bioreactor temperature PID parameters',
       description: 'Retune control loop following excursion analysis to improve stability around 37°C',
       status: 'in-review',
       requestedBy: 'Engineering',
-      requestedDate: new Date('2025-01-05T00:00:00Z'),
-      impactedBatches: ['BTH-2024-003'],
+      requestedDate: daysAgo(0, 8),
+      impactedBatches: [BATCH_IDS.warning],
       impactedEquipment: ['BIO-002'],
       riskLevel: 'medium'
     },
     {
-      id: 'CC-2025-002',
+      id: CHANGE_CONTROL_IDS.vibrationMonitoring,
       title: 'Add vibration monitoring to FIL-001 & CRY-001',
       description: 'Permanent installation of sensors and alarm thresholds',
       status: 'approved',
       requestedBy: 'Quality',
-      requestedDate: new Date('2025-01-08T00:00:00Z'),
-      impactedBatches: ['BTH-2024-002','BTH-2024-003'],
+      requestedDate: daysAgo(0, 6),
+      impactedBatches: [BATCH_IDS.smallMolecule, BATCH_IDS.warning],
       impactedEquipment: ['FIL-001','CRY-001'],
       riskLevel: 'high'
     }

@@ -1,4 +1,7 @@
 
+import { BATCH_IDS } from '@/data/identifiers'
+import { daysAgo, daysAhead, daysFromToday } from '@/lib/timeframe'
+
 export type ProductType = 'small-molecule' | 'large-molecule'
 
 export type BatchTimelineItem = {
@@ -52,69 +55,92 @@ export type BatchData = {
   timeline: BatchTimelineItem[]
 }
 
+const MS_IN_HOUR = 60 * 60 * 1000
+const MS_IN_MINUTE = 60 * 1000
+
+const addHours = (date: Date, hours: number) => new Date(date.getTime() + hours * MS_IN_HOUR)
+const addMinutes = (date: Date, minutes: number) => new Date(date.getTime() + minutes * MS_IN_MINUTE)
+
+const batch1Start = daysAgo(1, 8)
+const batch1InoculationStart = addHours(batch1Start, 2)
+const batch1FermentationStart = addHours(batch1Start, 3)
+const batch1HarvestStart = daysFromToday(0, 11)
+const batch1PurificationStart = daysFromToday(0, 15)
+
+const batch2Start = daysAgo(0, 14.5)
+const batch2CrystallizationStart = addHours(batch2Start, 4)
+const batch2FiltrationStart = daysFromToday(1, 6.5)
+const batch2DryingStart = daysFromToday(1, 10.5)
+
+const batch3Start = daysAgo(0, 7.75)
+const batch3InoculationStart = addMinutes(batch3Start, 90)
+const batch3FermentationStart = addHours(batch3Start, 2.25)
+const batch3HarvestStart = daysFromToday(1, 10)
+const batch3PurificationStart = daysFromToday(1, 14)
+
 // Seed: equipment metadata
 export const equipmentCalibration: EquipmentCalibration[] = [
   {
     id: 'BIO-001',
     name: 'Bioreactor 1',
-    lastCalibration: new Date('2024-12-01T00:00:00Z'),
-    nextDue: new Date('2025-12-01T00:00:00Z'),
+    lastCalibration: daysAgo(30),
+    nextDue: daysAhead(335),
     status: 'calibrated',
   },
   {
     id: 'BIO-002',
     name: 'Bioreactor 2',
-    lastCalibration: new Date('2024-11-20T00:00:00Z'),
-    nextDue: new Date('2025-11-20T00:00:00Z'),
+    lastCalibration: daysAgo(45),
+    nextDue: daysAhead(320),
     status: 'calibrated',
   },
   {
     id: 'CHR-001',
     name: 'Chromatography Skid A',
-    lastCalibration: new Date('2024-08-15T00:00:00Z'),
-    nextDue: new Date('2025-08-15T00:00:00Z'),
+    lastCalibration: daysAgo(70),
+    nextDue: daysAhead(295),
     status: 'calibrated',
   },
   {
     id: 'CHR-002',
     name: 'Chromatography Skid B',
-    lastCalibration: new Date('2024-08-05T00:00:00Z'),
-    nextDue: new Date('2025-08-05T00:00:00Z'),
+    lastCalibration: daysAgo(80),
+    nextDue: daysAhead(285),
     status: 'calibrated',
   },
   {
     id: 'FIL-001',
     name: 'Filter Train 1',
-    lastCalibration: new Date('2024-05-10T00:00:00Z'),
-    nextDue: new Date('2025-05-10T00:00:00Z'),
+    lastCalibration: daysAgo(150),
+    nextDue: daysAhead(20),
     status: 'due-soon',
   },
   {
     id: 'FIL-002',
     name: 'Filter Train 2',
-    lastCalibration: new Date('2024-05-05T00:00:00Z'),
-    nextDue: new Date('2025-05-05T00:00:00Z'),
+    lastCalibration: daysAgo(170),
+    nextDue: daysAhead(15),
     status: 'due-soon',
   },
   {
     id: 'REA-001',
     name: 'Reactor 1',
-    lastCalibration: new Date('2024-11-05T00:00:00Z'),
-    nextDue: new Date('2025-11-05T00:00:00Z'),
+    lastCalibration: daysAgo(40),
+    nextDue: daysAhead(330),
     status: 'calibrated',
   },
   {
     id: 'CRY-001',
     name: 'Crystallizer 1',
-    lastCalibration: new Date('2024-02-01T00:00:00Z'),
-    nextDue: new Date('2025-02-01T00:00:00Z'),
+    lastCalibration: daysAgo(250),
+    nextDue: daysAgo(10),
     status: 'overdue',
   },
   {
     id: 'DRY-002',
     name: 'Dryer 2',
-    lastCalibration: new Date('2024-03-20T00:00:00Z'),
-    nextDue: new Date('2025-03-20T00:00:00Z'),
+    lastCalibration: daysAgo(210),
+    nextDue: daysAhead(40),
     status: 'due-soon',
   },
 ]
@@ -133,13 +159,13 @@ export const equipmentTelemetry: EquipmentTelemetry[] = [
 
 export const batches: BatchData[] = [
   {
-    id: 'BTH-2024-001',
+    id: BATCH_IDS.monoclonal,
     product: 'Monoclonal Antibody X1',
     productType: 'large-molecule',
     stage: 'Fermentation',
     progress: 78,
     status: 'running',
-    startTime: new Date('2024-01-15T08:00:00Z'),
+    startTime: batch1Start,
     equipment: ['BIO-001', 'CHR-001', 'FIL-001'],
     parameters: {
       temperature: { current: 37.2, target: 37.0, unit: '°C' },
@@ -154,21 +180,21 @@ export const batches: BatchData[] = [
       volume: { min: 1800, max: 2000, unit: 'L' },
     },
     timeline: [
-      { stage: 'Media Preparation', startTime: new Date('2024-01-15T08:00:00Z'), endTime: new Date('2024-01-15T10:00:00Z'), status: 'complete' },
-      { stage: 'Inoculation', startTime: new Date('2024-01-15T10:00:00Z'), endTime: new Date('2024-01-15T11:00:00Z'), status: 'complete' },
-      { stage: 'Fermentation', startTime: new Date('2024-01-15T11:00:00Z'), status: 'active' },
-      { stage: 'Harvest', startTime: new Date('2024-01-16T11:00:00Z'), status: 'pending' },
-      { stage: 'Purification', startTime: new Date('2024-01-16T15:00:00Z'), status: 'pending' },
+      { stage: 'Media Preparation', startTime: batch1Start, endTime: addHours(batch1Start, 2), status: 'complete' },
+      { stage: 'Inoculation', startTime: batch1InoculationStart, endTime: addHours(batch1InoculationStart, 1), status: 'complete' },
+      { stage: 'Fermentation', startTime: batch1FermentationStart, status: 'active' },
+      { stage: 'Harvest', startTime: batch1HarvestStart, status: 'pending' },
+      { stage: 'Purification', startTime: batch1PurificationStart, status: 'pending' },
     ],
   },
   {
-    id: 'BTH-2024-002',
+    id: BATCH_IDS.smallMolecule,
     product: 'Small Molecule API-Y',
     productType: 'small-molecule',
     stage: 'Crystallization',
     progress: 45,
     status: 'running',
-    startTime: new Date('2024-01-16T14:30:00Z'),
+    startTime: batch2Start,
     equipment: ['REA-001', 'CRY-001', 'DRY-002'],
     parameters: {
       temperature: { current: 25.1, target: 25.0, unit: '°C' },
@@ -183,23 +209,23 @@ export const batches: BatchData[] = [
       volume: { min: 480, max: 520, unit: 'L' },
     },
     timeline: [
-      { stage: 'Synthesis', startTime: new Date('2024-01-16T14:30:00Z'), endTime: new Date('2024-01-16T18:30:00Z'), status: 'complete' },
-      { stage: 'Crystallization', startTime: new Date('2024-01-16T18:30:00Z'), status: 'active' },
-      { stage: 'Filtration', startTime: new Date('2024-01-17T06:30:00Z'), status: 'pending' },
-      { stage: 'Drying', startTime: new Date('2024-01-17T10:30:00Z'), status: 'pending' },
+      { stage: 'Synthesis', startTime: batch2Start, endTime: addHours(batch2Start, 4), status: 'complete' },
+      { stage: 'Crystallization', startTime: batch2CrystallizationStart, status: 'active' },
+      { stage: 'Filtration', startTime: batch2FiltrationStart, status: 'pending' },
+      { stage: 'Drying', startTime: batch2DryingStart, status: 'pending' },
     ],
   },
   {
-    id: 'BTH-2024-003',
+    id: BATCH_IDS.warning,
     product: 'Monoclonal Antibody X1',
     productType: 'large-molecule',
     stage: 'Fermentation',
     progress: 62,
     status: 'warning',
-    startTime: new Date('2024-01-16T07:45:00Z'),
+    startTime: batch3Start,
     equipment: ['BIO-002', 'CHR-002', 'FIL-002'],
     parameters: {
-      // Reflecting deviation DEV-2024-001: temperature excursion
+      // Reflecting an active temperature excursion scenario
       temperature: { current: 38.2, target: 37.0, unit: '°C' },
       pressure: { current: 1.15, target: 1.1, unit: 'bar' },
       pH: { current: 7.0, target: 7.0, unit: 'pH' },
@@ -212,11 +238,11 @@ export const batches: BatchData[] = [
       volume: { min: 1800, max: 2000, unit: 'L' },
     },
     timeline: [
-      { stage: 'Media Preparation', startTime: new Date('2024-01-16T07:45:00Z'), endTime: new Date('2024-01-16T09:15:00Z'), status: 'complete' },
-      { stage: 'Inoculation', startTime: new Date('2024-01-16T09:15:00Z'), endTime: new Date('2024-01-16T10:00:00Z'), status: 'complete' },
-      { stage: 'Fermentation', startTime: new Date('2024-01-16T10:00:00Z'), status: 'active' },
-      { stage: 'Harvest', startTime: new Date('2024-01-17T10:00:00Z'), status: 'pending' },
-      { stage: 'Purification', startTime: new Date('2024-01-17T14:00:00Z'), status: 'pending' },
+      { stage: 'Media Preparation', startTime: batch3Start, endTime: addMinutes(batch3Start, 90), status: 'complete' },
+      { stage: 'Inoculation', startTime: batch3InoculationStart, endTime: addMinutes(batch3InoculationStart, 45), status: 'complete' },
+      { stage: 'Fermentation', startTime: batch3FermentationStart, status: 'active' },
+      { stage: 'Harvest', startTime: batch3HarvestStart, status: 'pending' },
+      { stage: 'Purification', startTime: batch3PurificationStart, status: 'pending' },
     ],
   },
 ]

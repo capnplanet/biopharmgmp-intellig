@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { AUDIT_EVENT_IDS, BATCH_IDS, CAPA_IDS, CHANGE_CONTROL_IDS, DEVIATION_IDS } from '@/data/identifiers'
+import { daysAgo } from '@/lib/timeframe'
 import {
   FileText,
   Download,
@@ -29,36 +31,36 @@ import { useAuditLogger } from '@/hooks/use-audit'
 
 const mockAuditEvents: AuditEvent[] = [
   {
-    id: 'AUD-2024-001',
-    timestamp: new Date('2024-01-16T10:30:25Z'),
+    id: AUDIT_EVENT_IDS.deviationCreated,
+    timestamp: daysAgo(0, 9.5),
     userId: 'sarah.chen@company.com',
     userRole: 'Quality Analyst',
     action: 'Deviation Created',
     module: 'quality',
-    details: 'Created deviation DEV-2024-001 for temperature excursion in BTH-2024-003',
-    recordId: 'DEV-2024-001',
+    details: `Created deviation ${DEVIATION_IDS.temperatureExcursion} for temperature excursion in ${BATCH_IDS.warning}`,
+    recordId: DEVIATION_IDS.temperatureExcursion,
     ipAddress: '192.168.1.142',
     sessionId: 'sess-a8b9c0d1e2f3',
     outcome: 'success',
     digitalSignature: 'SHA256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
   },
   {
-    id: 'AUD-2024-002',
-    timestamp: new Date('2024-01-16T09:45:12Z'),
+    id: AUDIT_EVENT_IDS.batchParameterUpdated,
+    timestamp: daysAgo(0, 9.75),
     userId: 'mike.rodriguez@company.com',
     userRole: 'Production Operator',
     action: 'Batch Parameter Updated',
     module: 'batch',
-    details: 'Updated temperature setpoint from 36.8°C to 37.0°C for BTH-2024-002',
-    recordId: 'BTH-2024-002',
+    details: `Updated temperature setpoint from 36.8°C to 37.0°C for ${BATCH_IDS.smallMolecule}`,
+    recordId: BATCH_IDS.smallMolecule,
     ipAddress: '192.168.1.98',
     sessionId: 'sess-f4g5h6i7j8k9',
     outcome: 'success',
     digitalSignature: 'SHA256:d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592'
   },
   {
-    id: 'AUD-2024-003',
-    timestamp: new Date('2024-01-16T08:15:33Z'),
+    id: AUDIT_EVENT_IDS.equipmentStatusChange,
+    timestamp: daysAgo(0, 8.25),
     userId: 'system@company.com',
     userRole: 'System',
     action: 'Equipment Status Change',
@@ -70,22 +72,22 @@ const mockAuditEvents: AuditEvent[] = [
     outcome: 'warning'
   },
   {
-    id: 'AUD-2024-004',
-    timestamp: new Date('2024-01-15T16:22:15Z'),
+    id: AUDIT_EVENT_IDS.capaApproved,
+    timestamp: daysAgo(0, 15.5),
     userId: 'dr.jennifer.lee@company.com',
     userRole: 'Quality Manager',
     action: 'CAPA Approved',
     module: 'capa',
-    details: 'Approved CAPA-2024-001 for bioreactor temperature control system upgrade',
-    recordId: 'CAPA-2024-001',
+    details: `Approved ${CAPA_IDS.temperatureControlUpgrade} for bioreactor temperature control system upgrade`,
+    recordId: CAPA_IDS.temperatureControlUpgrade,
     ipAddress: '192.168.1.75',
     sessionId: 'sess-1a2b3c4d5e6f',
     outcome: 'success',
     digitalSignature: 'SHA256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
   },
   {
-    id: 'AUD-2024-005',
-    timestamp: new Date('2024-01-15T14:18:47Z'),
+    id: AUDIT_EVENT_IDS.loginFailed,
+    timestamp: daysAgo(0, 14.3),
     userId: 'tom.wilson@company.com',
     userRole: 'Manufacturing Supervisor',
     action: 'Login Failed',
@@ -96,35 +98,35 @@ const mockAuditEvents: AuditEvent[] = [
     outcome: 'failure'
   },
   {
-    id: 'AUD-2024-006',
-    timestamp: new Date('2024-01-16T11:45:00Z'),
+    id: AUDIT_EVENT_IDS.deviationResolved,
+    timestamp: daysAgo(0, 11.75),
     userId: 'qa.signer@biopharm.com',
     userRole: 'Quality Approver',
     action: 'Deviation Resolved',
     module: 'workflow',
-    details: 'Resolution approved for deviation DEV-2024-001 with e-signature',
-    recordId: 'DEV-2024-001',
+    details: `Resolution approved for deviation ${DEVIATION_IDS.temperatureExcursion} with e-signature`,
+    recordId: DEVIATION_IDS.temperatureExcursion,
     ipAddress: '192.168.1.150',
     sessionId: 'sess-workflow-001',
     outcome: 'success',
     digitalSignature: 'SHA256:c0ffee2543cdeedfadebabe1234567890abcdef1234567890abcdef12345678'
   },
   {
-    id: 'AUD-2024-007',
-    timestamp: new Date('2024-01-16T11:00:00Z'),
+    id: AUDIT_EVENT_IDS.aiAnalysisGenerated,
+    timestamp: daysAgo(0, 11),
     userId: 'sarah.chen@company.com',
     userRole: 'Quality Analyst',
     action: 'AI Analysis Generated',
     module: 'ai',
-    details: 'Generated AI-assisted root cause analysis for DEV-2024-001',
-    recordId: 'DEV-2024-001',
+    details: `Generated AI-assisted root cause analysis for ${DEVIATION_IDS.temperatureExcursion}`,
+    recordId: DEVIATION_IDS.temperatureExcursion,
     ipAddress: '192.168.1.142',
     sessionId: 'sess-ai-001',
     outcome: 'success'
   },
   {
-    id: 'AUD-2024-008',
-    timestamp: new Date('2024-01-16T10:05:00Z'),
+    id: AUDIT_EVENT_IDS.navigation,
+    timestamp: daysAgo(0, 10.08),
     userId: 'sarah.chen@company.com',
     userRole: 'Quality Analyst',
     action: 'Tab Navigated',
@@ -135,14 +137,14 @@ const mockAuditEvents: AuditEvent[] = [
     outcome: 'success'
   },
   {
-    id: 'AUD-2024-009',
-    timestamp: new Date('2024-01-15T16:50:00Z'),
+    id: AUDIT_EVENT_IDS.changeControlCreated,
+    timestamp: daysAgo(0, 16.5),
     userId: 'dr.jennifer.lee@company.com',
     userRole: 'Quality Manager',
     action: 'Change Control Created',
     module: 'change-control',
-    details: 'Created change control CC-2025-001 for PID retune',
-    recordId: 'CC-2025-001',
+    details: `Created change control ${CHANGE_CONTROL_IDS.pidRetune} for PID retune`,
+    recordId: CHANGE_CONTROL_IDS.pidRetune,
     ipAddress: '192.168.1.75',
     sessionId: 'sess-1a2b3c4d5e6f',
     outcome: 'success'
@@ -684,10 +686,10 @@ export function AuditTrail() {
                 <div className="p-4 border rounded-lg">
                   <h4 className="font-medium mb-2">Recent Compliance Activities:</h4>
                   <div className="space-y-2 text-sm">
-                    <div>• System validation completed: 2024-01-01</div>
-                    <div>• User access review completed: 2024-01-15</div>
-                    <div>• Backup verification successful: 2024-01-16</div>
-                    <div>• Security patch deployment: 2024-01-10</div>
+                    <div>• System validation completed: {daysAgo(90).toISOString().slice(0, 10)}</div>
+                    <div>• User access review completed: {daysAgo(20).toISOString().slice(0, 10)}</div>
+                    <div>• Backup verification successful: {daysAgo(19).toISOString().slice(0, 10)}</div>
+                    <div>• Security patch deployment: {daysAgo(25).toISOString().slice(0, 10)}</div>
                   </div>
                 </div>
               </div>

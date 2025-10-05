@@ -1,4 +1,6 @@
+import { AUDIT_EVENT_IDS, BATCH_IDS, DEVIATION_IDS, MATERIAL_LOTS } from '@/data/identifiers'
 import { batches, equipmentCalibration, equipmentTelemetry, type BatchData } from '@/data/seed'
+import { daysAgo, daysAhead, formatDate, previousYear } from '@/lib/timeframe'
 
 export type InvestigationSource = {
   id: string // e.g., S1, S2
@@ -33,57 +35,57 @@ const regulatoryGuidance = {
 // Historical maintenance and CAPA data
 const maintenanceLogs = {
   'BIO-002': [
-    { date: '2024-01-10', activity: 'Temperature sensor calibration', technician: 'J.Smith', result: 'Passed', nextDue: '2024-07-10' },
-    { date: '2024-01-05', activity: 'Agitator bearing replacement', technician: 'M.Johnson', result: 'Completed', notes: 'Slight temperature drift observed post-maintenance' },
-    { date: '2023-12-15', activity: 'Preventive maintenance - heating jacket', technician: 'R.Wilson', result: 'Passed' }
+    { date: formatDate(daysAgo(3)), activity: 'Temperature sensor calibration', technician: 'J.Smith', result: 'Passed', nextDue: formatDate(daysAhead(180)) },
+    { date: formatDate(daysAgo(7)), activity: 'Agitator bearing replacement', technician: 'M.Johnson', result: 'Completed', notes: 'Slight temperature drift observed post-maintenance' },
+    { date: formatDate(daysAgo(20)), activity: 'Preventive maintenance - heating jacket', technician: 'R.Wilson', result: 'Passed' }
   ],
   'CHR-002': [
-    { date: '2024-01-08', activity: 'Column packing verification', technician: 'L.Davis', result: 'Passed' },
-    { date: '2023-12-20', activity: 'Pump seal replacement', technician: 'K.Brown', result: 'Completed' }
+    { date: formatDate(daysAgo(5)), activity: 'Column packing verification', technician: 'L.Davis', result: 'Passed' },
+    { date: formatDate(daysAgo(22)), activity: 'Pump seal replacement', technician: 'K.Brown', result: 'Completed' }
   ],
   'FIL-002': [
-    { date: '2024-01-12', activity: 'Filter integrity test', technician: 'S.Miller', result: 'Failed initial test, passed after re-seating', notes: 'Minor leak detected, corrected' },
-    { date: '2023-12-18', activity: 'Pressure sensor calibration', technician: 'T.Anderson', result: 'Passed' }
+    { date: formatDate(daysAgo(4)), activity: 'Filter integrity test', technician: 'S.Miller', result: 'Failed initial test, passed after re-seating', notes: 'Minor leak detected, corrected' },
+    { date: formatDate(daysAgo(25)), activity: 'Pressure sensor calibration', technician: 'T.Anderson', result: 'Passed' }
   ]
 }
 
 // CAPA effectiveness tracking
 const capaHistory = {
-  'CAPA-2023-015': {
+  [`CAPA-${previousYear}-015`]: {
     title: 'Temperature Control System Enhancement',
     equipment: ['BIO-001', 'BIO-002'],
     effectivenessData: 'Post-implementation: 85% reduction in temperature excursions. 3 minor excursions in 6 months vs 20 in previous 6 months.',
     status: 'Effective',
-    completedDate: '2023-11-15'
+    completedDate: formatDate(daysAgo(320))
   },
-  'CAPA-2023-008': {
+  [`CAPA-${previousYear}-008`]: {
     title: 'Vibration Monitoring Program',
     equipment: ['FIL-001', 'FIL-002'],
     effectivenessData: 'Equipment failures reduced by 60%. Predictive maintenance schedules optimized based on vibration trends.',
     status: 'Effective',
-    completedDate: '2023-09-20'
+    completedDate: formatDate(daysAgo(380))
   }
 }
 
 // Operator log entries for context
 const operatorLogs = {
-  'BTH-2024-003': [
-    { timestamp: '2024-01-16T09:25:00Z', operator: 'Sarah Chen', entry: 'Temperature alarm activated. Observed rapid temperature rise from 37.1°C to 38.2°C over 5 minutes.' },
-    { timestamp: '2024-01-16T09:30:00Z', operator: 'Sarah Chen', entry: 'Initiated emergency cooling protocol. Contacted maintenance for heating jacket inspection.' },
-    { timestamp: '2024-01-16T09:45:00Z', operator: 'Mike Rodriguez', entry: 'Maintenance response: Heating jacket control valve stuck open. Manual override engaged to stabilize temperature.' },
-    { timestamp: '2024-01-16T10:15:00Z', operator: 'Sarah Chen', entry: 'Temperature stabilized at 37.0°C. Process parameters returned to normal ranges.' }
+  [BATCH_IDS.warning]: [
+    { timestamp: daysAgo(0, 9.25).toISOString(), operator: 'Sarah Chen', entry: 'Temperature alarm activated. Observed rapid temperature rise from 37.1°C to 38.2°C over 5 minutes.' },
+    { timestamp: daysAgo(0, 9.5).toISOString(), operator: 'Sarah Chen', entry: 'Initiated emergency cooling protocol. Contacted maintenance for heating jacket inspection.' },
+    { timestamp: daysAgo(0, 9.75).toISOString(), operator: 'Mike Rodriguez', entry: 'Maintenance response: Heating jacket control valve stuck open. Manual override engaged to stabilize temperature.' },
+    { timestamp: daysAgo(0, 10.25).toISOString(), operator: 'Sarah Chen', entry: 'Temperature stabilized at 37.0°C. Process parameters returned to normal ranges.' }
   ],
-  'BTH-2024-002': [
-    { timestamp: '2024-01-16T14:10:00Z', operator: 'Mike Rodriguez', entry: 'Manual pH reading: 3.2. Automated system reading: 3.0. Recalibrated pH probe.' },
-    { timestamp: '2024-01-16T14:20:00Z', operator: 'Mike Rodriguez', entry: 'Post-calibration readings align. Manual: 3.15, Automated: 3.14.' }
+  [BATCH_IDS.smallMolecule]: [
+    { timestamp: daysAgo(0, 14.17).toISOString(), operator: 'Mike Rodriguez', entry: 'Manual pH reading: 3.2. Automated system reading: 3.0. Recalibrated pH probe.' },
+    { timestamp: daysAgo(0, 14.33).toISOString(), operator: 'Mike Rodriguez', entry: 'Post-calibration readings align. Manual: 3.15, Automated: 3.14.' }
   ]
 }
 
 // Material traceability records
 const materialRecords = {
-  'RM-240115-A': {
+  [MATERIAL_LOTS.moistureSensitive]: {
     supplier: 'ChemSupply Corp',
-    lotNumber: 'RM-240115-A',
+    lotNumber: MATERIAL_LOTS.moistureSensitive,
     specification: { moisture: { max: 5.0, unit: '%' }, purity: { min: 99.5, unit: '%' } },
     actualValues: { moisture: 5.2, purity: 99.7 },
     storageConditions: 'Controlled room temperature, <60% RH',
@@ -94,29 +96,29 @@ const materialRecords = {
 
 // Audit trail events related to specific batches/equipment
 const auditTrailEvents = {
-  'BTH-2024-003': [
-    { id: 'AUD-2024-001', timestamp: '2024-01-16T09:30:25Z', action: 'Deviation Created', user: 'Sarah Chen', details: 'Created DEV-2024-001 for temperature excursion', outcome: 'success' },
-    { id: 'AUD-2024-003', timestamp: '2024-01-16T08:15:33Z', action: 'Equipment Status Change', user: 'System', details: 'BIO-002 status changed to WARNING due to temperature deviation', outcome: 'warning' }
+  [BATCH_IDS.warning]: [
+    { id: AUDIT_EVENT_IDS.deviationCreated, timestamp: daysAgo(0, 9.5).toISOString(), action: 'Deviation Created', user: 'Sarah Chen', details: `Created ${DEVIATION_IDS.temperatureExcursion} for temperature excursion`, outcome: 'success' },
+    { id: AUDIT_EVENT_IDS.equipmentStatusChange, timestamp: daysAgo(0, 8.25).toISOString(), action: 'Equipment Status Change', user: 'System', details: 'BIO-002 status changed to WARNING due to temperature deviation', outcome: 'warning' }
   ],
-  'BTH-2024-002': [
-    { id: 'AUD-2024-002', timestamp: '2024-01-16T09:45:12Z', action: 'Batch Parameter Updated', user: 'Mike Rodriguez', details: 'Updated temperature setpoint from 36.8°C to 37.0°C', outcome: 'success' }
+  [BATCH_IDS.smallMolecule]: [
+    { id: AUDIT_EVENT_IDS.batchParameterUpdated, timestamp: daysAgo(0, 14.25).toISOString(), action: 'Batch Parameter Updated', user: 'Mike Rodriguez', details: 'Updated temperature setpoint from 36.8°C to 37.0°C', outcome: 'success' }
   ]
 }
 
 // Statistical trend data and control chart information
 const trendAnalysis = {
   temperatureControl: {
-    batchIds: ['BTH-2024-001', 'BTH-2024-002', 'BTH-2024-003'],
+    batchIds: [BATCH_IDS.monoclonal, BATCH_IDS.smallMolecule, BATCH_IDS.warning],
     statistics: {
       mean: 37.1,
       standardDeviation: 0.45,
       cpk: 1.2,
       excursions: [
-        { batchId: 'BTH-2024-003', timestamp: '2024-01-16T09:25:00Z', value: 38.2, duration: '15 minutes', severity: 'major' }
+        { batchId: BATCH_IDS.warning, timestamp: daysAgo(0, 9.25).toISOString(), value: 38.2, duration: '15 minutes', severity: 'major' }
       ],
       controlLimits: { ucl: 37.8, lcl: 36.2, usl: 37.5, lsl: 36.5 }
     },
-    pattern: 'Temperature control generally stable with one significant excursion in BTH-2024-003. Heating jacket control valve failure identified as root cause.',
+    pattern: `Temperature control generally stable with one significant excursion in ${BATCH_IDS.warning}. Heating jacket control valve failure identified as root cause.`,
     recommendations: 'Implement predictive maintenance for heating jacket control valves. Consider redundant temperature control systems.'
   },
   equipmentVibration: {
@@ -177,11 +179,11 @@ export const buildInvestigationSources = (batchId?: string): InvestigationSource
       }
 
       // Material records if applicable
-      if (batch.id === 'BTH-2024-001' && materialRecords['RM-240115-A']) {
-        const material = materialRecords['RM-240115-A']
+      if (batch.id === BATCH_IDS.monoclonal && materialRecords[MATERIAL_LOTS.moistureSensitive]) {
+        const material = materialRecords[MATERIAL_LOTS.moistureSensitive]
         sources.push({
           id: 'S3',
-          title: `Material Record RM-240115-A`,
+          title: `Material Record ${MATERIAL_LOTS.moistureSensitive}`,
           type: 'material-record',
           content: [
             `Supplier: ${material.supplier}`,

@@ -309,7 +309,8 @@ function MetricCard({
   unit = '%', 
   trend, 
   historical, 
-  icon: Icon 
+  icon: Icon,
+  tooltip,
 }: {
   title: string
   value: number
@@ -317,6 +318,7 @@ function MetricCard({
   trend: 'up' | 'down' | 'stable'
   historical: number[]
   icon: React.ComponentType<{ className?: string }>
+  tooltip?: string
 }) {
   const trendIcon = trend === 'up' ? TrendUp : trend === 'down' ? TrendDown : null
   const trendColor = trend === 'up' ? 'text-success' : trend === 'down' ? 'text-destructive' : 'text-muted-foreground'
@@ -326,7 +328,22 @@ function MetricCard({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
+          <span className="flex items-center gap-2">
+            {title}
+            {tooltip ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help">
+                    <Info className="h-3 w-3" />
+                    <span className="sr-only">{tooltip}</span>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="start" className="max-w-xs text-left">
+                  {tooltip}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+          </span>
         </CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
@@ -1224,6 +1241,7 @@ export function Analytics() {
               trend={metrics.batchYield.trend}
               historical={metrics.batchYield.historical}
               icon={Target}
+              tooltip="Weighted probability that current batches will meet quality acceptance at completion, blending logistic probabilities and heuristic CPP compliance."
             />
             <MetricCard
               title="First Pass Rate"
@@ -1231,6 +1249,7 @@ export function Analytics() {
               trend={metrics.firstPassRate.trend}
               historical={metrics.firstPassRate.historical}
               icon={CheckCircle}
+              tooltip="Share of active batches predicted to clear release acceptance without rework, based on the quality decision threshold."
             />
             <MetricCard
               title="Deviation Rate"
@@ -1238,6 +1257,7 @@ export function Analytics() {
               trend={metrics.deviationRate.trend}
               historical={metrics.deviationRate.historical}
               icon={Warning}
+              tooltip="Percentage of batches exceeding the deviation risk threshold from heuristic/logistic predictors, signalling likely nonconformances."
             />
             <MetricCard
               title="Equipment OEE"
@@ -1245,6 +1265,7 @@ export function Analytics() {
               trend={metrics.equipmentOEE.trend}
               historical={metrics.equipmentOEE.historical}
               icon={ChartLine}
+              tooltip="Overall equipment effectiveness proxy derived from the inverse of failure probabilities across monitored assets."
             />
           </div>
 
@@ -1257,17 +1278,56 @@ export function Analytics() {
               <div className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="p-4 border rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-2">Active Batches</div>
+                    <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+                      <span>Active Batches</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help">
+                            <Info className="h-3 w-3" />
+                            <span className="sr-only">How active batches are counted</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-left">
+                          Includes batches in running or warning statuses streamed from the digital twin at the latest tick.
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     <div className="text-2xl font-bold">{activeBatchCount}</div>
                     <div className="text-xs text-muted-foreground">{totalBatchCount} total • {completedBatchCount} complete</div>
                   </div>
                   <div className="p-4 border rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-2">Average CPP Compliance</div>
+                    <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+                      <span>Average CPP Compliance</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help">
+                            <Info className="h-3 w-3" />
+                            <span className="sr-only">How CPP compliance is derived</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-left">
+                          Mean of critical process parameter compliance across batches (temperature, pressure, pH, volume) compared to specification bounds.
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     <div className="text-2xl font-bold text-primary">{qualitySnapshot.averageCompliance.toFixed(1)}%</div>
                     <div className="text-xs text-muted-foreground">Updated {lastTwinUpdate}</div>
                   </div>
                   <div className="p-4 border rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-2">High-Risk Batches</div>
+                    <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+                      <span>High-Risk Batches</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help">
+                            <Info className="h-3 w-3" />
+                            <span className="sr-only">When a batch is marked high risk</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-left">
+                          Count of batches whose deviation probability meets or exceeds the configured decision threshold ({(decisionThreshold.deviation_risk * 100).toFixed(0)}%).
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     <div className="text-2xl font-bold text-destructive">{highRiskBatchCount}</div>
                     <div className="text-xs text-muted-foreground">Deviation ≥ {(decisionThreshold.deviation_risk * 100).toFixed(0)}%</div>
                   </div>
@@ -1275,17 +1335,56 @@ export function Analytics() {
 
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="p-4 border rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-2">Average Deviation Probability</div>
+                    <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+                      <span>Average Deviation Probability</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help">
+                            <Info className="h-3 w-3" />
+                            <span className="sr-only">How deviation probability is calculated</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-left">
+                          Mean of predicted deviation risk across batches using the logistic/heuristic model outputs.
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     <div className="text-2xl font-bold text-amber-600">{averageDeviationRisk.toFixed(1)}%</div>
                     <div className="text-xs text-muted-foreground">Lower is better</div>
                   </div>
                   <div className="p-4 border rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-2">Weighted Batch Yield</div>
+                    <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+                      <span>Weighted Batch Yield</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help">
+                            <Info className="h-3 w-3" />
+                            <span className="sr-only">How weighted yield is determined</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-left">
+                          Probability-weighted quality yield that accounts for each batch’s progress and predicted pass likelihood.
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     <div className="text-2xl font-bold text-green-600">{metrics.batchYield.current.toFixed(1)}%</div>
                     <div className="text-xs text-muted-foreground">Trend: {renderTrendLabel(metrics.batchYield.trend)}</div>
                   </div>
                   <div className="p-4 border rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-2">Equipment OEE</div>
+                    <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+                      <span>Equipment OEE</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help">
+                            <Info className="h-3 w-3" />
+                            <span className="sr-only">How OEE is approximated</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-left">
+                          Heuristic overall equipment effectiveness derived from the complement of predicted failure probabilities.
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     <div className="text-2xl font-bold text-violet-600">{metrics.equipmentOEE.current.toFixed(1)}%</div>
                     <div className="text-xs text-muted-foreground">Includes logistic-enhanced predictions</div>
                   </div>

@@ -192,12 +192,16 @@ export function Dashboard() {
           warningBatches: warningBatchCount,
           cppCompliance: averageCompliance,
         }]
-    return source.map(point => ({
-      time: new Date(point.timestamp).toLocaleTimeString(),
-      active: point.activeBatches,
-      warnings: point.warningBatches,
-      compliance: Number(point.cppCompliance.toFixed(2)),
-    }))
+    return source.map(point => {
+      const running = Math.max(point.activeBatches - point.warningBatches, 0)
+      return {
+        time: new Date(point.timestamp).toLocaleTimeString(),
+        running,
+        warnings: point.warningBatches,
+        total: point.activeBatches,
+        compliance: Number(point.cppCompliance.toFixed(2)),
+      }
+    })
   }, [twinHistory, activeBatches.length, warningBatchCount, averageCompliance])
 
   const deviationSeverityData = useMemo(() => {
@@ -231,7 +235,7 @@ export function Dashboard() {
   }, [capas])
 
   const twinChartConfig: ChartConfig = {
-    active: { label: 'Active Batches', color: '#2563eb' },
+    running: { label: 'Running Batches', color: '#2563eb' },
     warnings: { label: 'Warning Batches', color: '#f59e0b' },
     compliance: { label: 'CPP Compliance %', color: '#16a34a' },
   }
@@ -537,11 +541,25 @@ export function Dashboard() {
                 <ChartTooltip
                   content={
                     <ChartTooltipContent
+                      labelFormatter={(_label, payload) => {
+                        const totalActive = payload?.reduce((sum, item) => {
+                          if (item.name === 'Running Batches' || item.name === 'Warning Batches') {
+                            return sum + (typeof item.value === 'number' ? item.value : 0)
+                          }
+                          return sum
+                        }, 0) ?? 0
+                        return (
+                          <div className="flex items-center justify-between gap-4">
+                            <span>Production Pulse</span>
+                            <span className="text-muted-foreground">Total active {totalActive}</span>
+                          </div>
+                        )
+                      }}
                       formatter={(value, name) => {
                         if (name === 'CPP Compliance %') {
                           return <span>{Number(value).toFixed(1)}%</span>
                         }
-                        return <span>{value}</span>
+                        return <span>{Number(value).toFixed(0)}</span>
                       }}
                     />
                   }
@@ -549,12 +567,13 @@ export function Dashboard() {
                 <Area
                   yAxisId="left"
                   type="monotone"
-                  dataKey="active"
-                  name="Active Batches"
-                  fill="var(--color-active)"
-                  stroke="var(--color-active)"
+                  dataKey="running"
+                  name="Running Batches"
+                  fill="var(--color-running)"
+                  stroke="var(--color-running)"
                   fillOpacity={0.2}
                   strokeWidth={2}
+                  stackId="batches"
                 />
                 <Area
                   yAxisId="left"
@@ -563,8 +582,9 @@ export function Dashboard() {
                   name="Warning Batches"
                   fill="var(--color-warnings)"
                   stroke="var(--color-warnings)"
-                  fillOpacity={0.3}
+                  fillOpacity={0.35}
                   strokeDasharray="4 3"
+                  stackId="batches"
                 />
                 <Line
                   yAxisId="right"
@@ -580,7 +600,7 @@ export function Dashboard() {
             <ChartLegendInline
               align="left"
               items={[
-                { key: 'active', label: 'Active Batches', color: '#2563eb' },
+                { key: 'running', label: 'Running Batches', color: '#2563eb' },
                 { key: 'warnings', label: 'Warning Batches', color: '#f59e0b', dashed: true },
                 { key: 'compliance', label: 'CPP Compliance %', color: '#16a34a' },
               ]}
