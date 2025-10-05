@@ -37,6 +37,7 @@ const FOLLOW_UP_KEYWORDS: Record<string, string[]> = {
   automation: ['automation', 'queue', 'bot', 'recommendation'],
   alerts: ['alert', 'alarm', 'warning'],
   batches: ['batch', 'lot', 'production', 'stage'],
+  progress: ['progress', 'complete', 'completion', 'finish', 'eta', 'timeline'],
 }
 
 const areSuggestionsEqual = (next: string[], current: string[]) =>
@@ -87,6 +88,11 @@ export function FloatingOperationsAssistant() {
     const topDeviation = digest.batches.topDeviationRisks[0]
     if ((topics.has('deviation') || topics.has('batches')) && topDeviation) {
       addPrompt(`Outline immediate mitigation steps for batch ${topDeviation.id} (${topDeviation.risk}% deviation risk).`)
+    }
+
+    const progressLeader = digest.batches.closestToCompletion
+    if (progressLeader) {
+      addPrompt(`Provide the remaining steps and ETA to finish batch ${progressLeader.id} (${progressLeader.progress}% complete${progressLeader.etaHours != null ? `, ~${progressLeader.etaHours}h remaining` : ''}).`)
     }
 
     if (topics.has('equipment') && digest.equipment.highestRisk) {
@@ -185,6 +191,7 @@ export function FloatingOperationsAssistant() {
         }, null, 2)}
 
         When citing values, mention units (%, counts, etc.) and note if they breach thresholds (e.g., deviation risk threshold ${digest.batches.highRiskThreshold}%).
+        Use batches.details for live progress percentages and etaHours to answer completion timeline questions precisely.
 
         Question:
         ${trimmed}

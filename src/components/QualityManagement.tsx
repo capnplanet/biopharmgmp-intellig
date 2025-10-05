@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ESignaturePrompt, type SignatureResult } from '@/components/ESignaturePrompt'
 import { batches } from '@/data/seed'
+import { useProductionBatches } from '@/hooks/use-production-batches'
 import { BATCH_IDS, CAPA_IDS, CHANGE_CONTROL_IDS, DEVIATION_IDS, MATERIAL_LOTS } from '@/data/identifiers'
 import {
   Warning,
@@ -476,6 +477,14 @@ export function QualityManagement() {
       riskLevel: 'high'
     }
   ])
+  const productionBatches = useProductionBatches()
+  const batchSource = productionBatches.length ? productionBatches : batches
+  const batchLookup = useMemo(() => {
+    const source = productionBatches.length ? productionBatches : batches
+    const map = new Map<string, (typeof source)[number]>()
+    source.forEach(batch => map.set(batch.id, batch))
+    return map
+  }, [productionBatches])
   const { log } = useAuditLogger()
   const { recordAlert } = useAlerts()
   const [investigationNotes, setInvestigationNotes] = useState('')
@@ -1249,6 +1258,7 @@ export function QualityManagement() {
                   ? Math.round(Math.max(0, Math.min(1, measurement.compliance)) * 100)
                   : undefined
               const productionContext = automationMetadata.productionContext
+              const fallbackBatch = batchLookup.get(deviation.batchId)
               const timelineEntries = Array.isArray(productionContext?.timeline)
                 ? (productionContext?.timeline as Array<{
                   stage?: string
@@ -1256,10 +1266,23 @@ export function QualityManagement() {
                   endTime?: string
                   status?: string
                 }>)
-                : []
+                : fallbackBatch
+                  ? fallbackBatch.timeline.map(item => ({
+                    stage: item.stage,
+                    startTime: item.startTime instanceof Date ? item.startTime.toISOString() : new Date(item.startTime).toISOString(),
+                    endTime: item.endTime ? (item.endTime instanceof Date ? item.endTime.toISOString() : new Date(item.endTime).toISOString()) : undefined,
+                    status: item.status,
+                  }))
+                  : []
               const progressValue = typeof productionContext?.progress === 'number'
                 ? Math.max(0, Math.min(100, productionContext.progress))
-                : undefined
+                : fallbackBatch
+                  ? Math.max(0, Math.min(100, fallbackBatch.progress))
+                  : undefined
+              const contextStage = productionContext?.stage ?? fallbackBatch?.stage
+              const contextStatus = productionContext?.status ?? fallbackBatch?.status
+              const contextEquipment = productionContext?.equipment ?? fallbackBatch?.equipment ?? []
+              const showProductionContext = Boolean(productionContext || fallbackBatch)
               const alcoa = automationMetadata.alcoa
 
               const openArchiveView = (targetBatchId: string) => {
@@ -1269,9 +1292,9 @@ export function QualityManagement() {
                 })
               }
 
-              const currentBatch = batches.find(batch => batch.id === deviation.batchId)
+              const currentBatch = fallbackBatch
               const relatedBatchHistory = currentBatch
-                ? batches.filter(batch => batch.product === currentBatch.product && batch.id !== currentBatch.id).slice(0, 3)
+                ? batchSource.filter(batch => batch.product === currentBatch.product && batch.id !== currentBatch.id).slice(0, 3)
                 : []
 
               return (
@@ -1380,7 +1403,7 @@ export function QualityManagement() {
                                     </div>
                                   )}
 
-                                  {productionContext && (
+                                  {showProductionContext && (
                                     <div className="rounded-lg border border-dashed bg-background/80 p-4 space-y-4">
                                       <div className="flex flex-wrap items-start justify-between gap-4">
                                         <div className="space-y-1">
@@ -1398,14 +1421,14 @@ export function QualityManagement() {
                                             </Button>
                                           </div>
                                           <div className="text-sm text-muted-foreground">
-                                            Stage: <span className="font-medium text-foreground">{productionContext.stage || 'Unknown'}</span>
+                                            Stage: <span className="font-medium text-foreground">{contextStage || 'Unknown'}</span>
                                           </div>
                                           <div className="text-sm text-muted-foreground">
-                                            Status: <span className="font-medium text-foreground">{productionContext.status || 'Unknown'}</span>
+                                            Status: <span className="font-medium text-foreground">{contextStatus || 'Unknown'}</span>
                                           </div>
-                                          {productionContext.equipment && productionContext.equipment.length > 0 && (
+                                          {contextEquipment.length > 0 && (
                                             <div className="text-xs text-muted-foreground/80">
-                                              Equipment: {productionContext.equipment.join(', ')}
+                                              Equipment: {contextEquipment.join(', ')}
                                             </div>
                                           )}
                                         </div>

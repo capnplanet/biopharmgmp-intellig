@@ -41,7 +41,11 @@ export type OperationsDigest = {
     total: number
     highRiskCount: number
     highRiskThreshold: number
-    topDeviationRisks: Array<{ id: string; product: string; stage: string; risk: number; cppCompliance: number; status: string }>
+    averageProgress: number
+    details: Array<{ id: string; product: string; stage: string; status: string; progress: number; startTime: string; equipment: string[]; etaHours?: number }>
+    progressLeaders: Array<{ id: string; product: string; stage: string; status: string; progress: number; etaHours?: number }>
+    closestToCompletion: { id: string; product: string; stage: string; status: string; progress: number; etaHours?: number } | null
+    topDeviationRisks: Array<{ id: string; product: string; stage: string; risk: number; cppCompliance: number; status: string; progress: number }>
   }
   equipment: {
     highestRisk?: { id: string; name: string; risk: number; vibrationRms: number; alert: boolean }
@@ -78,8 +82,13 @@ const INITIAL_SNAPSHOT: TwinSnapshot = {
 const formatNumber = (value: number, digits = 1) => Number(value.toFixed(digits))
 
 const buildSummary = (digest: OperationsDigest) => {
+  const progressLeader = digest.batches.closestToCompletion
+  const progressLine = progressLeader
+    ? `Progress: avg ${digest.batches.averageProgress}% | closest ${progressLeader.id} ${progressLeader.progress}% (${progressLeader.stage}, ${progressLeader.status})${progressLeader.etaHours != null ? ` (~${progressLeader.etaHours}h ETA)` : ''}.`
+    : `Progress: avg ${digest.batches.averageProgress}% | no running batches with tracked progress.`
   const lines = [
     `Batches: ${digest.batches.running} running, ${digest.batches.warning} warning, ${digest.batches.complete} complete (total ${digest.batches.total}).`,
+    progressLine,
     `Quality: yield ${digest.metrics.batchYield}% | first-pass ${digest.metrics.firstPassRate}% | avg deviation ${digest.metrics.averageDeviationRisk}%.`,
     `Equipment OEE ${digest.metrics.equipmentOee}% with top risk ${digest.equipment.highestRisk ? `${digest.equipment.highestRisk.name} ${digest.equipment.highestRisk.risk}%` : 'none highlighted'}.`,
     `Alerts: ${digest.alerts.total} active (warning ${digest.alerts.bySeverity.warning}, error ${digest.alerts.bySeverity.error}).`,
@@ -107,15 +116,24 @@ const deriveDigest = (
     const deviationBase = predictDeviationRisk(batch)
     const deviationProb = (predictLogisticProb('deviation_risk', deviationBase.features) ?? deviationBase.p) * 100
     const compliance = getCPPCompliance(batch) * 100
+    const startTime = batch.startTime instanceof Date ? batch.startTime : new Date(batch.startTime)
+    const progress = formatNumber(batch.progress)
+    const elapsedHours = Math.max(0, (snapshotState.updatedAt.getTime() - startTime.getTime()) / (60 * 60 * 1000))
+    const etaHours = progress > 0
+      ? formatNumber(Math.max(0, (elapsedHours / (progress / 100)) - elapsedHours))
+      : undefined
     return {
       id: batch.id,
       product: batch.product,
       stage: batch.stage,
       status: batch.status,
-      progress: batch.progress,
+      progress,
+      etaHours,
       qualityProbability: formatNumber(qualityProb),
       deviationProbability: formatNumber(deviationProb),
       compliance: formatNumber(compliance),
+      startTime: startTime.toISOString(),
+      equipment: batch.equipment.slice(),
     }
   })
 
@@ -137,6 +155,7 @@ const deriveDigest = (
       risk: item.deviationProbability,
       cppCompliance: item.compliance,
       status: item.status,
+      progress: item.progress,
     }))
 
   const progressFactors = batches.map(batch => Math.max(0, Math.min(1, batch.progress / 100)))
@@ -206,6 +225,30 @@ const deriveDigest = (
     accepted: automationQueue.filter(item => item.status === 'accepted').length,
   }
 
+  const averageProgress = total ? formatNumber(formattedBatches.reduce((sum, item) => sum + item.progress, 0) / total) : 0
+  const progressLeaderEntries = formattedBatches
+    .filter(batch => batch.status !== 'complete')
+    .sort((a, b) => b.progress - a.progress)
+    .slice(0, MAX_LIST_ITEMS)
+  const progressLeaders = progressLeaderEntries.map(({ id, product, stage, status, progress, etaHours }) => ({
+    id,
+    product,
+    stage,
+    status,
+    progress,
+    etaHours,
+  }))
+  const batchDetails = formattedBatches.map(({ id, product, stage, status, progress, startTime, equipment, etaHours }) => ({
+    id,
+    product,
+    stage,
+    status,
+    progress,
+    startTime,
+    equipment,
+    etaHours,
+  }))
+
   const modelPerformance: OperationsDigest['modelPerformance'] = (['quality_prediction', 'equipment_failure', 'deviation_risk'] as const).map(modelId => {
     const metrics = monitor.metrics(modelId, { threshold: decisionThreshold[modelId], minN: 30, requireBothClasses: true })
     return {
@@ -238,6 +281,10 @@ const deriveDigest = (
       total,
       highRiskCount,
       highRiskThreshold: formatNumber(deviationThresholdPercent),
+      averageProgress,
+      details: batchDetails,
+      progressLeaders,
+      closestToCompletion: progressLeaders[0] ?? null,
       topDeviationRisks,
     },
     equipment: {

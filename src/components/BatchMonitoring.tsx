@@ -16,6 +16,7 @@ import {
 } from '@phosphor-icons/react'
 
 import { batches as seedBatches, type BatchData } from '@/data/seed'
+import { useProductionBatches } from '@/hooks/use-production-batches'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useAuditLogger } from '@/hooks/use-audit'
 
@@ -102,13 +103,23 @@ function BatchTimeline({ timeline }: { timeline: BatchData['timeline'] }) {
 export function BatchMonitoring() {
   const { log } = useAuditLogger()
   const [, setRoute] = useKV<string>('route', '')
+  const liveBatches = useProductionBatches()
   const [selectedBatch, setSelectedBatch] = useState<BatchData>(mockBatches[0])
+  const availableBatches = liveBatches.length ? liveBatches : mockBatches
   const [, setCurrentTime] = useState(new Date())
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 15000)
     return () => clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    if (!availableBatches.length) return
+    setSelectedBatch(prev => {
+      const fallback = availableBatches.find(batch => batch.id === prev?.id)
+      return fallback ?? availableBatches[0]
+    })
+  }, [availableBatches])
 
   return (
     <div className="p-6 space-y-6 overflow-auto h-full">
@@ -123,7 +134,7 @@ export function BatchMonitoring() {
             <CardTitle>Active Batches</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {mockBatches.map((batch) => (
+            {availableBatches.map((batch) => (
               <div
                 key={batch.id}
                 className={`p-3 rounded-lg border cursor-pointer transition-colors ${
