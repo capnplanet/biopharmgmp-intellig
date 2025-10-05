@@ -51,28 +51,121 @@ interface QualityMetrics {
   equipmentOEE: { current: number; trend: 'up' | 'down' | 'stable'; historical: number[] }
 }
 
-// (runtime models are built via buildRuntimeModels)
+type BatchQualityRow = {
+  id: string
+  product: string
+  stage: string
+  status: string
+  progress: number
+  qualityProbability: number
+  deviationProbability: number
+  compliance: number
+}
 
-const mockMetrics: QualityMetrics = {
-  batchYield: { 
-    current: 94.3, 
-    trend: 'up', 
-    historical: [91.2, 92.1, 93.4, 94.1, 94.3] 
-  },
-  firstPassRate: { 
-    current: 89.7, 
-    trend: 'stable', 
-    historical: [88.9, 89.2, 89.5, 89.8, 89.7] 
-  },
-  deviationRate: { 
-    current: 2.1, 
-    trend: 'down', 
-    historical: [3.2, 2.8, 2.4, 2.3, 2.1] 
-  },
-  equipmentOEE: { 
-    current: 87.4, 
-    trend: 'up', 
-    historical: [84.1, 85.3, 86.2, 86.8, 87.4] 
+type QualitySnapshot = {
+  batchYield: number
+  firstPassRate: number
+  deviationRate: number
+  averageDeviationRisk: number
+  equipmentOEE: number
+  averageCompliance: number
+  perBatch: BatchQualityRow[]
+}
+
+type QualityHistoryPoint = {
+  timestamp: string
+  batchYield: number
+  firstPassRate: number
+  deviationRate: number
+  averageDeviationRisk: number
+  equipmentOEE: number
+  averageCompliance: number
+}
+
+const METRIC_HISTORY_LIMIT = 36
+const METRIC_TREND_EPSILON = 0.25
+
+function createEmptyMetrics(): QualityMetrics {
+  return {
+    batchYield: { current: 0, trend: 'stable', historical: [] },
+    firstPassRate: { current: 0, trend: 'stable', historical: [] },
+    deviationRate: { current: 0, trend: 'stable', historical: [] },
+    equipmentOEE: { current: 0, trend: 'stable', historical: [] },
+  }
+}
+
+function updateMetricSummary(prev: QualityMetrics[keyof QualityMetrics], value: number): QualityMetrics[keyof QualityMetrics] {
+  const nextValue = Number(value.toFixed(1))
+  const prevValue = prev?.current ?? nextValue
+  const delta = nextValue - prevValue
+  const trend: 'up' | 'down' | 'stable' = delta > METRIC_TREND_EPSILON ? 'up' : delta < -METRIC_TREND_EPSILON ? 'down' : 'stable'
+  const historical = [...(prev?.historical ?? []), nextValue].slice(-METRIC_HISTORY_LIMIT)
+  return { current: nextValue, trend, historical }
+}
+
+function computeQualitySnapshot(snapshot: TwinSnapshot): QualitySnapshot {
+  const formattedBatches: BatchQualityRow[] = snapshot.batches.map(batch => {
+    const qualityBase = predictQuality(batch)
+    const qualityProb = (predictLogisticProb('quality_prediction', qualityBase.features) ?? qualityBase.p) * 100
+    const deviationBase = predictDeviationRisk(batch)
+    const deviationProb = (predictLogisticProb('deviation_risk', deviationBase.features) ?? deviationBase.p) * 100
+    const compliance = getCPPCompliance(batch) * 100
+    return {
+      id: batch.id,
+      product: batch.product,
+      stage: batch.stage,
+      status: batch.status,
+      progress: batch.progress,
+      qualityProbability: Number(qualityProb.toFixed(1)),
+      deviationProbability: Number(deviationProb.toFixed(1)),
+      compliance: Number(compliance.toFixed(1)),
+    }
+  })
+
+  const totalBatches = formattedBatches.length || 1
+  const qualityProbs = formattedBatches.map(item => item.qualityProbability / 100)
+  const deviationProbs = formattedBatches.map(item => item.deviationProbability / 100)
+  const progressFactors = snapshot.batches.map(batch => Math.max(0, Math.min(1, batch.progress / 100)))
+
+  const batchYield = Number((
+    formattedBatches.reduce((sum, _item, index) => sum + qualityProbs[index] * (progressFactors[index] ?? 1), 0) /
+    totalBatches *
+    100
+  ).toFixed(1))
+
+  const firstPassRate = Number((
+    (qualityProbs.filter(p => p >= decisionThreshold.quality_prediction).length / totalBatches) * 100
+  ).toFixed(1))
+
+  const deviationRate = Number((
+    (deviationProbs.filter(p => p >= decisionThreshold.deviation_risk).length / totalBatches) * 100
+  ).toFixed(1))
+
+  const averageDeviationRisk = Number((
+    (deviationProbs.reduce((sum, p) => sum + p, 0) / totalBatches) * 100
+  ).toFixed(1))
+
+  const equipmentPredictions = snapshot.equipmentTelemetry.map(eq => {
+    const equipmentBase = predictEquipmentFailure(eq)
+    return predictLogisticProb('equipment_failure', equipmentBase.features) ?? equipmentBase.p
+  })
+
+  const equipmentOEE = equipmentPredictions.length
+    ? Number((equipmentPredictions.reduce((sum, p) => sum + (1 - p), 0) / equipmentPredictions.length * 100).toFixed(1))
+    : 0
+
+  const averageCompliance = formattedBatches.length
+    ? Number((formattedBatches.reduce((sum, item) => sum + item.compliance, 0) / formattedBatches.length).toFixed(1))
+    : 0
+
+  return {
+    batchYield,
+    firstPassRate,
+    deviationRate,
+    averageDeviationRisk,
+    equipmentOEE,
+    averageCompliance,
+    perBatch: formattedBatches,
   }
 }
 
@@ -325,7 +418,11 @@ function PredictionCard({ model }: { model: PredictiveModel }) {
 
 export function Analytics() {
   const [models, setModels] = useState<PredictiveModel[]>(buildRuntimeModels())
-  const [metrics] = useState<QualityMetrics>(mockMetrics)
+  const [metrics, setMetrics] = useState<QualityMetrics>(() => createEmptyMetrics())
+  const [qualitySnapshot, setQualitySnapshot] = useState<QualitySnapshot>(() =>
+    computeQualitySnapshot({ timestamp: new Date(), batches, equipmentTelemetry })
+  )
+  const [qualityHistory, setQualityHistory] = useState<QualityHistoryPoint[]>([])
   const [, setCurrentTime] = useState(new Date())
   const { alerts = [] } = useAlerts()
   const [deviations = []] = useKV<Deviation[]>('deviations', [])
@@ -378,6 +475,32 @@ export function Analytics() {
     const id = setInterval(tryTrain, 45000)
     return () => { clearTimeout(t0); clearInterval(id) }
   }, [])
+
+  useEffect(() => {
+    const snapshot = computeQualitySnapshot(latestTwin)
+    setQualitySnapshot(snapshot)
+    setMetrics(prev => ({
+      batchYield: updateMetricSummary(prev.batchYield, snapshot.batchYield),
+      firstPassRate: updateMetricSummary(prev.firstPassRate, snapshot.firstPassRate),
+      deviationRate: updateMetricSummary(prev.deviationRate, snapshot.deviationRate),
+      equipmentOEE: updateMetricSummary(prev.equipmentOEE, snapshot.equipmentOEE),
+    }))
+    setQualityHistory(prev => {
+      const timestamp = latestTwin.timestamp.toISOString()
+      if (prev.length && prev[prev.length - 1].timestamp === timestamp) return prev
+      const nextPoint: QualityHistoryPoint = {
+        timestamp,
+        batchYield: snapshot.batchYield,
+        firstPassRate: snapshot.firstPassRate,
+        deviationRate: snapshot.deviationRate,
+        averageDeviationRisk: snapshot.averageDeviationRisk,
+        equipmentOEE: snapshot.equipmentOEE,
+        averageCompliance: snapshot.averageCompliance,
+      }
+      const nextHistory = [...prev, nextPoint]
+      return nextHistory.slice(-METRIC_HISTORY_LIMIT)
+    })
+  }, [latestTwin])
 
   useEffect(() => {
     const equipmentModel = models.find(m => m.type === 'equipment_failure')
@@ -517,6 +640,69 @@ export function Analytics() {
         quality: Number(point.qualityConfidence.toFixed(1)),
       })),
     [riskHistory]
+  )
+
+  const qualityChartConfig: ChartConfig = useMemo(() => ({
+    yield: { label: 'Batch Yield %', color: '#38bdf8' },
+    firstPass: { label: 'First Pass Rate %', color: '#22c55e' },
+    deviation: { label: 'Deviation Risk %', color: '#f97316' },
+    oee: { label: 'Equipment OEE %', color: '#a855f7' },
+  }), [])
+
+  const qualityTrendSeries = useMemo(
+    () =>
+      qualityHistory.map(point => ({
+        time: new Date(point.timestamp).toLocaleTimeString(),
+        yield: Number(point.batchYield.toFixed(1)),
+        firstPass: Number(point.firstPassRate.toFixed(1)),
+        deviation: Number(point.averageDeviationRisk.toFixed(1)),
+        oee: Number(point.equipmentOEE.toFixed(1)),
+      })),
+    [qualityHistory]
+  )
+
+  const qualityTrendSummary = useMemo(() => {
+    if (qualityHistory.length < 2) return null
+    const first = qualityHistory[0]
+    const last = qualityHistory[qualityHistory.length - 1]
+    const delta = (curr: number, prev: number) => Number((curr - prev).toFixed(1))
+    return {
+      yieldDelta: delta(last.batchYield, first.batchYield),
+      firstPassDelta: delta(last.firstPassRate, first.firstPassRate),
+      deviationDelta: delta(last.averageDeviationRisk, first.averageDeviationRisk),
+      oeeDelta: delta(last.equipmentOEE, first.equipmentOEE),
+    }
+  }, [qualityHistory])
+
+  const batchQualityRows = useMemo(() => {
+    return [...qualitySnapshot.perBatch].sort((a, b) => b.deviationProbability - a.deviationProbability)
+  }, [qualitySnapshot])
+
+  const deviationThresholdPercent = decisionThreshold.deviation_risk * 100
+
+  const highRiskBatchCount = useMemo(() => {
+    return qualitySnapshot.perBatch.filter(row => row.deviationProbability >= deviationThresholdPercent).length
+  }, [qualitySnapshot, deviationThresholdPercent])
+
+  const completedBatchCount = useMemo(
+    () => qualitySnapshot.perBatch.filter(row => row.status === 'complete').length,
+    [qualitySnapshot]
+  )
+
+  const totalBatchCount = qualitySnapshot.perBatch.length
+  const activeBatchCount = Math.max(0, totalBatchCount - completedBatchCount)
+  const averageDeviationRisk = qualitySnapshot.averageDeviationRisk
+
+  const formatDelta = (delta: number | undefined, { invert = false }: { invert?: boolean } = {}) => {
+    if (delta == null || Number.isNaN(delta) || Math.abs(delta) < 0.1) return 'holding steady'
+    const sign = delta > 0 ? '+' : ''
+    const favorable = invert ? delta < 0 : delta > 0
+    const descriptor = favorable ? 'improved' : 'softened'
+    return `${descriptor} ${sign}${delta.toFixed(1)} pts`
+  }
+
+  const renderTrendLabel = (trend: 'up' | 'down' | 'stable') => (
+    trend === 'up' ? 'Improving' : trend === 'down' ? 'Declining' : 'Stable'
   )
 
   const lastTwinUpdate = useMemo(
@@ -1025,34 +1211,53 @@ export function Analytics() {
           <Card>
             <CardHeader>
               <CardTitle>Key Performance Indicators</CardTitle>
+              <p className="text-sm text-muted-foreground">Live roll-up across all monitored batches and equipment snapshots.</p>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="p-4 border rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-2">Manufacturing Efficiency</div>
-                    <div className="text-2xl font-bold text-green-600">92.3%</div>
-                    <div className="text-xs text-muted-foreground">+2.1% vs target</div>
+                    <div className="text-sm text-muted-foreground mb-2">Active Batches</div>
+                    <div className="text-2xl font-bold">{activeBatchCount}</div>
+                    <div className="text-xs text-muted-foreground">{totalBatchCount} total • {completedBatchCount} complete</div>
                   </div>
                   <div className="p-4 border rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-2">Regulatory Compliance</div>
-                    <div className="text-2xl font-bold text-green-600">99.8%</div>
-                    <div className="text-xs text-muted-foreground">Within specification</div>
+                    <div className="text-sm text-muted-foreground mb-2">Average CPP Compliance</div>
+                    <div className="text-2xl font-bold text-primary">{qualitySnapshot.averageCompliance.toFixed(1)}%</div>
+                    <div className="text-xs text-muted-foreground">Updated {lastTwinUpdate}</div>
                   </div>
                   <div className="p-4 border rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-2">Cost per Batch</div>
-                    <div className="text-2xl font-bold text-blue-600">$47.2K</div>
-                    <div className="text-xs text-muted-foreground">-5.3% vs budget</div>
+                    <div className="text-sm text-muted-foreground mb-2">High-Risk Batches</div>
+                    <div className="text-2xl font-bold text-destructive">{highRiskBatchCount}</div>
+                    <div className="text-xs text-muted-foreground">Deviation ≥ {(decisionThreshold.deviation_risk * 100).toFixed(0)}%</div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="p-4 border rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-2">Average Deviation Probability</div>
+                    <div className="text-2xl font-bold text-amber-600">{averageDeviationRisk.toFixed(1)}%</div>
+                    <div className="text-xs text-muted-foreground">Lower is better</div>
+                  </div>
+                  <div className="p-4 border rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-2">Weighted Batch Yield</div>
+                    <div className="text-2xl font-bold text-green-600">{metrics.batchYield.current.toFixed(1)}%</div>
+                    <div className="text-xs text-muted-foreground">Trend: {renderTrendLabel(metrics.batchYield.trend)}</div>
+                  </div>
+                  <div className="p-4 border rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-2">Equipment OEE</div>
+                    <div className="text-2xl font-bold text-violet-600">{metrics.equipmentOEE.current.toFixed(1)}%</div>
+                    <div className="text-xs text-muted-foreground">Includes logistic-enhanced predictions</div>
                   </div>
                 </div>
 
                 <div className="p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-medium mb-2">Performance Insights:</h4>
+                  <h4 className="font-medium mb-2">Performance Insights</h4>
                   <ul className="text-sm space-y-1">
-                    <li>• Batch yield improvements driven by optimized temperature control</li>
-                    <li>• Deviation rate reduction attributed to enhanced operator training</li>
-                    <li>• Equipment OEE gains from predictive maintenance implementation</li>
-                    <li>• First pass rate maintained through improved raw material quality</li>
+                    <li>• Batch yield {qualityTrendSummary ? formatDelta(qualityTrendSummary.yieldDelta) : 'monitoring baseline'} (current {metrics.batchYield.current.toFixed(1)}%).</li>
+                    <li>• First pass rate {qualityTrendSummary ? formatDelta(qualityTrendSummary.firstPassDelta) : 'monitoring baseline'} (current {metrics.firstPassRate.current.toFixed(1)}%).</li>
+                    <li>• Deviation exposure {qualityTrendSummary ? formatDelta(qualityTrendSummary.deviationDelta, { invert: true }) : 'monitoring baseline'} (avg {averageDeviationRisk.toFixed(1)}%).</li>
+                    <li>• Equipment OEE {qualityTrendSummary ? formatDelta(qualityTrendSummary.oeeDelta) : 'monitoring baseline'} (current {metrics.equipmentOEE.current.toFixed(1)}%).</li>
                   </ul>
                 </div>
               </div>
@@ -1064,45 +1269,111 @@ export function Analytics() {
           <Card>
             <CardHeader>
               <CardTitle>Historical Trend Analysis</CardTitle>
+              <p className="text-sm text-muted-foreground">Real-time traces derived from the same predictions driving the live dashboards.</p>
             </CardHeader>
             <CardContent>
-              <div className="space-y-6">
-                <div className="p-4 border rounded-lg">
-                  <h4 className="font-medium mb-4">30-Day Performance Trends</h4>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Quality Score Trend</span>
-                      <div className="flex items-center gap-2">
-                        <TrendUp className="h-4 w-4 text-green-600" />
-                        <span className="text-sm font-mono text-green-600">+3.2%</span>
-                      </div>
+              <div className="grid gap-4 lg:grid-cols-3">
+                <div className="lg:col-span-2 space-y-3">
+                  {qualityTrendSeries.length > 1 ? (
+                    <>
+                      <ChartContainer className="h-56" config={qualityChartConfig}>
+                        <ComposedChart data={qualityTrendSeries} margin={{ left: 8, right: 16, top: 8, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="time" axisLine={false} tickLine={false} minTickGap={28} />
+                          <YAxis domain={[0, 100]} axisLine={false} tickLine={false} width={42} />
+                          <ChartTooltip
+                            content={
+                              <ChartTooltipContent
+                                formatter={(value) => (
+                                  <span>{Number(value).toFixed(1)}%</span>
+                                )}
+                              />
+                            }
+                          />
+                          <Area type="monotone" dataKey="yield" fill="var(--color-yield)" stroke="var(--color-yield)" fillOpacity={0.12} strokeWidth={2} />
+                          <Line type="monotone" dataKey="firstPass" stroke="var(--color-firstPass)" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="oee" stroke="var(--color-oee)" strokeWidth={2} dot={false} strokeDasharray="4 3" />
+                          <Line type="monotone" dataKey="deviation" stroke="var(--color-deviation)" strokeWidth={2} dot={false} strokeDasharray="6 4" />
+                        </ComposedChart>
+                      </ChartContainer>
+                      <ChartLegendInline
+                        className="justify-start"
+                        items={[
+                          { key: 'yield', label: 'Batch Yield', color: 'var(--color-yield)' },
+                          { key: 'firstPass', label: 'First Pass Rate', color: 'var(--color-firstPass)' },
+                          { key: 'oee', label: 'Equipment OEE', color: 'var(--color-oee)' },
+                          { key: 'deviation', label: 'Avg Deviation Risk', color: 'var(--color-deviation)' },
+                        ]}
+                      />
+                    </>
+                  ) : (
+                    <div className="h-56 border rounded-lg bg-muted/40 flex items-center justify-center text-sm text-muted-foreground">
+                      Collecting data… quality trends will appear shortly.
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Production Volume</span>
-                      <div className="flex items-center gap-2">
-                        <TrendUp className="h-4 w-4 text-green-600" />
-                        <span className="text-sm font-mono text-green-600">+7.8%</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Equipment Downtime</span>
-                      <div className="flex items-center gap-2">
-                        <TrendDown className="h-4 w-4 text-green-600" />
-                        <span className="text-sm font-mono text-green-600">-12.4%</span>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
-
-                <div className="p-4 bg-amber-50 rounded-lg">
-                  <h4 className="font-medium mb-2">Trend Analysis Summary:</h4>
-                  <p className="text-sm text-amber-800">
-                    Manufacturing performance shows consistent improvement across all key metrics. 
-                    The implementation of AI-driven predictive analytics has contributed to a 15% 
-                    reduction in unplanned downtime and 8% improvement in overall quality scores 
-                    over the past quarter.
+                <div className="space-y-3 p-4 border rounded-lg bg-muted/40">
+                  <h4 className="text-sm font-medium">Trend Summary</h4>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li>
+                      <span className="font-medium text-foreground">Yield:</span> {metrics.batchYield.current.toFixed(1)}% • {qualityTrendSummary ? formatDelta(qualityTrendSummary.yieldDelta) : 'baseline sample'}
+                    </li>
+                    <li>
+                      <span className="font-medium text-foreground">First Pass:</span> {metrics.firstPassRate.current.toFixed(1)}% • {qualityTrendSummary ? formatDelta(qualityTrendSummary.firstPassDelta) : 'baseline sample'}
+                    </li>
+                    <li>
+                      <span className="font-medium text-foreground">Deviation Risk:</span> {averageDeviationRisk.toFixed(1)}% • {qualityTrendSummary ? formatDelta(qualityTrendSummary.deviationDelta, { invert: true }) : 'baseline sample'}
+                    </li>
+                    <li>
+                      <span className="font-medium text-foreground">Equipment OEE:</span> {metrics.equipmentOEE.current.toFixed(1)}% • {qualityTrendSummary ? formatDelta(qualityTrendSummary.oeeDelta) : 'baseline sample'}
+                    </li>
+                  </ul>
+                  <p className="text-xs text-muted-foreground">
+                    Updates are driven by every digital-twin tick (~60 simulated seconds). Predictions and trend statistics refresh in lockstep with the operations dashboard.
                   </p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Batch Quality Snapshot</CardTitle>
+              <p className="text-sm text-muted-foreground">Per-batch probabilities from the latest digital-twin sample ({new Date(latestTwin.timestamp).toLocaleTimeString()}).</p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Batch</th>
+                      <th className="px-3 py-2 text-left">Stage</th>
+                      <th className="px-3 py-2 text-left">Status</th>
+                      <th className="px-3 py-2 text-right">Progress</th>
+                      <th className="px-3 py-2 text-right">Quality %</th>
+                      <th className="px-3 py-2 text-right">Deviation %</th>
+                      <th className="px-3 py-2 text-right">CPP %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {batchQualityRows.map(row => (
+                      <tr key={row.id} className="border-t">
+                        <td className="px-3 py-2 font-medium text-foreground">{row.id}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{row.stage}</td>
+                        <td className="px-3 py-2 text-muted-foreground capitalize">{row.status}</td>
+                        <td className="px-3 py-2 text-right font-mono">{row.progress.toFixed(0)}%</td>
+                        <td className="px-3 py-2 text-right font-mono">{row.qualityProbability.toFixed(1)}%</td>
+                        <td className={`px-3 py-2 text-right font-mono ${row.deviationProbability >= deviationThresholdPercent ? 'text-destructive' : 'text-foreground'}`}>
+                          {row.deviationProbability.toFixed(1)}%
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono">{row.compliance.toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {batchQualityRows.length === 0 && (
+                  <div className="py-6 text-center text-sm text-muted-foreground">No batches are currently monitored.</div>
+                )}
               </div>
             </CardContent>
           </Card>
