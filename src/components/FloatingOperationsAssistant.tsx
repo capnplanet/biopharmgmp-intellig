@@ -120,6 +120,59 @@ export function FloatingOperationsAssistant() {
     return prompts.slice(0, MAX_SUGGESTIONS)
   }, [detectTopics, digest])
 
+  const buildFallbackResponse = useCallback((question: string) => {
+    const lines: string[] = []
+    const topics = detectTopics(question)
+
+    if (topics.has('progress') || question.toLowerCase().includes('complete') || question.toLowerCase().includes('finish')) {
+      const closest = digest.batches.closestToCompletion
+      if (closest) {
+        lines.push(`Batch ${closest.id} is the closest to completion at ${closest.progress}% (${closest.stage}, status ${closest.status}).${closest.etaHours != null ? ` Estimated ${closest.etaHours} hours remaining.` : ''}`)
+      }
+      lines.push(`Average progress across all batches is ${digest.batches.averageProgress}%.`)
+    }
+
+    if (topics.has('batches') && digest.batches.details.length > 0) {
+      const top = digest.batches.details
+        .filter(batch => batch.status !== 'complete')
+        .sort((a, b) => b.progress - a.progress)
+        .slice(0, 3)
+        .map(batch => `${batch.id} ${batch.progress}% (${batch.stage}, status ${batch.status})${batch.etaHours != null ? `, ~${batch.etaHours}h remaining` : ''}`)
+      if (top.length) {
+        lines.push(`Active batches: ${top.join(' | ')}.`)
+      }
+    }
+
+    if (topics.has('deviation')) {
+      const highRisk = digest.batches.topDeviationRisks[0]
+      if (highRisk) {
+        lines.push(`Highest deviation risk: ${highRisk.id} at ${highRisk.risk}% (${highRisk.stage}, compliance ${highRisk.cppCompliance}%).`)
+      }
+    }
+
+    if (topics.has('equipment')) {
+      const equipmentRisk = digest.equipment.highestRisk
+      if (equipmentRisk) {
+        lines.push(`Equipment hot spot: ${equipmentRisk.name} with ${equipmentRisk.risk}% predicted failure risk${equipmentRisk.alert ? ' and active alert' : ''}.`)
+      }
+    }
+
+    if (topics.has('alerts')) {
+      lines.push(`Alerts open: ${digest.alerts.total} (warnings ${digest.alerts.bySeverity.warning}, errors ${digest.alerts.bySeverity.error}).`)
+    }
+
+    if (topics.has('automation')) {
+      lines.push(`Automation queue has ${digest.automation.pending} pending and ${digest.automation.accepted} accepted recommendations.`)
+    }
+
+    if (!lines.length) {
+      lines.push(latestSummary)
+    }
+
+    lines.push('_(Generated from the latest operations snapshot—Spark runtime not connected.)_')
+    return lines.join('\n')
+  }, [detectTopics, digest, latestSummary])
+
   const applySuggestions = useCallback((next: string[]) => {
     if (!areSuggestionsEqual(next, suggestedPrompts)) {
       setSuggestedPrompts(next)
@@ -163,9 +216,9 @@ export function FloatingOperationsAssistant() {
     const spark = getSpark()
     if (!spark?.llm || !spark.llmPrompt) {
       appendMessage({
-        id: `${now.getTime()}-error`,
+        id: `${now.getTime()}-fallback`,
         role: 'assistant',
-        content: 'AI assistant is currently unavailable. Ensure Spark runtime is connected.',
+        content: buildFallbackResponse(trimmed),
         createdAt: new Date().toISOString(),
       })
       return
@@ -197,10 +250,12 @@ export function FloatingOperationsAssistant() {
         ${trimmed}
       `
       const output = await spark.llm(prompt, 'gpt-4o')
+      const cleaned = typeof output === 'string' ? output.trim() : ''
+      const responseContent = cleaned.length > 0 ? output : buildFallbackResponse(trimmed)
       appendMessage({
         id: `${Date.now()}-assistant`,
         role: 'assistant',
-        content: output,
+        content: responseContent,
         createdAt: new Date().toISOString(),
       })
     } catch (error) {
@@ -208,7 +263,7 @@ export function FloatingOperationsAssistant() {
       appendMessage({
         id: `${Date.now()}-assistant-error`,
         role: 'assistant',
-        content: `Unable to generate a response: ${message}`,
+        content: `${buildFallbackResponse(trimmed)}\n\nError details: ${message}`,
         createdAt: new Date().toISOString(),
       })
     } finally {
