@@ -34,13 +34,12 @@ import {
   LinkSimple
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
-import { buildInvestigationSources, sourcesToString } from '@/data/archive'
 import { notifyQualityEventResolved } from '@/lib/qualityAutomation'
-import { getSpark } from '@/lib/spark'
 import type { AutomationSuggestion } from '@/types/automation'
 import type { CAPA, ChangeControl, Deviation, ESignatureRecord, Investigation } from '@/types/quality'
 import { calculateInvestigationProgress, createInvestigationFromDeviation, normalizeInvestigation } from '@/utils/investigation'
 import { useAuditLogger } from '@/hooks/use-audit'
+import QualityAssistantPanel, { AssistantMode } from '@/components/QualityAssistantPanel'
 
 type QualityTab = 'deviations' | 'investigations' | 'capa' | 'change-control'
 
@@ -394,13 +393,18 @@ export function QualityManagement() {
     }
   ])
   const { log } = useAuditLogger()
-  const [selectedDeviation, setSelectedDeviation] = useState<Deviation | null>(null)
   const [investigationNotes, setInvestigationNotes] = useState('')
-  const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false)
-  const [aiAnalysis, setAiAnalysis] = useState('')
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  const [assistantMode, setAssistantMode] = useState<AssistantMode>('deviation')
+  const [assistantRecordId, setAssistantRecordId] = useState<string | undefined>(undefined)
   const [activeTab, setActiveTab] = useState<'deviations' | 'investigations' | 'capa' | 'change-control'>('deviations')
   const pendingAutomation = (automationQueue || []).filter(item => item.status === 'pending')
   const automationHistory = (automationQueue || []).filter(item => item.status !== 'pending')
+  const assistantModeLabels: Record<AssistantMode, string> = {
+    deviation: 'Deviation Investigation Support',
+    capa: 'CAPA Authoring Support',
+    'change-control': 'Change Control Planning'
+  }
 
   const formatDate = (d: Date | string | undefined) => {
     if (!d) return ''
@@ -686,102 +690,22 @@ export function QualityManagement() {
     return colors[risk]
   }
 
-  const generateAIAnalysis = async (deviation: Deviation) => {
-    setSelectedDeviation(deviation)
-    if (!isAIAssistantOpen) {
-      log('AI Assistant Opened', 'ai', `AI assistant opened for deviation ${deviation.id}`, { recordId: deviation.id })
-    }
-    setIsAIAssistantOpen(true)
-    setAiAnalysis('Analyzing deviation data and batch records...')
-
-    log('AI Analysis Requested', 'ai', `Requested AI analysis for deviation ${deviation.id}`, { recordId: deviation.id })
-
-    try {
-      const spark = getSpark()
-      const llmPrompt = spark?.llmPrompt
-      if (!llmPrompt || !spark?.llm) throw new Error('AI helpers not available')
-      const sources = buildInvestigationSources(deviation.batchId)
-      const prompt = llmPrompt`
-        You are a pharmaceutical quality expert AI assistant specializing in GMP compliance and root cause analysis. Analyze this deviation using the provided SOURCES to generate a comprehensive, actionable investigation report.
-
-        DEVIATION DETAILS:
-        - Title: ${deviation.title}
-        - Description: ${deviation.description}
-        - Batch ID: ${deviation.batchId}
-        - Severity: ${deviation.severity}
-        - Status: ${deviation.status}
-        - Reported By: ${deviation.reportedBy}
-        - Date: ${deviation.reportedDate}
-
-        INVESTIGATION SOURCES (each has an id like [S1]):
-        ${sourcesToString(sources)}
-
-        ANALYSIS REQUIREMENTS:
-        You must provide a thorough analysis that is:
-        1. EVIDENCE-BASED: Base all conclusions strictly on the PROVIDED SOURCES
-        2. COMPLIANT: Follow 21 CFR Part 11, GMP, and ICH Q7 requirements
-        3. TRACEABLE: Cite sources inline as [S#] for every factual claim
-        4. ACTIONABLE: Provide specific, implementable recommendations
-
-        REQUIRED OUTPUT SECTIONS:
-
-        **1. IMMEDIATE ASSESSMENT**
-        - Product impact evaluation with specific risk level
-        - Batch disposition recommendation (release/reject/investigate)
-        - Immediate containment actions required
-
-        **2. ROOT CAUSE ANALYSIS**
-        - Primary root cause (most likely based on evidence)
-        - Contributing factors (2-3 secondary causes)
-        - Evidence supporting each cause with source citations
-
-        **3. INVESTIGATION PLAN** 
-        - Specific tests/inspections required to confirm root cause
-        - Additional records to review
-        - Timeline for completion
-        - Responsible parties
-
-        **4. CORRECTIVE ACTIONS (CAPA)**
-        - Immediate corrections (fix the problem)
-        - Corrective actions (prevent recurrence)
-        - Preventive actions (system improvements)
-        - Effectiveness monitoring plan
-
-        **5. REGULATORY CONSIDERATIONS**
-        - Reportability assessment (internal/external notifications)
-        - Documentation requirements
-        - Validation impacts
-
-        FORMAT: Use clear headings, bullet points, and maintain professional tone suitable for regulatory review.
-      `
-      const analysis = await spark.llm(prompt, 'gpt-4o')
-      log('AI Analysis Generated', 'ai', `AI analysis for deviation ${deviation.id}`, { recordId: deviation.id })
-      const sourcesList = '\n\nSources:\n' + sources.map(s => `${s.id} — ${s.title}`).join('\n')
-      setAiAnalysis(analysis + sourcesList)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      setAiAnalysis(`Error generating analysis. Please try again.\n\nDetails: ${message}`)
-      toast.error('Failed to generate AI analysis')
-      log('AI Analysis Error', 'ai', `AI analysis failed for deviation ${deviation.id}: ${message}`, {
-        recordId: deviation.id,
-        outcome: 'failure'
-      })
-    }
+  const openAssistant = (mode: AssistantMode, recordId: string) => {
+    setAssistantMode(mode)
+    setAssistantRecordId(recordId)
+    setAssistantOpen(true)
+    log('AI Assistant Opened', 'ai', `${assistantModeLabels[mode]} launched for ${recordId}`, {
+      recordId
+    })
   }
 
-  const closeAiAssistant = () => {
-    if (!isAIAssistantOpen) return
-    setIsAIAssistantOpen(false)
-    log(
-      'AI Assistant Closed',
-      'ai',
-      selectedDeviation
-        ? `AI assistant closed after reviewing ${selectedDeviation.id}`
-        : 'AI assistant closed',
-      {
-        recordId: selectedDeviation?.id,
-      }
-    )
+  const handleAssistantVisibility = (next: boolean) => {
+    setAssistantOpen(next)
+    if (!next) {
+      log('AI Assistant Closed', 'ai', assistantRecordId ? `Assistant closed after working on ${assistantRecordId}` : 'Assistant closed', {
+        recordId: assistantRecordId
+      })
+    }
   }
 
   const updateDeviationStatus = (
@@ -1231,7 +1155,7 @@ export function QualityManagement() {
                       <div className="flex gap-2">
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button variant="outline" size="sm" onClick={() => setSelectedDeviation(deviation)}>
+                            <Button variant="outline" size="sm">
                               <MagnifyingGlass className="h-4 w-4 mr-2" />
                               Investigate
                             </Button>
@@ -1444,7 +1368,7 @@ export function QualityManagement() {
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
-                                      onClick={() => generateAIAnalysis(deviation)}
+                                      onClick={() => openAssistant('deviation', deviation.id)}
                                       className="flex items-center gap-2"
                                     >
                                       <Robot className="h-4 w-4" />
@@ -1699,7 +1623,7 @@ export function QualityManagement() {
                             <Button
                               size="sm"
                               disabled={!relatedDeviation}
-                              onClick={() => relatedDeviation && generateAIAnalysis(relatedDeviation)}
+                              onClick={() => relatedDeviation && openAssistant('deviation', relatedDeviation.id)}
                             >
                               <Robot className="h-4 w-4 mr-2" />
                               AI Assist
@@ -1787,6 +1711,10 @@ export function QualityManagement() {
                       )}
                     </div>
                     <div className="flex gap-2">
+                      <Button size="sm" onClick={() => openAssistant('capa', capa.id)} className="flex items-center gap-2">
+                        <Robot className="h-4 w-4" />
+                        Assistant
+                      </Button>
                       <Button variant="outline" size="sm" onClick={() => { setRoute(`capa/${capa.id}/review`); log('Open CAPA Review', 'capa', `Opened CAPA ${capa.id}`, { recordId: capa.id }) }}>
                         <CheckCircle className="h-4 w-4 mr-2" />
                         Review
@@ -1828,6 +1756,10 @@ export function QualityManagement() {
                     <div className="text-xs text-muted-foreground mt-1">Window: {formatDate(cc.plannedStartDate)} → {formatDate(cc.plannedEndDate)} • Related deviations: {(cc.relatedDeviations || []).join(', ') || 'None'}</div>
                   </div>
                   <div className="flex gap-2">
+                    <Button size="sm" onClick={() => openAssistant('change-control', cc.id)} className="flex items-center gap-2">
+                      <Robot className="h-4 w-4" />
+                      Assistant
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => { setRoute(`cc/${cc.id}`); log('Open Change Control', 'change-control', `Opened ${cc.id}`, { recordId: cc.id }) }}>
                       <FileText className="h-4 w-4 mr-2" />
                       View
@@ -1840,44 +1772,17 @@ export function QualityManagement() {
         </TabsContent>
       </Tabs>
 
-      <Dialog
-        open={isAIAssistantOpen}
-        onOpenChange={(next) => {
-          if (next) {
-            setIsAIAssistantOpen(true)
-          } else {
-            closeAiAssistant()
-          }
-        }}
-      >
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Robot className="h-5 w-5" />
-              AI Root Cause Analysis Assistant
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="p-4 bg-muted rounded-lg">
-              <h4 className="font-medium mb-2">Analysis Results:</h4>
-              <div className="whitespace-pre-wrap text-sm">
-                {aiAnalysis}
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={closeAiAssistant}>
-                Close
-              </Button>
-              <Button onClick={() => {
-                navigator.clipboard.writeText(aiAnalysis)
-                toast.success('Analysis copied to clipboard')
-              }}>
-                Copy Analysis
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <QualityAssistantPanel
+        open={assistantOpen}
+        onOpenChange={handleAssistantVisibility}
+        deviations={deviations || []}
+        capas={capas || []}
+        changeControls={changeControls || []}
+        automationQueue={automationQueue || []}
+        onLog={log}
+        initialMode={assistantMode}
+        initialRecordId={assistantRecordId}
+      />
     </div>
   )
 }
