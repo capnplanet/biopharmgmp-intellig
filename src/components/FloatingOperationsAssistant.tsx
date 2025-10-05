@@ -313,7 +313,7 @@ export function FloatingOperationsAssistant() {
                       size="sm"
                       disabled={loading}
                       onClick={() => void askAssistant(prompt)}
-                      className="h-7 text-xs"
+                      className="h-auto min-h-[2.25rem] w-full sm:w-auto max-w-full whitespace-normal break-words text-left text-xs leading-tight px-3 py-2 justify-start items-start"
                     >
                       {prompt}
                     </Button>
