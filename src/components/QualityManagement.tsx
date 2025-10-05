@@ -28,23 +28,13 @@ import {
 import { toast } from 'sonner'
 import { buildInvestigationSources, sourcesToString } from '@/data/archive'
 import { notifyQualityEventResolved } from '@/lib/qualityAutomation'
+import { getSpark } from '@/lib/spark'
 import type { AutomationSuggestion } from '@/types/automation'
 import type { CAPA, ChangeControl, Deviation, ESignatureRecord, Investigation } from '@/types/quality'
 import { calculateInvestigationProgress, createInvestigationFromDeviation, normalizeInvestigation } from '@/utils/investigation'
 import { useAuditLogger } from '@/hooks/use-audit'
 
-type WindowSpark = {
-  llmPrompt: (strings: TemplateStringsArray, ...expr: unknown[]) => unknown
-  llm: (prompt: unknown, model: string) => Promise<string>
-}
-
 type QualityTab = 'deviations' | 'investigations' | 'capa' | 'change-control'
-
-const getSpark = (): WindowSpark | undefined => {
-  // Safely access window.spark without introducing 'any' types
-  const w = window as unknown as { spark?: WindowSpark }
-  return w.spark
-}
 
 const mockDeviations: Deviation[] = [
   {
@@ -1688,7 +1678,12 @@ export function QualityManagement() {
                 </CardContent>
               </Card>
             </div>
-            <Button>
+            <Button
+              onClick={() => {
+                setRoute('capa/new')
+                log('Open CAPA Wizard', 'capa', 'Initiated CAPA creation workflow')
+              }}
+            >
               <Plus className="h-4 w-4 mr-2" />
               New CAPA
             </Button>

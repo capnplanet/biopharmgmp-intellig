@@ -50,6 +50,16 @@ export interface CAPA {
   actions: CapaAction[]
   effectivenessCheck?: EffectivenessCheck
   signatures?: ESignatureRecord[]
+  riskAssessment?: string
+  effectivenessPlan?: string
+  aiProposalSummary?: string
+  rootCause?: string
+  correctivePlan?: string
+  preventivePlan?: string
+  verificationPlan?: string
+  createdAt?: Date
+  createdBy?: string
+  metadata?: Record<string, unknown>
 }
 
 export type InvestigationTaskStatus = "pending" | "in-progress" | "complete"

@@ -319,7 +319,18 @@ export function CapaCreationWizard({ onCancel }: { onCancel: () => void }) {
               result: undefined
             }
           : undefined,
-        signatures: [signatureRecord]
+        signatures: [signatureRecord],
+        riskAssessment: draft.metadata.riskAssessment,
+        effectivenessPlan: draft.metadata.effectivenessPlan,
+        aiProposalSummary: draft.metadata.aiProposal,
+        createdAt: new Date(),
+        createdBy: user?.id ?? 'quality.user',
+        metadata: {
+          ...(draft.metadata.aiProposal ? { aiProposal: draft.metadata.aiProposal } : {}),
+          createdFrom: 'wizard',
+          createdAt: new Date().toISOString(),
+          createdBy: user?.id ?? 'quality.user'
+        }
       }
 
       setCAPAs((current) => [capa, ...(current || [])])
