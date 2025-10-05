@@ -28,6 +28,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { getSpark } from '@/lib/spark'
 import { buildInvestigationSources, sourcesToString } from '@/data/archive'
 import { cn } from '@/lib/utils'
+import { useQualityNavigation } from '@/hooks/use-quality-navigation'
 
 const demoCredentials = {
   username: 'capa.approver@biopharm.com',
@@ -100,7 +101,7 @@ export function CapaCreationWizard({ onCancel }: { onCancel: () => void }) {
   const [, setCAPAs] = useKV<CAPA[]>('capas', [])
   const [deviations] = useKV<Deviation[]>('deviations', [])
   const [, setInvestigations] = useKV<Investigation[]>('investigations')
-  const [, setRoute] = useKV<string>('route', '')
+  const navigateQuality = useQualityNavigation()
   const [draft, setDraft] = useState<CapaDraftData>(() => initialDraft(user?.id ?? 'Quality'))
   const [activeStep, setActiveStep] = useState<WizardStep>('basics')
   const [aiBusy, setAiBusy] = useState(false)
@@ -351,7 +352,7 @@ export function CapaCreationWizard({ onCancel }: { onCancel: () => void }) {
         digitalSignature: signature.digitalSignature
       })
       toast.success(`CAPA ${capaId} created`)
-      setRoute(`capa/${capaId}/review`)
+  navigateQuality(`capa/${capaId}/review`)
     } catch (error) {
       console.error(error)
       toast.error('Unable to create CAPA record')

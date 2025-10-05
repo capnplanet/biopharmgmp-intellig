@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Clock, ArrowLeft } from '@phosphor-icons/react'
 import { useAuditLogger } from '@/hooks/use-audit'
 import type { CAPA } from '@/types/quality'
+import { useQualityNavigation } from '@/hooks/use-quality-navigation'
 
 export function CapaTimeline({ id, onBack }: { id: string, onBack: () => void }) {
   const [capas] = useKV<CAPA[]>('capas')
-  const [, setRoute] = useKV<string>('route', '')
+  const navigateQuality = useQualityNavigation()
   const capa = (capas || []).find(c => c.id === id)
   const { log } = useAuditLogger()
 
@@ -72,7 +73,7 @@ export function CapaTimeline({ id, onBack }: { id: string, onBack: () => void })
           </CardHeader>
           <CardContent>
             {capa.relatedDeviations.map((devId, idx) => (
-              <Button key={devId} variant="link" className="px-1" onClick={() => setRoute(`deviation/${devId}`)}>
+              <Button key={devId} variant="link" className="px-1" onClick={() => navigateQuality(`deviation/${devId}`)}>
                 {devId}{idx < capa.relatedDeviations.length - 1 ? ',' : ''}
               </Button>
             ))}

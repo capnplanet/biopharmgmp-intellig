@@ -16,6 +16,7 @@ import { useAuditLogger } from '@/hooks/use-audit'
 import { ESignaturePrompt, type SignatureResult } from '@/components/ESignaturePrompt'
 import type { CAPA, Deviation, ESignatureRecord } from '@/types/quality'
 import { cn } from '@/lib/utils'
+import { useQualityNavigation } from '@/hooks/use-quality-navigation'
 
 const demoCredentials = {
   username: 'capa.approver@biopharm.com',
@@ -85,7 +86,7 @@ const buildSignatureRecord = (capaId: string, signature: SignatureResult, action
 export function CapaCreateWizard({ onBack }: { onBack: () => void }) {
   const [capas = [], setCAPAs] = useKV<CAPA[]>('capas', [])
   const [deviations = []] = useKV<Deviation[]>('deviations', [])
-  const [, setRoute] = useKV<string>('route', '')
+  const navigateQuality = useQualityNavigation()
   const { log } = useAuditLogger()
   const [activeStep, setActiveStep] = useState<StepId>('context')
   const [isCreating, setIsCreating] = useState(false)
@@ -218,7 +219,7 @@ export function CapaCreateWizard({ onBack }: { onBack: () => void }) {
             sessionId: `sess-esign-${capaId.slice(-4)}`
           }
         })
-        setRoute(`capa/${capaId}/review`)
+  navigateQuality(`capa/${capaId}/review`)
       } catch (error) {
         console.error(error)
         toast.error('Unable to create CAPA record')

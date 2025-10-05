@@ -7,6 +7,7 @@ import { CheckCircle, ArrowLeft } from '@phosphor-icons/react'
 import { useAuditLogger } from '@/hooks/use-audit'
 import { ESignaturePrompt, type SignatureResult } from '@/components/ESignaturePrompt'
 import type { CAPA, ESignatureRecord } from '@/types/quality'
+import { useQualityNavigation } from '@/hooks/use-quality-navigation'
 
 const demoCredentials = {
   username: 'approver.demo@biopharm.com',
@@ -15,7 +16,7 @@ const demoCredentials = {
 
 export function CapaReview({ id, onBack }: { id: string, onBack: () => void }) {
   const [capas, setCAPAs] = useKV<CAPA[]>('capas')
-  const [, setRoute] = useKV<string>('route', '')
+  const navigateQuality = useQualityNavigation()
   const capa = (capas || []).find(c => c.id === id)
   const { log } = useAuditLogger()
 
@@ -73,7 +74,7 @@ export function CapaReview({ id, onBack }: { id: string, onBack: () => void }) {
           {capa.relatedDeviations.length > 0 && (
             <div className="mt-3 text-sm">
               Related deviations: {capa.relatedDeviations.map((devId, idx) => (
-                <Button key={devId} variant="link" className="px-1" onClick={() => setRoute(`deviation/${devId}`)}>
+                <Button key={devId} variant="link" className="px-1" onClick={() => navigateQuality(`deviation/${devId}`)}>
                   {devId}{idx < capa.relatedDeviations.length - 1 ? ',' : ''}
                 </Button>
               ))}

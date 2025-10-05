@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { useAuditLogger } from '@/hooks/use-audit'
+import { useQualityNavigation } from '@/hooks/use-quality-navigation'
 import { batches } from '@/data/seed'
 import type { ChangeControl, Deviation } from '@/types/quality'
 import type { ChangeControlDraftData, ChangeControlDraftImpact, WorkflowStepState } from '@/types/workflows'
@@ -107,7 +108,7 @@ export function ChangeControlCreationWizard({ onCancel }: { onCancel: () => void
   const { log } = useAuditLogger()
   const [, setChangeControls] = useKV<ChangeControl[]>('change-controls', [])
   const [deviations] = useKV<Deviation[]>('deviations', [])
-  const [, setRoute] = useKV<string>('route', '')
+  const navigateQuality = useQualityNavigation()
   const [draft, setDraft] = useState<ChangeControlDraftData>(() => initialDraft(user?.id ?? 'Quality Systems'))
   const [activeStep, setActiveStep] = useState<WizardStep>('basics')
   const [aiBusy, setAiBusy] = useState(false)
@@ -244,7 +245,7 @@ export function ChangeControlCreationWizard({ onCancel }: { onCancel: () => void
         digitalSignature: signature.digitalSignature
       })
       toast.success(`Change control ${id} created`)
-      setRoute(`cc/${id}`)
+  navigateQuality(`cc/${id}`)
     } catch (error) {
       console.error(error)
       toast.error('Unable to create change control record')

@@ -39,6 +39,7 @@ import type { AutomationSuggestion } from '@/types/automation'
 import type { CAPA, ChangeControl, Deviation, ESignatureRecord, Investigation } from '@/types/quality'
 import { calculateInvestigationProgress, createInvestigationFromDeviation, normalizeInvestigation } from '@/utils/investigation'
 import { useAuditLogger } from '@/hooks/use-audit'
+import { useQualityNavigation } from '@/hooks/use-quality-navigation'
 import QualityAssistantPanel, { AssistantMode } from '@/components/QualityAssistantPanel'
 
 type QualityTab = 'deviations' | 'investigations' | 'capa' | 'change-control'
@@ -367,7 +368,6 @@ export function QualityManagement() {
   const [capas, setCAPAs] = useKV<CAPA[]>('capas', mockCAPAs)
   const [investigations, setInvestigations] = useKV<Investigation[]>('investigations', mockInvestigations)
   const [automationQueue = [], setAutomationQueue] = useKV<AutomationSuggestion[]>('automation-queue', [])
-  const [, setRoute] = useKV<string>('route', '')
   const [changeControls = []] = useKV<ChangeControl[]>('change-controls', [
     {
       id: 'CC-2025-001',
@@ -398,6 +398,7 @@ export function QualityManagement() {
   const [assistantMode, setAssistantMode] = useState<AssistantMode>('deviation')
   const [assistantRecordId, setAssistantRecordId] = useState<string | undefined>(undefined)
   const [activeTab, setActiveTab] = useState<'deviations' | 'investigations' | 'capa' | 'change-control'>('deviations')
+  const navigateQuality = useQualityNavigation()
   const pendingAutomation = (automationQueue || []).filter(item => item.status === 'pending')
   const automationHistory = (automationQueue || []).filter(item => item.status !== 'pending')
   const assistantModeLabels: Record<AssistantMode, string> = {
@@ -788,15 +789,15 @@ export function QualityManagement() {
   const openRecordCreation = (type: 'deviation' | 'capa' | 'change-control') => {
     switch (type) {
       case 'deviation':
-        setRoute('deviation/new')
+        navigateQuality('deviation/new')
         log('Open Deviation Creation', 'deviation', 'Opened deviation creation workflow', { recordId: 'deviation-new' })
         break
       case 'capa':
-        setRoute('capa/new')
+        navigateQuality('capa/new')
         log('Open CAPA Wizard', 'capa', 'Initiated CAPA creation workflow', { recordId: 'capa-new' })
         break
       case 'change-control':
-        setRoute('cc/new')
+        navigateQuality('cc/new')
         log('Open Change Control Creation', 'change-control', 'Opened change control creation workflow', { recordId: 'cc-new' })
         break
     }
@@ -1119,7 +1120,7 @@ export function QualityManagement() {
               const alcoa = automationMetadata.alcoa
 
               const openArchiveView = (targetBatchId: string) => {
-                setRoute(`archive/${targetBatchId}`)
+                navigateQuality(`archive/${targetBatchId}`)
                 log('Open Batch Archive', 'navigation', `Archive view opened for ${targetBatchId}`, {
                   recordId: targetBatchId,
                 })
@@ -1551,7 +1552,7 @@ export function QualityManagement() {
                         size="sm"
                         onClick={() => {
                           ensureInvestigationForDeviation(deviation)
-                          setRoute(`investigation/${deviation.id}`)
+                          navigateQuality(`investigation/${deviation.id}`)
                           log('Open Investigation Workflow', 'workflow', `Opened workflow for ${deviation.id}`, { recordId: deviation.id })
                         }}
                       >
@@ -1616,7 +1617,7 @@ export function QualityManagement() {
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => setRoute(`investigation/${inv.id}`)}>
+                            <Button variant="outline" size="sm" onClick={() => navigateQuality(`investigation/${inv.id}`)}>
                               <FileText className="h-4 w-4 mr-2" />
                               View Workflow
                             </Button>
@@ -1703,7 +1704,7 @@ export function QualityManagement() {
                       {capa.relatedDeviations.length > 0 && (
                         <div className="mt-2 text-sm">
                           Related deviations: {capa.relatedDeviations.map((devId, idx) => (
-                            <Button key={devId} variant="link" className="px-1" onClick={() => setRoute(`deviation/${devId}`)}>
+                            <Button key={devId} variant="link" className="px-1" onClick={() => navigateQuality(`deviation/${devId}`)}>
                               {devId}{idx < capa.relatedDeviations.length - 1 ? ',' : ''}
                             </Button>
                           ))}
@@ -1715,11 +1716,11 @@ export function QualityManagement() {
                         <Robot className="h-4 w-4" />
                         Assistant
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => { setRoute(`capa/${capa.id}/review`); log('Open CAPA Review', 'capa', `Opened CAPA ${capa.id}`, { recordId: capa.id }) }}>
+                      <Button variant="outline" size="sm" onClick={() => { navigateQuality(`capa/${capa.id}/review`); log('Open CAPA Review', 'capa', `Opened CAPA ${capa.id}`, { recordId: capa.id }) }}>
                         <CheckCircle className="h-4 w-4 mr-2" />
                         Review
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => { setRoute(`capa/${capa.id}/timeline`); log('Open CAPA Timeline', 'capa', `Opened CAPA ${capa.id}`, { recordId: capa.id }) }}>
+                      <Button variant="outline" size="sm" onClick={() => { navigateQuality(`capa/${capa.id}/timeline`); log('Open CAPA Timeline', 'capa', `Opened CAPA ${capa.id}`, { recordId: capa.id }) }}>
                         <Clock className="h-4 w-4 mr-2" />
                         Timeline
                       </Button>
@@ -1760,7 +1761,7 @@ export function QualityManagement() {
                       <Robot className="h-4 w-4" />
                       Assistant
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => { setRoute(`cc/${cc.id}`); log('Open Change Control', 'change-control', `Opened ${cc.id}`, { recordId: cc.id }) }}>
+                    <Button variant="outline" size="sm" onClick={() => { navigateQuality(`cc/${cc.id}`); log('Open Change Control', 'change-control', `Opened ${cc.id}`, { recordId: cc.id }) }}>
                       <FileText className="h-4 w-4 mr-2" />
                       View
                     </Button>

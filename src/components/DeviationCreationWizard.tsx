@@ -40,6 +40,7 @@ import {
 import { format } from 'date-fns'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
+import { useQualityNavigation } from '@/hooks/use-quality-navigation'
 import type { DeviationSeverity } from '@/types/quality'
 import { createInvestigationFromDeviation } from '@/utils/investigation'
 
@@ -119,7 +120,7 @@ export function DeviationCreationWizard({ onCancel, onCreated }: DeviationCreati
   const { log } = useAuditLogger()
   const [, setDeviations] = useKV<Deviation[]>('deviations')
   const [, setInvestigations] = useKV<Investigation[]>('investigations')
-  const [, setRoute] = useKV<string>('route', '')
+  const navigateQuality = useQualityNavigation()
   const [draft, setDraft] = useState<DeviationDraftData>(() => initialDraft(user?.id))
   const [activeStep, setActiveStep] = useState<WizardStep>('details')
   const [aiBusy, setAiBusy] = useState(false)
@@ -263,7 +264,7 @@ export function DeviationCreationWizard({ onCancel, onCreated }: DeviationCreati
       })
       toast.success(`Deviation ${deviationId} created and investigation launched`)
       onCreated?.(deviationId)
-      setRoute(`deviation/${deviationId}`)
+  navigateQuality(`deviation/${deviationId}`)
     } catch (error) {
       console.error(error)
       toast.error('Unable to create deviation record')

@@ -14,6 +14,7 @@ import type {
 } from '@/types/quality'
 import { calculateInvestigationProgress, cycleTaskStatus, deriveInvestigationStatus } from '@/utils/investigation'
 import { useAuditLogger } from '@/hooks/use-audit'
+import { useQualityNavigation } from '@/hooks/use-quality-navigation'
 
 interface InvestigationWorkflowProps {
   id: string
@@ -78,7 +79,7 @@ const stageProgress = (stage: InvestigationStage) => {
 export function InvestigationWorkflow({ id, onBack }: InvestigationWorkflowProps) {
   const [investigations, setInvestigations] = useKV<Investigation[]>('investigations')
   const [deviations] = useKV<Deviation[]>('deviations')
-  const [, setRoute] = useKV<string>('route', '')
+  const navigateQuality = useQualityNavigation()
   const { log } = useAuditLogger()
 
   const investigation = (investigations || []).find(inv => inv.id === id || inv.deviationId === id)
@@ -156,7 +157,7 @@ export function InvestigationWorkflow({ id, onBack }: InvestigationWorkflowProps
             <Button
               variant="link"
               className="px-0"
-              onClick={() => setRoute(`deviation/${relatedDeviation.id}`)}
+              onClick={() => navigateQuality(`deviation/${relatedDeviation.id}`)}
             >
               <ArrowSquareOut className="h-4 w-4 mr-1" />
               View deviation record
@@ -315,7 +316,7 @@ export function InvestigationWorkflow({ id, onBack }: InvestigationWorkflowProps
                 key={capaId}
                 variant="outline"
                 size="sm"
-                onClick={() => setRoute(`capa/${capaId}/review`)}
+                onClick={() => navigateQuality(`capa/${capaId}/review`)}
               >
                 {capaId}
               </Button>

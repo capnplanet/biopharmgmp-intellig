@@ -28,6 +28,13 @@ import { CapaCreationWizard } from '@/components/CapaCreationWizard'
 
 export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'advanced-analytics' | 'audit'
 
+const normalizeQualityRoute = (value: string | undefined) => {
+  if (!value) return ''
+  const trimmed = value.replace(/^#/, '')
+  const withoutTab = trimmed.startsWith('quality/') ? trimmed.slice('quality/'.length) : trimmed
+  return withoutTab.replace(/^\/+|\/+$/g, '')
+}
+
 function App() {
   const [activeTab, setActiveTab] = useKV<NavigationItem>('active-tab', 'dashboard')
   // lightweight route overlay for per-batch pages under the Batches tab
@@ -103,23 +110,24 @@ function App() {
         }
         return <BatchMonitoring />
       }
-      case 'quality':
+      case 'quality': {
+        const qualityRoute = normalizeQualityRoute(route)
         // Render sub-pages for quality route overlays
-        if ((route || '') === 'deviation/new') {
+        if (qualityRoute === 'deviation/new') {
           return <DeviationCreationWizard onCancel={() => setRoute('')} />
         }
-        if ((route || '').startsWith('investigation/')) {
-          const parts = (route || '').split('/').filter(Boolean)
+        if (qualityRoute.startsWith('investigation/')) {
+          const parts = qualityRoute.split('/').filter(Boolean)
           const [, investigationId] = parts
           if (investigationId) {
             return <InvestigationWorkflow id={investigationId} onBack={() => setRoute('')} />
           }
         }
-        if ((route || '') === 'capa/new') {
+        if (qualityRoute === 'capa/new') {
           return <CapaCreationWizard onCancel={() => setRoute('')} />
         }
-        if ((route || '').startsWith('capa/')) {
-          const parts = (route || '').split('/').filter(Boolean)
+        if (qualityRoute.startsWith('capa/')) {
+          const parts = qualityRoute.split('/').filter(Boolean)
           // Expected: capa/:id/review or capa/:id/timeline
           const [, capaId, subpage] = parts
           if (parts.length === 3 && capaId && subpage === 'review') {
@@ -129,29 +137,30 @@ function App() {
             return <CapaTimeline id={capaId} onBack={() => setRoute('')} />
           }
         }
-        if ((route || '').startsWith('deviation/')) {
-          const parts = (route || '').split('/').filter(Boolean)
+        if (qualityRoute.startsWith('deviation/')) {
+          const parts = qualityRoute.split('/').filter(Boolean)
           const [, devId] = parts
           if (devId) {
             return <DeviationDetails id={devId} onBack={() => setRoute('')} />
           }
         }
-        if ((route || '').startsWith('archive')) {
-          const parts = (route || '').split('/').filter(Boolean)
+        if (qualityRoute.startsWith('archive')) {
+          const parts = qualityRoute.split('/').filter(Boolean)
           const batchId = parts.length >= 2 ? parts[1] : undefined
           return <ArchiveView batchId={batchId} onBack={() => setRoute('')} />
         }
-        if ((route || '') === 'cc/new') {
+        if (qualityRoute === 'cc/new') {
           return <ChangeControlCreationWizard onCancel={() => setRoute('')} />
         }
-        if ((route || '').startsWith('cc/')) {
-          const parts = (route || '').split('/').filter(Boolean)
+        if (qualityRoute.startsWith('cc/')) {
+          const parts = qualityRoute.split('/').filter(Boolean)
           const [, ccId] = parts
           if (ccId) {
             return <ChangeControlDetails id={ccId} onBack={() => setRoute('')} />
           }
         }
         return <QualityManagement />
+      }
       case 'analytics':
         return <Analytics />
       case 'advanced-analytics':
