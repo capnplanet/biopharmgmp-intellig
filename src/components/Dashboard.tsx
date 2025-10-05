@@ -578,11 +578,11 @@ export function Dashboard() {
               </ComposedChart>
             </ChartContainer>
             <ChartLegendInline
-              className="justify-start"
+              align="left"
               items={[
-                { key: 'active', label: 'Active Batches', color: 'var(--color-active)' },
-                { key: 'warnings', label: 'Warning Batches', color: 'var(--color-warnings)' },
-                { key: 'compliance', label: 'CPP Compliance %', color: 'var(--color-compliance)' },
+                { key: 'active', label: 'Active Batches', color: '#2563eb' },
+                { key: 'warnings', label: 'Warning Batches', color: '#f59e0b', dashed: true },
+                { key: 'compliance', label: 'CPP Compliance %', color: '#16a34a' },
               ]}
             />
             <div className="grid grid-cols-3 gap-4 text-sm">

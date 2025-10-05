@@ -26,6 +26,7 @@ import type { TwinSnapshot } from '@/lib/digitalTwin'
 import type { AutomationSuggestion } from '@/types/automation'
 import type { Deviation } from '@/types/quality'
 import { ChartContainer, ChartLegendInline, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Area, ComposedChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -41,6 +42,8 @@ interface PredictiveModel {
     confidence: number
     timestamp: Date
     explanation: string
+    source: 'heuristic' | 'logistic'
+    summary: string
   }[]
 }
 
@@ -219,9 +222,24 @@ function buildRuntimeModels(): PredictiveModel[] {
   const eH = predictEquipmentFailure(equipmentTelemetry.find(x => x.id === topEq.id)!)
 
   // Try LR probabilities if a trained model exists; otherwise use heuristics
-  const qP = predictLogisticProb('quality_prediction', qH.features) ?? qH.p
-  const dP = predictLogisticProb('deviation_risk', dH.features) ?? dH.p
-  const eP = predictLogisticProb('equipment_failure', eH.features) ?? eH.p
+  const qLog = predictLogisticProb('quality_prediction', qH.features)
+  const dLog = predictLogisticProb('deviation_risk', dH.features)
+  const eLog = predictLogisticProb('equipment_failure', eH.features)
+  const qSource: 'heuristic' | 'logistic' = qLog != null ? 'logistic' : 'heuristic'
+  const dSource: 'heuristic' | 'logistic' = dLog != null ? 'logistic' : 'heuristic'
+  const eSource: 'heuristic' | 'logistic' = eLog != null ? 'logistic' : 'heuristic'
+  const qP = qLog ?? qH.p
+  const dP = dLog ?? dH.p
+  const eP = eLog ?? eH.p
+  const qSummary = qSource === 'logistic'
+    ? 'Local logistic regression on engineered CPP features; calibrated to produce probability.'
+    : 'Rule-based mapping of CPP compliance and parameter deltas to a probability-like quality score.'
+  const dSummary = dSource === 'logistic'
+    ? 'Logistic regression on normalized deviation signatures (temperature, pressure, pH).'
+    : 'Heuristic risk takes the max normalized deviation across CPPs and scales it for alerting.'
+  const eSummary = eSource === 'logistic'
+    ? 'Logistic regression blending vibration RMS, thermal variance, and alert flags for failure risk.'
+    : 'Heuristic weighs vibration RMS, temperature variance, and active alerts to estimate failure probability.'
 
   const conf = (p: number) => 0.5 + Math.abs(p - 0.5) / 2 // simple heuristic confidence proxy
 
@@ -236,9 +254,11 @@ function buildRuntimeModels(): PredictiveModel[] {
       value: qP * 100,
       confidence: conf(qP),
       timestamp: new Date(),
-      explanation: predictLogisticProb('quality_prediction', qH.features) != null
-        ? `Logistic model (local) on engineered features (standardized) outputs probability via σ(w·x + b). Falls back to heuristic if unavailable. Current CPP compliance=${qH.features.cpp_compliance.toFixed(2)}, |ΔT|=${qH.features.temp_delta.toFixed(2)}, |ΔP|=${qH.features.pressure_delta.toFixed(2)}, |ΔpH|=${qH.features.ph_delta.toFixed(2)}.`
-        : `Heuristic: p = clamp(0.05 + 0.9*CPP, 0, 1). Inputs include |ΔT|=${qH.features.temp_delta.toFixed(2)}, |ΔP|=${qH.features.pressure_delta.toFixed(2)}, |ΔpH|=${qH.features.ph_delta.toFixed(2)}.`
+        explanation: predictLogisticProb('quality_prediction', qH.features) != null
+          ? `Logistic model (local) on engineered features (standardized) outputs probability via σ(w·x + b). Falls back to heuristic if unavailable. Current CPP compliance=${qH.features.cpp_compliance.toFixed(2)}, |ΔT|=${qH.features.temp_delta.toFixed(2)}, |ΔP|=${qH.features.pressure_delta.toFixed(2)}, |ΔpH|=${qH.features.ph_delta.toFixed(2)}.`
+          : `Heuristic: p = clamp(0.05 + 0.9*CPP, 0, 1). Inputs include |ΔT|=${qH.features.temp_delta.toFixed(2)}, |ΔP|=${qH.features.pressure_delta.toFixed(2)}, |ΔpH|=${qH.features.ph_delta.toFixed(2)}.`,
+        source: qSource,
+        summary: qSummary,
     }]
   }
 
@@ -253,9 +273,11 @@ function buildRuntimeModels(): PredictiveModel[] {
       value: dP * 100,
       confidence: conf(dP),
       timestamp: new Date(),
-      explanation: predictLogisticProb('deviation_risk', dH.features) != null
-        ? `Logistic model (local) on normalized deviation features; outputs σ(w·x + b). Fallback to heuristic if model untrained. Norm devs: temp=${dH.features.temp_norm_dev.toFixed(2)}, pressure=${dH.features.pressure_norm_dev.toFixed(2)}, pH=${dH.features.ph_norm_dev.toFixed(2)}.`
-        : `Heuristic: risk p = max(normDevs)/2, with temp=${dH.features.temp_norm_dev.toFixed(2)}, pressure=${dH.features.pressure_norm_dev.toFixed(2)}, pH=${dH.features.ph_norm_dev.toFixed(2)}.`
+        explanation: predictLogisticProb('deviation_risk', dH.features) != null
+          ? `Logistic model (local) on normalized deviation features; outputs σ(w·x + b). Fallback to heuristic if model untrained. Norm devs: temp=${dH.features.temp_norm_dev.toFixed(2)}, pressure=${dH.features.pressure_norm_dev.toFixed(2)}, pH=${dH.features.ph_norm_dev.toFixed(2)}.`
+          : `Heuristic: risk p = max(normDevs)/2, with temp=${dH.features.temp_norm_dev.toFixed(2)}, pressure=${dH.features.pressure_norm_dev.toFixed(2)}, pH=${dH.features.ph_norm_dev.toFixed(2)}.`,
+        source: dSource,
+        summary: dSummary,
     }]
   }
 
@@ -270,9 +292,11 @@ function buildRuntimeModels(): PredictiveModel[] {
       value: eP * 100,
       confidence: conf(eP),
       timestamp: new Date(),
-      explanation: predictLogisticProb('equipment_failure', eH.features) != null
-        ? `Logistic model (local) on vibration/thermal features; outputs σ(w·x + b). Fallback to heuristic if model untrained. For ${topEq.id}, rms_norm=${eH.features.rms_norm.toFixed(2)}, temp_var_norm=${eH.features.temp_var_norm.toFixed(2)}, alert=${eH.features.alert_flag}.`
-        : `Heuristic: p = 0.6*rms_norm + 0.3*temp_var_norm + 0.2*alert. For ${topEq.id}, rms_norm=${eH.features.rms_norm.toFixed(2)}, temp_var_norm=${eH.features.temp_var_norm.toFixed(2)}, alert=${eH.features.alert_flag}.`
+        explanation: predictLogisticProb('equipment_failure', eH.features) != null
+          ? `Logistic model (local) on vibration/thermal features; outputs σ(w·x + b). Fallback to heuristic if model untrained. For ${topEq.id}, rms_norm=${eH.features.rms_norm.toFixed(2)}, temp_var_norm=${eH.features.temp_var_norm.toFixed(2)}, alert=${eH.features.alert_flag}.`
+          : `Heuristic: p = 0.6*rms_norm + 0.3*temp_var_norm + 0.2*alert. For ${topEq.id}, rms_norm=${eH.features.rms_norm.toFixed(2)}, temp_var_norm=${eH.features.temp_var_norm.toFixed(2)}, alert=${eH.features.alert_flag}.`,
+        source: eSource,
+        summary: eSummary,
     }]
   }
 
@@ -358,9 +382,25 @@ function PredictionCard({ model }: { model: PredictiveModel }) {
       <CardContent>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <div>
-              <div className="text-2xl font-bold font-mono">
-                {prediction.value.toFixed(1)}{model.type === 'quality_prediction' ? '%' : model.type === 'equipment_failure' ? '% risk' : '% risk'}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="text-2xl font-bold font-mono">
+                  {prediction.value.toFixed(1)}{model.type === 'quality_prediction' ? '%' : model.type === 'equipment_failure' ? '% risk' : '% risk'}
+                </div>
+                <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                  {prediction.source === 'logistic' ? 'Logistic' : 'Heuristic'}
+                </Badge>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help">
+                      <Info className="h-3 w-3" />
+                      <span className="sr-only">Model computation details</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="end" className="max-w-xs text-left">
+                    {prediction.summary}
+                  </TooltipContent>
+                </Tooltip>
               </div>
               <div className="text-sm text-muted-foreground">
                 Confidence: {(prediction.confidence * 100).toFixed(0)}%
@@ -1067,11 +1107,11 @@ export function Analytics() {
                         </ComposedChart>
                       </ChartContainer>
                       <ChartLegendInline
-                        className="justify-start"
+                        align="left"
                         items={[
-                          { key: 'equipment', label: 'Equipment Risk', color: 'var(--color-equipment)' },
-                          { key: 'deviation', label: 'Deviation Risk', color: 'var(--color-deviation)' },
-                          { key: 'quality', label: 'Quality Confidence', color: 'var(--color-quality)' },
+                          { key: 'equipment', label: 'Equipment Risk', color: '#ef4444' },
+                          { key: 'deviation', label: 'Deviation Risk', color: '#f97316', dashed: true },
+                          { key: 'quality', label: 'Quality Confidence', color: '#22c55e' },
                         ]}
                       />
                     </>
@@ -1297,12 +1337,12 @@ export function Analytics() {
                         </ComposedChart>
                       </ChartContainer>
                       <ChartLegendInline
-                        className="justify-start"
+                        align="left"
                         items={[
-                          { key: 'yield', label: 'Batch Yield', color: 'var(--color-yield)' },
-                          { key: 'firstPass', label: 'First Pass Rate', color: 'var(--color-firstPass)' },
-                          { key: 'oee', label: 'Equipment OEE', color: 'var(--color-oee)' },
-                          { key: 'deviation', label: 'Avg Deviation Risk', color: 'var(--color-deviation)' },
+                          { key: 'yield', label: 'Batch Yield', color: '#38bdf8' },
+                          { key: 'firstPass', label: 'First Pass Rate', color: '#22c55e' },
+                          { key: 'oee', label: 'Equipment OEE', color: '#a855f7', dashed: true },
+                          { key: 'deviation', label: 'Avg Deviation Risk', color: '#f97316', dashed: true },
                         ]}
                       />
                     </>

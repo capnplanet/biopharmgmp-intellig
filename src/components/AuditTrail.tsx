@@ -557,7 +557,7 @@ export function AuditTrail() {
                       </Bar>
                     </BarChart>
                   </ChartContainer>
-                  <ChartLegendInline className="mt-3" items={moduleLegendItems} />
+                  <ChartLegendInline className="mt-3" align="left" items={moduleLegendItems} />
                 </CardContent>
               </Card>
             )}

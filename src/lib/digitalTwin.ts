@@ -1,4 +1,5 @@
 import { batches, equipmentTelemetry } from '@/data/seed'
+import type { BatchData } from '@/data/seed'
 import { sampleAndRecordPredictions } from '@/lib/modeling'
 
 // Simple Gaussian noise
@@ -39,37 +40,35 @@ export function subscribeToTwin(listener: TwinListener) {
   return () => listeners.delete(listener)
 }
 
-const cloneSnapshot = (): TwinSnapshot => {
-  const cloneBatch = (batch: typeof batches[number]) => ({
-    ...batch,
-    startTime: new Date(batch.startTime),
-    parameters: {
-      temperature: { ...batch.parameters.temperature },
-      pressure: { ...batch.parameters.pressure },
-      pH: { ...batch.parameters.pH },
-      volume: { ...batch.parameters.volume },
-    },
-    cppBounds: {
-      temperature: { ...batch.cppBounds.temperature },
-      pressure: { ...batch.cppBounds.pressure },
-      pH: { ...batch.cppBounds.pH },
-      volume: { ...batch.cppBounds.volume },
-    },
-    timeline: batch.timeline.map(item => ({
-      ...item,
-      startTime: new Date(item.startTime),
-      endTime: item.endTime ? new Date(item.endTime) : undefined,
-    })),
-  })
+const cloneBatch = (batch: BatchData): BatchData => ({
+  ...batch,
+  startTime: new Date(batch.startTime),
+  parameters: {
+    temperature: { ...batch.parameters.temperature },
+    pressure: { ...batch.parameters.pressure },
+    pH: { ...batch.parameters.pH },
+    volume: { ...batch.parameters.volume },
+  },
+  cppBounds: {
+    temperature: { ...batch.cppBounds.temperature },
+    pressure: { ...batch.cppBounds.pressure },
+    pH: { ...batch.cppBounds.pH },
+    volume: { ...batch.cppBounds.volume },
+  },
+  timeline: batch.timeline.map(item => ({
+    ...item,
+    startTime: new Date(item.startTime),
+    endTime: item.endTime ? new Date(item.endTime) : undefined,
+  })),
+})
 
-  const cloneEquipment = (item: typeof equipmentTelemetry[number]) => ({ ...item })
+const cloneEquipment = (item: typeof equipmentTelemetry[number]) => ({ ...item })
 
-  return {
-    timestamp: new Date(),
-    batches: batches.map(cloneBatch),
-    equipmentTelemetry: equipmentTelemetry.map(cloneEquipment),
-  }
-}
+const cloneSnapshot = (): TwinSnapshot => ({
+  timestamp: new Date(),
+  batches: batches.map(cloneBatch),
+  equipmentTelemetry: equipmentTelemetry.map(cloneEquipment),
+})
 
 let timer: number | undefined
 let opts: TwinOptions = { tickMs: 2000, simSecondsPerTick: 60, monitorEverySimSeconds: 30 }
@@ -78,6 +77,55 @@ let simAccum = 0
 // Internal state for transient events (e.g., equipment alerts)
 const eqAlertDecay: Record<string, number> = {}
 const batchWarningDecay: Record<string, number> = {}
+let batchSequence = batches.length
+
+const generateBatchId = () => {
+  batchSequence += 1
+  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 12)
+  return `BTH-${stamp}-${batchSequence.toString().padStart(3, '0')}`
+}
+
+const createNewBatchFrom = (template: BatchData): BatchData => {
+  const now = new Date()
+  const newTimeline = template.timeline.map((item, index) => ({
+    ...item,
+    startTime: index === 0 ? now : new Date(now.getTime() + index * 60 * 60 * 1000),
+    endTime: undefined,
+    status: (index === 0 ? 'active' : 'pending') as BatchData['timeline'][number]['status'],
+  }))
+  const nextParameters: BatchData['parameters'] = {
+    temperature: {
+      ...template.parameters.temperature,
+      current: template.parameters.temperature.target + randn() * 0.15,
+    },
+    pressure: {
+      ...template.parameters.pressure,
+      current: template.parameters.pressure.target + randn() * 0.03,
+    },
+    pH: {
+      ...template.parameters.pH,
+      current: template.parameters.pH.target + randn() * 0.05,
+    },
+    volume: {
+      ...template.parameters.volume,
+      current: Math.max(template.cppBounds.volume.min, Math.min(template.cppBounds.volume.max, template.parameters.volume.target + randn() * 25)),
+    },
+  }
+  return {
+    ...template,
+    id: generateBatchId(),
+    stage: newTimeline.find(item => item.status === 'active')?.stage ?? template.stage,
+    progress: Math.max(0, Math.min(5, randn() * 2 + 1)),
+    status: 'running',
+    startTime: now,
+    parameters: nextParameters,
+    timeline: newTimeline,
+  }
+}
+
+const clearBatchState = (batchId: string) => {
+  delete batchWarningDecay[batchId]
+}
 
 const TRANSIENT_EVENT_PROB = 0.006
 const WARNING_RECOVERY_PROB = 0.05
@@ -88,12 +136,14 @@ function tick() {
   const dtSec = opts.simSecondsPerTick
 
   // Update batches: progress and CPPs drift around targets with small noise
-  for (const b of batches) {
+  const completed: Array<{ index: number; template: BatchData }> = []
+  for (let i = 0; i < batches.length; i++) {
+    const b = batches[i]
     // Progress: advance slowly if running
     if (b.status === 'running' || b.status === 'warning') {
       const progressDelta = (dtSec / 3600) * (0.5 + Math.random() * 0.8) // ~0.5–1.3% per sim hour
       b.progress = Math.min(100, Math.max(0, b.progress + progressDelta))
-      if (b.progress >= 100) {
+  if (b.progress >= 100) {
         b.status = 'complete'
         // Mark active timeline stage complete if needed
         const active = b.timeline.find(t => t.status === 'active')
@@ -101,6 +151,7 @@ function tick() {
           active.status = 'complete'
           active.endTime = new Date()
         }
+        completed.push({ index: i, template: cloneBatch(b) })
       }
     }
 
@@ -137,6 +188,13 @@ function tick() {
         b.status = 'running'
         delete batchWarningDecay[b.id]
       }
+    }
+  }
+
+  if (completed.length > 0) {
+    for (const { index, template } of completed) {
+      clearBatchState(template.id)
+      batches[index] = createNewBatchFrom(template)
     }
   }
 

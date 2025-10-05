@@ -267,8 +267,9 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
             </ChartContainer>
             <ChartLegendInline
               className="mt-2"
+              align="left"
               items={[
-                { key: 'temp', label: 'Temperature', color: 'var(--color-temperature)' },
+                { key: 'temp', label: 'Temperature', color: '#3b82f6' },
                 { key: 'spec', label: 'Spec Limit', color: '#f59e0b', dashed: true },
               ]}
             />
@@ -304,8 +305,9 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
             </ChartContainer>
             <ChartLegendInline
               className="mt-2"
+              align="left"
               items={[
-                { key: 'press', label: 'Pressure', color: 'var(--color-pressure)' },
+                { key: 'press', label: 'Pressure', color: '#10b981' },
                 { key: 'spec', label: 'Spec Limit', color: '#f59e0b', dashed: true },
               ]}
             />
@@ -341,8 +343,9 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
             </ChartContainer>
             <ChartLegendInline
               className="mt-2"
+              align="left"
               items={[
-                { key: 'ph', label: 'pH', color: 'var(--color-pH)' },
+                { key: 'ph', label: 'pH', color: '#8b5cf6' },
                 { key: 'spec', label: 'Spec Limit', color: '#f59e0b', dashed: true },
               ]}
             />
@@ -401,9 +404,10 @@ export function BatchAnalytics({ batchId, onBack }: Props) {
           {eqData.length > 0 && (
             <ChartLegendInline
               className="mt-2"
+              align="left"
               items={[
-                { key: 'ok', label: 'OK', color: 'var(--color-ok)' },
-                { key: 'warn', label: 'Alert', color: 'var(--color-warn)' },
+                { key: 'ok', label: 'OK', color: '#10b981' },
+                { key: 'warn', label: 'Alert', color: '#f59e0b' },
               ]}
             />
           )}
