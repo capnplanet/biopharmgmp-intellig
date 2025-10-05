@@ -83,6 +83,7 @@ type EquipmentSnapshot = {
 type TwinHistoryPoint = {
   timestamp: string
   activeBatches: number
+  runningBatches: number
   warningBatches: number
   cppCompliance: number
 }
@@ -189,16 +190,19 @@ export function Dashboard() {
       : [{
           timestamp: new Date().toISOString(),
           activeBatches: activeBatches.length,
+          runningBatches: Math.max(activeBatches.length - warningBatchCount, 0),
           warningBatches: warningBatchCount,
           cppCompliance: averageCompliance,
         }]
     return source.map(point => {
-      const running = Math.max(point.activeBatches - point.warningBatches, 0)
+      const running = Math.max(point.runningBatches, 0)
+      const warnings = Math.max(point.warningBatches, 0)
+      const total = Math.max(point.activeBatches, running + warnings)
       return {
         time: new Date(point.timestamp).toLocaleTimeString(),
         running,
-        warnings: point.warningBatches,
-        total: point.activeBatches,
+        warnings,
+        total,
         compliance: Number(point.cppCompliance.toFixed(2)),
       }
     })
@@ -237,6 +241,7 @@ export function Dashboard() {
   const twinChartConfig: ChartConfig = {
     running: { label: 'Running Batches', color: '#2563eb' },
     warnings: { label: 'Warning Batches', color: '#f59e0b' },
+    total: { label: 'Total Active Batches', color: '#0f172a' },
     compliance: { label: 'CPP Compliance %', color: '#16a34a' },
   }
 
@@ -313,12 +318,12 @@ export function Dashboard() {
       csvLines.push(`${metric},${value}`)
     }
     csvLines.push('')
-    csvLines.push('Timestamp,Active Batches,Warning Batches,CPP Compliance %')
+    csvLines.push('Timestamp,Active Batches,Running Batches,Warning Batches,CPP Compliance')
     if (exportDataset.timeSeries.length === 0) {
-      csvLines.push(`${timestamp},${activeBatches.length},${warningBatchCount},${averageCompliance}`)
+      csvLines.push(`${new Date().toISOString()},${activeBatches.length},${Math.max(activeBatches.length - warningBatchCount, 0)},${warningBatchCount},${averageCompliance}`)
     } else {
       exportDataset.timeSeries.forEach(point => {
-        csvLines.push(`${point.timestamp},${point.activeBatches},${point.warningBatches},${point.cppCompliance}`)
+        csvLines.push(`${point.timestamp},${point.activeBatches},${point.runningBatches},${point.warningBatches},${point.cppCompliance}`)
       })
     }
     csvLines.push('')
@@ -362,14 +367,16 @@ export function Dashboard() {
     const unsubscribe = subscribeToTwin(snapshot => {
       setBatchState(snapshot.batches)
       setEquipmentTelemetryState(snapshot.equipmentTelemetry)
-      const activeCount = snapshot.batches.filter(batch => batch.status === 'running' || batch.status === 'warning').length
+      const runningCount = snapshot.batches.filter(batch => batch.status === 'running').length
       const warningCount = snapshot.batches.filter(batch => batch.status === 'warning').length
+      const activeCount = runningCount + warningCount
       const compliance = snapshot.batches.length
         ? snapshot.batches.reduce((acc, batch) => acc + getCPPCompliance(batch), 0) / snapshot.batches.length
         : 0
       const point: TwinHistoryPoint = {
         timestamp: snapshot.timestamp.toISOString(),
         activeBatches: activeCount,
+        runningBatches: runningCount,
         warningBatches: warningCount,
         cppCompliance: Number((compliance * 100).toFixed(2)),
       }
@@ -542,12 +549,7 @@ export function Dashboard() {
                   content={
                     <ChartTooltipContent
                       labelFormatter={(_label, payload) => {
-                        const totalActive = payload?.reduce((sum, item) => {
-                          if (item.name === 'Running Batches' || item.name === 'Warning Batches') {
-                            return sum + (typeof item.value === 'number' ? item.value : 0)
-                          }
-                          return sum
-                        }, 0) ?? 0
+                        const totalActive = (payload?.find(item => item.dataKey === 'total')?.value ?? payload?.[0]?.payload?.total ?? 0) as number
                         return (
                           <div className="flex items-center justify-between gap-4">
                             <span>Production Pulse</span>
@@ -555,8 +557,8 @@ export function Dashboard() {
                           </div>
                         )
                       }}
-                      formatter={(value, name) => {
-                        if (name === 'CPP Compliance %') {
+                      formatter={(value, name, item) => {
+                        if (item?.dataKey === 'compliance') {
                           return <span>{Number(value).toFixed(1)}%</span>
                         }
                         return <span>{Number(value).toFixed(0)}</span>
@@ -587,6 +589,16 @@ export function Dashboard() {
                   stackId="batches"
                 />
                 <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="total"
+                  name="Total Active Batches"
+                  stroke="var(--color-total)"
+                  strokeWidth={2}
+                  dot={false}
+                  strokeDasharray="5 2"
+                />
+                <Line
                   yAxisId="right"
                   type="monotone"
                   dataKey="compliance"
@@ -602,9 +614,13 @@ export function Dashboard() {
               items={[
                 { key: 'running', label: 'Running Batches', color: '#2563eb' },
                 { key: 'warnings', label: 'Warning Batches', color: '#f59e0b', dashed: true },
+                { key: 'total', label: 'Total Active Batches', color: '#0f172a', dashed: true },
                 { key: 'compliance', label: 'CPP Compliance %', color: '#16a34a' },
               ]}
             />
+            <p className="text-xs text-muted-foreground">
+              The solid line tracks the total number of active batches. Variations in the stacked areas indicate shifts between running and warning states, ensuring the chart only changes when production activity actually does.
+            </p>
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
                 <div className="text-xs uppercase text-muted-foreground">Active</div>

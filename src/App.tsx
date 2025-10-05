@@ -26,6 +26,7 @@ import { Play, Pause, Minus, ArrowsOutSimple } from '@phosphor-icons/react'
 import { DeviationCreationWizard } from '@/components/DeviationCreationWizard'
 import { CapaCreationWizard } from '@/components/CapaCreationWizard'
 import { cn } from '@/lib/utils'
+import { FloatingOperationsAssistant } from '@/components/FloatingOperationsAssistant'
 
 export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'advanced-analytics' | 'audit'
 
@@ -207,6 +208,7 @@ function App() {
         {renderContent()}
         {/* Digital Twin Controls (floating) */}
         <TwinControls />
+        <FloatingOperationsAssistant />
       </main>
       <Toaster />
     </div>

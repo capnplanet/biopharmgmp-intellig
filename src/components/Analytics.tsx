@@ -365,6 +365,19 @@ function MetricCard({
 function PredictionCard({ model }: { model: PredictiveModel }) {
   const [showExplanation, setShowExplanation] = useState(false)
   const prediction = model.predictions[0]
+  const valueDescriptions: Record<PredictiveModel['type'], string> = {
+    quality_prediction: 'Represents the predicted probability that the batch will meet all release criteria given current CPP signals and thresholds.',
+    equipment_failure: 'Shows the estimated likelihood that the monitored equipment will experience a failure alarm in the upcoming monitoring window.',
+    deviation_risk: 'Indicates the probability that the process will register a quality deviation if current conditions persist.',
+    batch_optimization: 'Relative performance score for the optimization scenario compared to the current baseline.',
+  }
+  const riskLevelDescriptions: Record<PredictiveModel['type'], string> = {
+    quality_prediction: 'Risk tier compares predicted quality to the 95% release target. High risk means probability has fallen below that bar.',
+    equipment_failure: 'Risk tier maps the failure probability to action thresholds (low <10%, medium 10-30%, high >30%).',
+    deviation_risk: 'Risk tier maps deviation probability to watch (20-50%) and escalation (>50%) thresholds.',
+    batch_optimization: 'Risk tier compares optimization score to acceptable tolerance ranges for production readiness.',
+  }
+  const confidenceDescription = 'Confidence increases as the model output moves further away from its decision boundary; higher percentages indicate a clearer signal from the model.'
   
   const getStatusColor = (status: string) => {
     return status === 'active' ? 'bg-success text-success-foreground' :
@@ -404,6 +417,17 @@ function PredictionCard({ model }: { model: PredictiveModel }) {
                 <div className="text-2xl font-bold font-mono">
                   {prediction.value.toFixed(1)}{model.type === 'quality_prediction' ? '%' : model.type === 'equipment_failure' ? '% risk' : '% risk'}
                 </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help">
+                      <Info className="h-3 w-3" />
+                      <span className="sr-only">Predicted value context</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="start" className="max-w-xs text-left">
+                    {valueDescriptions[model.type]}
+                  </TooltipContent>
+                </Tooltip>
                 <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
                   {prediction.source === 'logistic' ? 'Logistic' : 'Heuristic'}
                 </Badge>
@@ -419,13 +443,35 @@ function PredictionCard({ model }: { model: PredictiveModel }) {
                   </TooltipContent>
                 </Tooltip>
               </div>
-              <div className="text-sm text-muted-foreground">
-                Confidence: {(prediction.confidence * 100).toFixed(0)}%
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Confidence: {(prediction.confidence * 100).toFixed(0)}%</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help">
+                      <Info className="h-3 w-3" />
+                      <span className="sr-only">Confidence definition</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="start" className="max-w-xs text-left">
+                    {confidenceDescription}
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </div>
             <div className="text-right">
-              <div className={`text-sm font-medium ${riskColor}`}>
-                {riskLevel.toUpperCase()} RISK
+              <div className={`text-sm font-medium ${riskColor} flex items-center justify-end gap-2`}>
+                <span>{riskLevel.toUpperCase()} RISK</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted/70 text-muted-foreground cursor-help">
+                      <Info className="h-3 w-3" />
+                      <span className="sr-only">Risk tier explanation</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="end" className="max-w-xs text-left">
+                    {riskLevelDescriptions[model.type]}
+                  </TooltipContent>
+                </Tooltip>
               </div>
               <div className="text-xs text-muted-foreground">
                 Accuracy: {model.accuracy}%
@@ -774,6 +820,11 @@ export function Analytics() {
   const equipmentRiskLevel = classifyRiskLevel(topEquipmentRisk?.risk ?? 0)
   const deviationRiskLevel = classifyRiskLevel(topDeviationRisk?.risk ?? 0)
   const qualityConfidenceLevel = classifyConfidenceLevel(averageQualityConfidence)
+  const riskSummaryTooltips = {
+    equipment: 'Represents the highest predicted equipment failure probability right now, derived from the failure model for the most at-risk asset.',
+    deviation: 'Shows the top predicted process deviation probability among active batches based on current CPP compliance and deviation risk models.',
+    quality: 'Displays the average predicted probability that active batches will meet quality specifications; higher values indicate stronger overall quality confidence.',
+  }
 
   function ExplainabilityPanel() {
     return (
@@ -1064,7 +1115,20 @@ export function Analytics() {
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="p-4 border rounded-lg bg-destructive/5">
                   <div className="flex items-center justify-between text-xs uppercase text-muted-foreground">
-                    <span>Equipment Failure Risk</span>
+                    <span className="flex items-center gap-1">
+                      Equipment Failure Risk
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help">
+                            <Info className="h-3 w-3" />
+                            <span className="sr-only">Equipment risk definition</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-left">
+                          {riskSummaryTooltips.equipment}
+                        </TooltipContent>
+                      </Tooltip>
+                    </span>
                     <Badge className={equipmentRiskLevel.badge}>{equipmentRiskLevel.label}</Badge>
                   </div>
                   <div className="mt-2 text-2xl font-semibold font-mono">
@@ -1076,7 +1140,20 @@ export function Analytics() {
                 </div>
                 <div className="p-4 border rounded-lg bg-warning/5">
                   <div className="flex items-center justify-between text-xs uppercase text-muted-foreground">
-                    <span>Deviation Risk</span>
+                    <span className="flex items-center gap-1">
+                      Deviation Risk
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help">
+                            <Info className="h-3 w-3" />
+                            <span className="sr-only">Deviation risk definition</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-left">
+                          {riskSummaryTooltips.deviation}
+                        </TooltipContent>
+                      </Tooltip>
+                    </span>
                     <Badge className={deviationRiskLevel.badge}>{deviationRiskLevel.label}</Badge>
                   </div>
                   <div className="mt-2 text-2xl font-semibold font-mono">
@@ -1088,7 +1165,20 @@ export function Analytics() {
                 </div>
                 <div className="p-4 border rounded-lg bg-success/5">
                   <div className="flex items-center justify-between text-xs uppercase text-muted-foreground">
-                    <span>Quality Confidence</span>
+                    <span className="flex items-center gap-1">
+                      Quality Confidence
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help">
+                            <Info className="h-3 w-3" />
+                            <span className="sr-only">Quality confidence definition</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-left">
+                          {riskSummaryTooltips.quality}
+                        </TooltipContent>
+                      </Tooltip>
+                    </span>
                     <Badge className={qualityConfidenceLevel.badge}>{qualityConfidenceLevel.label}</Badge>
                   </div>
                   <div className="mt-2 text-2xl font-semibold font-mono">
