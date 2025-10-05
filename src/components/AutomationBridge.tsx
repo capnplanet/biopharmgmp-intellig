@@ -5,11 +5,13 @@ import type { AutomationProposalDetail } from '@/lib/qualityAutomation'
 import type { AutomationSuggestion } from '@/types/automation'
 import type { Deviation } from '@/types/quality'
 import { useAuditLogger } from '@/hooks/use-audit'
+import { useAlerts } from '@/hooks/use-alerts'
 
 export function AutomationBridge() {
   const [, setDeviations] = useKV<Deviation[]>('deviations', [])
   const [suggestions = [], setSuggestions] = useKV<AutomationSuggestion[]>('automation-queue', [])
   const { log } = useAuditLogger()
+  const { recordAlert } = useAlerts()
 
   useEffect(() => {
     if (!suggestions) {
@@ -41,6 +43,21 @@ export function AutomationBridge() {
       log('Automation Plan Proposed', 'ai', `Recommendation ${detail.suggestion.id} generated for deviation ${detail.deviation.id}.`, {
         recordId: detail.deviation.id,
       })
+
+      recordAlert(
+        `${detail.trigger} condition detected for ${detail.batchId}`,
+        `Deviation ${detail.deviation.id} and mitigation plan ${detail.suggestion.id} generated.`,
+        {
+          severity: detail.trigger === 'OOS' ? 'warning' : 'info',
+          source: 'digital-twin',
+          relatedRecordId: detail.deviation.id,
+          context: {
+            batchId: detail.batchId,
+            trigger: detail.trigger,
+            parameter: detail.parameter,
+          },
+        }
+      )
 
       toast.info(`Digital twin detected ${detail.trigger} trend`, {
         description: `Deviation ${detail.deviation.id} and AI action plan ${detail.suggestion.id} pending review.`,

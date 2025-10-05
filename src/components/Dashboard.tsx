@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
@@ -9,8 +9,13 @@ import {
   Warning, 
   CheckCircle,
   Clock,
-  TrendUp
+  TrendUp,
+  Info,
+  XCircle
 } from '@phosphor-icons/react'
+import { formatDistanceToNow } from 'date-fns'
+import { useAlerts } from '@/hooks/use-alerts'
+import type { AlertSeverity } from '@/types/alerts'
 
 interface KPICardProps {
   title: string
@@ -100,6 +105,20 @@ export function Dashboard() {
   ])
 
   const [currentTime, setCurrentTime] = useState(new Date())
+  const { alerts } = useAlerts()
+
+  const recentAlerts = useMemo(() => {
+    return [...(alerts ?? [])]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 6)
+  }, [alerts])
+
+  const severityStyles: Record<AlertSeverity, { container: string; iconClass: string; Icon: React.ComponentType<{ className?: string }> }> = {
+    info: { container: 'bg-primary/10', iconClass: 'text-primary', Icon: Info },
+    success: { container: 'bg-success/10', iconClass: 'text-success', Icon: CheckCircle },
+    warning: { container: 'bg-warning/10', iconClass: 'text-warning', Icon: Warning },
+    error: { container: 'bg-destructive/10', iconClass: 'text-destructive', Icon: XCircle }
+  }
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
@@ -268,44 +287,29 @@ export function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            <div className="flex items-center gap-3 p-3 bg-warning/10 rounded-lg">
-              <Warning className="h-4 w-4 text-warning" />
-              <div className="flex-1">
-                <div className="font-medium">Temperature deviation detected</div>
-                <div className="text-sm text-muted-foreground">
-                  Bioreactor 1 - BTH-2024-003 exceeded 37.5°C limit
-                </div>
+            {recentAlerts.length === 0 ? (
+              <div className="flex items-center gap-3 p-3 bg-muted/40 rounded-lg text-sm text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                <span>No alerts yet. Activity across the platform will appear here in real time.</span>
               </div>
-              <div className="text-sm text-muted-foreground font-mono">
-                {new Date(Date.now() - 5 * 60 * 1000).toLocaleTimeString()}
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3 p-3 bg-success/10 rounded-lg">
-              <CheckCircle className="h-4 w-4 text-success" />
-              <div className="flex-1">
-                <div className="font-medium">Batch completion</div>
-                <div className="text-sm text-muted-foreground">
-                  BTH-2024-000 - Small Molecule API-X completed successfully
-                </div>
-              </div>
-              <div className="text-sm text-muted-foreground font-mono">
-                {new Date(Date.now() - 15 * 60 * 1000).toLocaleTimeString()}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <div className="flex-1">
-                <div className="font-medium">Scheduled maintenance</div>
-                <div className="text-sm text-muted-foreground">
-                  Spray Dryer 1 - Preventive maintenance started
-                </div>
-              </div>
-              <div className="text-sm text-muted-foreground font-mono">
-                {new Date(Date.now() - 45 * 60 * 1000).toLocaleTimeString()}
-              </div>
-            </div>
+            ) : (
+              recentAlerts.map((alert) => {
+                const style = severityStyles[alert.severity] ?? severityStyles.info
+                const Icon = style.Icon
+                return (
+                  <div key={alert.id} className={`flex items-center gap-3 p-3 rounded-lg ${style.container}`}>
+                    <Icon className={`h-4 w-4 ${style.iconClass}`} />
+                    <div className="flex-1">
+                      <div className="font-medium">{alert.title}</div>
+                      <div className="text-sm text-muted-foreground">{alert.description}</div>
+                    </div>
+                    <div className="text-xs text-muted-foreground whitespace-nowrap">
+                      {formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}
+                    </div>
+                  </div>
+                )
+              })
+            )}
           </div>
         </CardContent>
       </Card>
