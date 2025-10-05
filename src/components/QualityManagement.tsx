@@ -9,6 +9,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { ESignaturePrompt, type SignatureResult } from '@/components/ESignaturePrompt'
 import { batches } from '@/data/seed'
 import {
@@ -361,7 +369,7 @@ export function QualityManagement() {
   const [investigations, setInvestigations] = useKV<Investigation[]>('investigations', mockInvestigations)
   const [automationQueue = [], setAutomationQueue] = useKV<AutomationSuggestion[]>('automation-queue', [])
   const [, setRoute] = useKV<string>('route', '')
-  const [changeControls, setChangeControls] = useKV<ChangeControl[]>('change-controls', [
+  const [changeControls = []] = useKV<ChangeControl[]>('change-controls', [
     {
       id: 'CC-2025-001',
       title: 'Implement new bioreactor temperature PID parameters',
@@ -853,11 +861,72 @@ export function QualityManagement() {
     })
   }
 
+  const openRecordCreation = (type: 'deviation' | 'capa' | 'change-control') => {
+    switch (type) {
+      case 'deviation':
+        setRoute('deviation/new')
+        log('Open Deviation Creation', 'deviation', 'Opened deviation creation workflow', { recordId: 'deviation-new' })
+        break
+      case 'capa':
+        setRoute('capa/new')
+        log('Open CAPA Wizard', 'capa', 'Initiated CAPA creation workflow', { recordId: 'capa-new' })
+        break
+      case 'change-control':
+        setRoute('cc/new')
+        log('Open Change Control Creation', 'change-control', 'Opened change control creation workflow', { recordId: 'cc-new' })
+        break
+    }
+  }
+
   return (
     <div className="p-6 space-y-6 overflow-auto h-full">
-      <div>
-        <h1 className="text-3xl font-bold">Quality Management System</h1>
-        <p className="text-muted-foreground">Manage deviations, investigations, CAPAs, and change controls</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold">Quality Management System</h1>
+          <p className="text-muted-foreground">Manage deviations, investigations, CAPAs, and change controls</p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              New Quality Record
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel>Start a new workflow</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="flex items-center gap-2"
+              onSelect={(event) => {
+                event.preventDefault()
+                openRecordCreation('deviation')
+              }}
+            >
+              <Warning className="h-4 w-4 text-red-500" />
+              Log deviation
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="flex items-center gap-2"
+              onSelect={(event) => {
+                event.preventDefault()
+                openRecordCreation('capa')
+              }}
+            >
+              <ListChecks className="h-4 w-4 text-blue-500" />
+              Create CAPA
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="flex items-center gap-2"
+              onSelect={(event) => {
+                event.preventDefault()
+                openRecordCreation('change-control')
+              }}
+            >
+              <FileText className="h-4 w-4 text-amber-500" />
+              Initiate change control
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <Tabs
@@ -904,12 +973,7 @@ export function QualityManagement() {
                 </CardContent>
               </Card>
             </div>
-            <Button
-              onClick={() => {
-                setRoute('deviation/new')
-                log('Open Deviation Creation', 'deviation', 'Opened deviation creation workflow', { recordId: 'deviation-new' })
-              }}
-            >
+            <Button onClick={() => openRecordCreation('deviation')}>
               <Plus className="h-4 w-4 mr-2" />
               Log Deviation
             </Button>
@@ -1678,12 +1742,7 @@ export function QualityManagement() {
                 </CardContent>
               </Card>
             </div>
-            <Button
-              onClick={() => {
-                setRoute('capa/new')
-                log('Open CAPA Wizard', 'capa', 'Initiated CAPA creation workflow')
-              }}
-            >
+            <Button onClick={() => openRecordCreation('capa')}>
               <Plus className="h-4 w-4 mr-2" />
               New CAPA
             </Button>
@@ -1747,23 +1806,7 @@ export function QualityManagement() {
         <TabsContent value="change-control" className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Change Controls</h2>
-            <Button onClick={() => {
-              const id = `CC-${new Date().getFullYear()}-${String(Math.floor(Math.random()*900)+100)}`
-              const newCC: ChangeControl = {
-                id,
-                title: 'New Change Request',
-                description: 'Describe the proposed change, rationale, and impact.',
-                status: 'draft',
-                requestedBy: 'User',
-                requestedDate: new Date(),
-                impactedBatches: [],
-                impactedEquipment: [],
-                riskLevel: 'low'
-              }
-              setChangeControls(prev => [newCC, ...(prev || [])])
-              setRoute(`cc/${id}`)
-              log('Create Change Control', 'change-control', `Created ${id}`, { recordId: id })
-            }}>
+            <Button onClick={() => openRecordCreation('change-control')}>
               <Plus className="h-4 w-4 mr-2" />
               Create Change Request
             </Button>
@@ -1782,6 +1825,7 @@ export function QualityManagement() {
                     <div className="font-semibold">{cc.title}</div>
                     <div className="text-sm text-muted-foreground mb-2">Requested by {cc.requestedBy} on {new Date(cc.requestedDate).toLocaleDateString()}</div>
                     <div className="text-sm">Impacted batches: {cc.impactedBatches.join(', ') || 'None'} • Impacted equipment: {cc.impactedEquipment.join(', ') || 'None'}</div>
+                    <div className="text-xs text-muted-foreground mt-1">Window: {formatDate(cc.plannedStartDate)} → {formatDate(cc.plannedEndDate)} • Related deviations: {(cc.relatedDeviations || []).join(', ') || 'None'}</div>
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => { setRoute(`cc/${cc.id}`); log('Open Change Control', 'change-control', `Opened ${cc.id}`, { recordId: cc.id }) }}>

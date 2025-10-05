@@ -89,6 +89,8 @@ export interface ChangeControlDraftBasics {
   description: string
   requestedBy: string
   status: ChangeControlStatus
+  plannedStartDate?: Date | null
+  plannedEndDate?: Date | null
 }
 
 export interface ChangeControlDraftImpact {
@@ -96,6 +98,9 @@ export interface ChangeControlDraftImpact {
   impactedEquipment: string[]
   riskLevel: 'low' | 'medium' | 'high'
   implementationPlan?: string
+  validationPlan?: string
+  relatedDeviations?: string[]
+  impactAssessment?: string
   aiImpactSummary?: string
 }
 

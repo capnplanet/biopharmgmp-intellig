@@ -7,6 +7,14 @@ import { ArrowLeft } from '@phosphor-icons/react'
 import { useAuditLogger } from '@/hooks/use-audit'
 import { ESignaturePrompt, type SignatureResult } from '@/components/ESignaturePrompt'
 import type { ChangeControl, ESignatureRecord } from '@/types/quality'
+import { Separator } from '@/components/ui/separator'
+
+const formatDate = (value?: Date | string) => {
+  if (!value) return '—'
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleDateString()
+}
 
 const demoCredentials = {
   username: 'cc.approver@biopharm.com',
@@ -63,12 +71,47 @@ export function ChangeControlDetails({ id, onBack }: { id: string; onBack: () =>
           </div>
           <div className="text-sm text-muted-foreground">Requested by {cc.requestedBy} on {new Date(cc.requestedDate).toLocaleDateString()}</div>
           <p className="mt-3">{cc.description}</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="text-sm">
+              <div className="text-xs uppercase text-muted-foreground/70">Planned Window</div>
+              <div>{formatDate(cc.plannedStartDate)} → {formatDate(cc.plannedEndDate)}</div>
+            </div>
+            <div className="text-sm">
+              <div className="text-xs uppercase text-muted-foreground/70">Related Deviations</div>
+              <div>{(cc.relatedDeviations || []).join(', ') || 'None'}</div>
+            </div>
+          </div>
           <div className="mt-3 text-sm">
             Impacted batches: {cc.impactedBatches.length ? cc.impactedBatches.join(', ') : 'None'}
           </div>
           <div className="text-sm">
             Impacted equipment: {cc.impactedEquipment.length ? cc.impactedEquipment.join(', ') : 'None'}
           </div>
+          {(cc.impactAssessment || cc.implementationPlan || cc.validationPlan) && (
+            <div className="mt-4 space-y-4">
+              {cc.impactAssessment && (
+                <section className="space-y-2">
+                  <Separator />
+                  <div className="text-xs uppercase text-muted-foreground/70">Impact Assessment</div>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{cc.impactAssessment}</p>
+                </section>
+              )}
+              {cc.implementationPlan && (
+                <section className="space-y-2">
+                  <Separator />
+                  <div className="text-xs uppercase text-muted-foreground/70">Implementation Plan</div>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{cc.implementationPlan}</p>
+                </section>
+              )}
+              {cc.validationPlan && (
+                <section className="space-y-2">
+                  <Separator />
+                  <div className="text-xs uppercase text-muted-foreground/70">Validation / Verification</div>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{cc.validationPlan}</p>
+                </section>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 mt-4">
             {(() => {
               const currentIndex = statusOrder.indexOf(cc.status)

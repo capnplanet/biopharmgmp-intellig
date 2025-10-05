@@ -138,6 +138,12 @@ export interface ChangeControl {
   impactedBatches: string[]
   impactedEquipment: string[]
   riskLevel: "low" | "medium" | "high"
+  impactAssessment?: string
+  implementationPlan?: string
+  validationPlan?: string
+  relatedDeviations?: string[]
+  plannedStartDate?: Date
+  plannedEndDate?: Date
   signatures?: ESignatureRecord[]
 }
 
