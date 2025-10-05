@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ESignaturePrompt, type SignatureResult } from '@/components/ESignaturePrompt'
+import { batches } from '@/data/seed'
 import {
   Warning,
   MagnifyingGlass,
@@ -913,9 +914,14 @@ export function QualityManagement() {
                 </CardContent>
               </Card>
             </div>
-            <Button>
+            <Button
+              onClick={() => {
+                setRoute('deviation/new')
+                log('Open Deviation Creation', 'deviation', 'Opened deviation creation workflow', { recordId: 'deviation-new' })
+              }}
+            >
               <Plus className="h-4 w-4 mr-2" />
-              New Deviation
+              Log Deviation
             </Button>
           </div>
 
@@ -1134,12 +1140,17 @@ export function QualityManagement() {
                 : undefined
               const alcoa = automationMetadata.alcoa
 
-              const openArchiveView = () => {
-                setRoute(`archive/${deviation.batchId}`)
-                log('Open Batch Archive', 'archive', `Archive view opened for ${deviation.batchId}`, {
-                  recordId: deviation.batchId,
+              const openArchiveView = (targetBatchId: string) => {
+                setRoute(`archive/${targetBatchId}`)
+                log('Open Batch Archive', 'navigation', `Archive view opened for ${targetBatchId}`, {
+                  recordId: targetBatchId,
                 })
               }
+
+              const currentBatch = batches.find(batch => batch.id === deviation.batchId)
+              const relatedBatchHistory = currentBatch
+                ? batches.filter(batch => batch.product === currentBatch.product && batch.id !== currentBatch.id).slice(0, 3)
+                : []
 
               return (
                 <Card key={deviation.id} className="cursor-pointer hover:shadow-md transition-shadow">
@@ -1258,7 +1269,7 @@ export function QualityManagement() {
                                             <Button
                                               variant="link"
                                               className="px-0 h-auto text-xs"
-                                              onClick={openArchiveView}
+                                              onClick={() => openArchiveView(deviation.batchId)}
                                             >
                                               <LinkSimple className="h-3 w-3 mr-1" />
                                               View archive record
@@ -1313,6 +1324,27 @@ export function QualityManagement() {
                                                   </div>
                                                 )}
                                               </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                      {relatedBatchHistory.length > 0 && (
+                                        <div className="pt-3 border-t border-dashed border-muted-foreground/30 space-y-2">
+                                          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                                            Related Batches
+                                          </div>
+                                          <div className="flex flex-wrap gap-2">
+                                            {relatedBatchHistory.map(batch => (
+                                              <Button
+                                                key={batch.id}
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 text-xs"
+                                                onClick={() => openArchiveView(batch.id)}
+                                              >
+                                                <span className="font-mono mr-2">{batch.id}</span>
+                                                <span>{batch.stage}</span>
+                                              </Button>
                                             ))}
                                           </div>
                                         </div>

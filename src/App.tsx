@@ -22,6 +22,8 @@ import { initializeQualityAutomation } from '@/lib/qualityAutomation'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Play, Pause } from '@phosphor-icons/react'
+import { DeviationCreationWizard } from '@/components/DeviationCreationWizard'
+import { CapaCreationWizard } from '@/components/CapaCreationWizard'
 
 export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'advanced-analytics' | 'audit'
 
@@ -102,12 +104,18 @@ function App() {
       }
       case 'quality':
         // Render sub-pages for quality route overlays
+        if ((route || '') === 'deviation/new') {
+          return <DeviationCreationWizard onCancel={() => setRoute('')} />
+        }
         if ((route || '').startsWith('investigation/')) {
           const parts = (route || '').split('/').filter(Boolean)
           const [, investigationId] = parts
           if (investigationId) {
             return <InvestigationWorkflow id={investigationId} onBack={() => setRoute('')} />
           }
+        }
+        if ((route || '') === 'capa/new') {
+          return <CapaCreationWizard onCancel={() => setRoute('')} />
         }
         if ((route || '').startsWith('capa/')) {
           const parts = (route || '').split('/').filter(Boolean)
