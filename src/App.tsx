@@ -27,8 +27,9 @@ import { DeviationCreationWizard } from '@/components/DeviationCreationWizard'
 import { CapaCreationWizard } from '@/components/CapaCreationWizard'
 import { cn } from '@/lib/utils'
 import { FloatingOperationsAssistant } from '@/components/FloatingOperationsAssistant'
+import { OperationsAssistantPage } from '@/components/OperationsAssistantPage'
 
-export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'advanced-analytics' | 'audit'
+export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'advanced-analytics' | 'audit' | 'assistant'
 
 const normalizeQualityRoute = (value: string | undefined) => {
   if (!value) return ''
@@ -71,11 +72,11 @@ function App() {
       if (!raw) return { tab: 'dashboard', r: '' }
       const parts = raw.split('/').filter(Boolean)
       const tab = (parts[0] as NavigationItem) || 'dashboard'
-      const validTabs: NavigationItem[] = ['dashboard', 'batches', 'quality', 'analytics', 'advanced-analytics', 'audit']
+  const validTabs: NavigationItem[] = ['dashboard', 'batches', 'quality', 'analytics', 'advanced-analytics', 'audit', 'assistant']
       const safeTab: NavigationItem = validTabs.includes(tab) ? tab : 'dashboard'
       const r = parts.slice(1).join('/')
       // Only keep route for tabs that support overlays
-      const safeRoute = safeTab === 'batches' || safeTab === 'quality' ? r : ''
+  const safeRoute = safeTab === 'batches' || safeTab === 'quality' ? r : ''
       return { tab: safeTab, r: safeRoute }
     }
 
@@ -191,6 +192,8 @@ function App() {
         return <AdvancedAnalytics />
       case 'audit':
         return <AuditTrail />
+      case 'assistant':
+        return <OperationsAssistantPage />
       default:
         return <Dashboard />
     }
@@ -208,7 +211,7 @@ function App() {
         {renderContent()}
         {/* Digital Twin Controls (floating) */}
         <TwinControls />
-        <FloatingOperationsAssistant />
+        {activeTab !== 'assistant' && <FloatingOperationsAssistant />}
       </main>
       <Toaster />
     </div>

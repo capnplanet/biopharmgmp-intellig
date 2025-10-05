@@ -22,6 +22,7 @@ const navigationItems = [
   { id: 'analytics' as const, label: 'Analytics', icon: ChartLine },
   { id: 'advanced-analytics' as const, label: 'Advanced Analytics', icon: ChartLine },
   { id: 'audit' as const, label: 'Audit Trail', icon: FileText },
+  { id: 'assistant' as const, label: 'Operations Copilot', icon: Atom },
 ]
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
