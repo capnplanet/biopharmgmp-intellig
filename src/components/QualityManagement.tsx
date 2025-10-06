@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ESignaturePrompt, type SignatureResult } from '@/components/ESignaturePrompt'
 import { batches } from '@/data/seed'
+import { subscribeToTwin } from '@/lib/digitalTwin'
 import { useProductionBatches } from '@/hooks/use-production-batches'
 import { BATCH_IDS, CAPA_IDS, CHANGE_CONTROL_IDS, DEVIATION_IDS, MATERIAL_LOTS } from '@/data/identifiers'
 import {
@@ -450,6 +451,66 @@ const mockInvestigations: Investigation[] = [
 
 export function QualityManagement() {
   const [deviations, setDeviations] = useKV<Deviation[]>('deviations', mockDeviations)
+  // Listen for OOS/OOT events from the digital twin and seed as deviations
+  useEffect(() => {
+    const unsub = subscribeToTwin((snapshot) => {
+      // For each batch, check for OOS/OOT (out of spec/out of trend)
+      const newDeviations: Deviation[] = []
+      snapshot.batches.forEach(batch => {
+        // Example: OOS if any parameter is outside cppBounds
+        const params = batch.parameters
+        const bounds = batch.cppBounds
+        const oosParams = Object.keys(params).filter(key => {
+          const k = key as keyof typeof params
+          return params[k].current < bounds[k].min || params[k].current > bounds[k].max
+        })
+        if (oosParams.length > 0) {
+          // Only add if not already present
+          const alreadyLogged = (deviations || []).some(d => d.batchId === batch.id && d.status === 'open' && d.title.includes('OOS'))
+          if (!alreadyLogged) {
+            newDeviations.push({
+              id: `OOS-${batch.id}-${Date.now()}`,
+              title: `OOS detected in batch ${batch.id}`,
+              description: `Out of spec: ${oosParams.join(', ')}. Current values: ${oosParams.map(k => `${k}: ${params[k as keyof typeof params].current.toFixed(2)}`).join(', ')}`,
+              severity: 'critical',
+              status: 'open',
+              batchId: batch.id,
+              reportedBy: 'Digital Twin',
+              reportedDate: new Date(),
+            })
+          }
+        }
+        // Example: OOT if parameter is trending toward bounds (within 10% of min/max)
+        const ootParams = Object.keys(params).filter(key => {
+          const k = key as keyof typeof params
+          const range = bounds[k].max - bounds[k].min
+          return (
+            params[k].current > bounds[k].max - 0.1 * range ||
+            params[k].current < bounds[k].min + 0.1 * range
+          ) && !(params[k].current < bounds[k].min || params[k].current > bounds[k].max)
+        })
+        if (ootParams.length > 0) {
+          const alreadyLogged = (deviations || []).some(d => d.batchId === batch.id && d.status === 'open' && d.title.includes('OOT'))
+          if (!alreadyLogged) {
+            newDeviations.push({
+              id: `OOT-${batch.id}-${Date.now()}`,
+              title: `OOT detected in batch ${batch.id}`,
+              description: `Out of trend: ${ootParams.join(', ')}. Current values: ${ootParams.map(k => `${k}: ${params[k as keyof typeof params].current.toFixed(2)}`).join(', ')}`,
+              severity: 'high',
+              status: 'open',
+              batchId: batch.id,
+              reportedBy: 'Digital Twin',
+              reportedDate: new Date(),
+            })
+          }
+        }
+      })
+      if (newDeviations.length > 0) {
+        setDeviations((current = []) => [...newDeviations, ...current])
+      }
+    })
+    return () => unsub()
+  }, [deviations, setDeviations])
   const [capas, setCAPAs] = useKV<CAPA[]>('capas', mockCAPAs)
   const [investigations, setInvestigations] = useKV<Investigation[]>('investigations', mockInvestigations)
   const [automationQueue = [], setAutomationQueue] = useKV<AutomationSuggestion[]>('automation-queue', [])
