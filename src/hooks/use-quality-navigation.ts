@@ -29,10 +29,9 @@ const normalizeHash = (path: string | undefined) => {
 export function useQualityNavigation() {
   const [, setRoute] = useKV<string>('route', '')
   const [, setActiveTab] = useKV<NavigationItem>('active-tab', 'dashboard')
-
   return useCallback(
     (path?: string) => {
-  const target = normalizeRoute(path)
+      const target = normalizeRoute(path)
       setActiveTab('quality')
       setRoute(target)
       if (typeof window !== 'undefined' && window.location) {
@@ -44,6 +43,8 @@ export function useQualityNavigation() {
             window.location.hash = nextHash
           }
         }
+        // Force a hashchange event to trigger App re-render
+        window.dispatchEvent(new HashChangeEvent('hashchange'))
       }
     },
     [setRoute, setActiveTab]

@@ -1,4 +1,4 @@
-import { FloatingOperationsAssistant } from '@/components/FloatingOperationsAssistant'
+import { OperationsAssistant } from '@/components/OperationsAssistant'
 
 export function OperationsAssistantPage() {
   return (
@@ -9,8 +9,8 @@ export function OperationsAssistantPage() {
           Chat with the assistant in a full workspace view with room for historical responses and follow-up prompts.
         </p>
       </div>
-      <div className="flex-1 overflow-hidden">
-        <FloatingOperationsAssistant variant="page" />
+      <div className="flex-1 overflow-hidden min-h-0">
+        <OperationsAssistant />
       </div>
     </div>
   )

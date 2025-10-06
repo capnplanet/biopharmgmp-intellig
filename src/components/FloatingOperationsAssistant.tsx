@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { getSpark } from '@/lib/spark'
 import { useOperationsAssistant } from '@/hooks/use-operations-assistant'
@@ -49,6 +50,9 @@ export function FloatingOperationsAssistant() {
   const [suggestedPrompts = defaultSuggestedPrompts, setSuggestedPrompts] = useKV<string[]>('operations-assistant-suggestions', defaultSuggestedPrompts)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const [rateLimited, setRateLimited] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
   const latestSummary = useMemo(() => digest.summary, [digest.summary])
 
   const detectTopics = useCallback((text?: string) => {
@@ -185,6 +189,23 @@ export function FloatingOperationsAssistant() {
   }, [setMessages, applySuggestions])
 
   useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const scrollToBottom = () => {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
+    }
+
+    let animation: number | null = null
+    animation = window.requestAnimationFrame(scrollToBottom)
+
+    return () => {
+      if (animation != null) {
+        window.cancelAnimationFrame(animation)
+      }
+    }
+  }, [messages, loading])
+
+  useEffect(() => {
     if (!messages.length) {
       applySuggestions(defaultSuggestedPrompts.slice())
       return
@@ -231,6 +252,8 @@ export function FloatingOperationsAssistant() {
 
     try {
       setLoading(true)
+      setRateLimited(false)
+      setRetryCount(0)
       const prompt = spark.llmPrompt`
         You are the "Operations Copilot" for a GMP manufacturing command center. Answer questions precisely, citing current metrics when available. Provide concise bullet recommendations and highlight any compliance considerations.
 
@@ -254,7 +277,29 @@ export function FloatingOperationsAssistant() {
         Question:
         ${trimmed}
       `
-      const output = await spark.llm(prompt, 'gpt-4o')
+      const maxRetries = 3
+      const baseDelayMs = 750
+      let output: string = ''
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const o = await spark.llm(prompt, 'gpt-4o')
+          output = typeof o === 'string' ? o : ''
+          setRateLimited(false)
+          setRetryCount(0)
+          break
+        } catch (err) {
+          const msg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase()
+          const is429 = msg.includes('429') || msg.includes('rate limit')
+          if (!is429 || attempt === maxRetries) {
+            throw err
+          }
+          // Backoff and retry
+          setRateLimited(true)
+          setRetryCount(attempt + 1)
+          const delay = baseDelayMs * Math.pow(2, attempt)
+          await new Promise(res => setTimeout(res, delay))
+        }
+      }
       const cleaned = typeof output === 'string' ? output.trim() : ''
       const responseContent = cleaned.length > 0 ? output : buildFallbackResponse(trimmed)
       appendMessage({
@@ -273,6 +318,8 @@ export function FloatingOperationsAssistant() {
       })
     } finally {
       setLoading(false)
+      setRateLimited(false)
+      setRetryCount(0)
     }
   }
 
@@ -286,7 +333,7 @@ export function FloatingOperationsAssistant() {
   const cardClasses = 'h-full w-full max-w-4xl overflow-hidden border bg-background shadow-2xl border-primary/20 backdrop-blur supports-[backdrop-filter]:bg-background/80 flex flex-col'
 
   const contentPadding = 'px-6 pb-6'
-  const suggestionContainerClasses = 'rounded-md border border-border/40 bg-muted/20 p-3 min-h-[8rem]'
+  const suggestionContainerClasses = 'rounded-md border border-border/40 bg-muted/20 p-3'
 
   return (
     <div className={containerClasses}>
@@ -325,14 +372,50 @@ export function FloatingOperationsAssistant() {
                 </Tooltip>
               </div>
             </div>
-            <div className="mt-3 rounded-md border bg-muted/40 text-xs text-muted-foreground p-2 flex items-start gap-2">
-              <ListBullets className="h-4 w-4 text-muted-foreground" />
-              <span className="whitespace-pre-line leading-5">{latestSummary}</span>
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="hidden sm:inline-flex text-[10px] uppercase tracking-wide">
+                    Digital twin snapshot
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" align="start" className="max-w-xs whitespace-pre-line leading-5 text-xs">
+                  {latestSummary}
+                </TooltipContent>
+              </Tooltip>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    aria-label="View latest operations snapshot"
+                  >
+                    <ListBullets className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="max-w-sm whitespace-pre-line text-xs leading-5">
+                  <div className="font-medium text-muted-foreground/80 mb-1">Latest snapshot</div>
+                  {latestSummary}
+                </PopoverContent>
+              </Popover>
             </div>
           </CardHeader>
           <CardContent className={cn('flex flex-1 flex-col gap-3 overflow-hidden min-h-0', contentPadding)}>
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain rounded-md border bg-background/60">
+            <div
+              ref={scrollContainerRef}
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain rounded-md border bg-background/60 scroll-smooth"
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions"
+            >
               <div className="space-y-3 p-3">
+                {rateLimited && (
+                  <div className="mr-auto max-w-[90%] rounded-md border border-border/40 bg-amber-100/60 px-3 py-2 text-xs text-amber-900 flex items-center gap-2">
+                    <Sparkle className="h-3.5 w-3.5" />
+                    Rate limited — retrying {retryCount}/3…
+                  </div>
+                )}
                 {messages.length === 0 && !loading ? (
                   <div className="text-xs text-muted-foreground space-y-2">
                     <p>Ask about KPIs, deviation risk, equipment health, or automation impact. The assistant responds with real-time context.</p>

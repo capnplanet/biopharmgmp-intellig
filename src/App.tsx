@@ -83,7 +83,8 @@ function App() {
       const { tab, r } = parseHash(window.location.hash)
       if (tab && tab !== (activeTab || 'dashboard')) setActiveTab(tab)
       if (r !== (route || '')) setRoute(r)
-      if ((tab !== 'batches' && tab !== 'quality') && route) setRoute('')
+  // Only clear route for tabs that support overlays (batches, quality)
+  if (!['batches', 'quality'].includes(tab) && route) setRoute('')
     }
 
     // Initialize from current hash
@@ -199,13 +200,13 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen min-h-0 bg-background">
       <Sidebar activeTab={activeTab || 'dashboard'} onTabChange={(tab) => {
         // Leaving a sub-page clears the overlay route
         if (tab !== 'batches') setRoute('')
         setActiveTab(tab)
       }} />
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-hidden min-h-0">
         <AutomationBridge />
         {renderContent()}
         {/* Digital Twin Controls (floating) */}
