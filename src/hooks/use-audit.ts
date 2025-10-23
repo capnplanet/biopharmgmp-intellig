@@ -47,7 +47,7 @@ export function useAuditLogger(user?: { id: string; role: string; ipAddress?: st
   }
 
   function log(action: string, module: AuditModule, details: string, opts?: { recordId?: string; outcome?: AuditOutcome; digitalSignature?: string; userOverride?: { id: string; role: string; ipAddress?: string; sessionId?: string } }) {
-  const u = opts?.userOverride || user || currentUser || defaultUser
+    const u = opts?.userOverride || user || currentUser || defaultUser
     const event: AuditEvent = {
       id: genId(),
       timestamp: new Date(),
@@ -62,7 +62,7 @@ export function useAuditLogger(user?: { id: string; role: string; ipAddress?: st
       outcome: opts?.outcome || 'success',
       digitalSignature: opts?.digitalSignature,
     }
-    setEvents([event, ...((events as AuditEvent[]) || [])])
+    setEvents((curr = []) => [event, ...curr])
   }
 
   async function withAudit<T>(actionName: string, module: AuditModule, details: string, fn: () => Promise<T>, opts?: { recordId?: string }) {

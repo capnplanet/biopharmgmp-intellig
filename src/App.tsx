@@ -30,6 +30,7 @@ import { OperationsAssistantPage } from '@/components/OperationsAssistantPage'
 import { AIAuditTrail } from '@/components/AIAuditTrail'
 import { useAuditLogger } from '@/hooks/use-audit'
 import { EquipmentDetails } from '@/components/EquipmentDetails'
+import { ModelMetricsSampler } from '@/components/ModelMetricsSampler'
 
 export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'advanced-analytics' | 'audit' | 'assistant'
 
@@ -79,7 +80,7 @@ function App() {
       const safeTab: NavigationItem = validTabs.includes(tab) ? tab : 'dashboard'
       const r = parts.slice(1).join('/')
       // Only keep route for tabs that support overlays
-  const safeRoute = (safeTab === 'batches' || safeTab === 'quality' || safeTab === 'dashboard') ? r : ''
+      const safeRoute = (safeTab === 'batches' || safeTab === 'quality' || safeTab === 'dashboard' || safeTab === 'audit') ? r : ''
       return { tab: safeTab, r: safeRoute }
     }
 
@@ -87,8 +88,8 @@ function App() {
       const { tab, r } = parseHash(window.location.hash)
       if (tab && tab !== (activeTab || 'dashboard')) setActiveTab(tab)
       if (r !== (route || '')) setRoute(r)
-  // Only clear route for tabs that support overlays (batches, quality)
-  if (!['batches', 'quality'].includes(tab) && route) setRoute('')
+      // Only clear route for tabs that support overlays (batches, quality, dashboard, audit)
+      if (!['batches', 'quality', 'dashboard', 'audit'].includes(tab) && route) setRoute('')
     }
 
     // Initialize from current hash
@@ -102,8 +103,8 @@ function App() {
 
   // Keep hash in sync with state
   useEffect(() => {
-  const base = activeTab || 'dashboard'
-  const suffix = (base === 'batches' || base === 'quality' || base === 'dashboard') && route ? `/${route}` : ''
+    const base = activeTab || 'dashboard'
+    const suffix = (base === 'batches' || base === 'quality' || base === 'dashboard' || base === 'audit') && route ? `/${route}` : ''
     const nextHash = `#${base}${suffix}`
     if (window.location.hash !== nextHash) {
       // Avoid adding entries to history on every navigation to keep back button useful
@@ -230,6 +231,7 @@ function App() {
       }} />
       <main className="flex-1 overflow-hidden min-h-0">
         <AutomationBridge />
+        <ModelMetricsSampler />
         {renderContent()}
         {/* Digital Twin Controls (floating) */}
         <TwinControls />

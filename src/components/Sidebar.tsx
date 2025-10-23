@@ -9,6 +9,8 @@ import {
   Atom
 } from '@phosphor-icons/react'
 import { useAuditLogger } from '@/hooks/use-audit'
+import { useKV } from '@github/spark/hooks'
+import type { AuditEvent } from '@/hooks/use-audit'
 
 interface SidebarProps {
   activeTab: NavigationItem
@@ -27,6 +29,8 @@ const navigationItems = [
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   const { log } = useAuditLogger()
+  const [events = []] = useKV<AuditEvent[]>('audit-events', [])
+  const aiCount = (events || []).filter(e => e.module === 'ai').length
   return (
     <div className="w-64 bg-card border-r border-border flex flex-col">
       <div className="p-6 border-b border-border">
@@ -53,7 +57,12 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
                 onClick={() => { onTabChange(item.id); log('Navigate', 'system', `Tab change to ${item.id}`) }}
               >
                 <Icon className="w-5 h-5" />
-                {item.label}
+                <span className="flex-1 text-left">{item.label}</span>
+                {item.id === 'audit' && aiCount > 0 && (
+                  <span className="ml-auto inline-flex items-center justify-center rounded-full bg-cyan-600 text-white text-[10px] font-semibold min-w-[20px] h-5 px-1">
+                    {aiCount}
+                  </span>
+                )}
               </Button>
             )
           })}

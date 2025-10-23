@@ -172,6 +172,7 @@ export function AuditTrail() {
   const [selectedModule, setSelectedModule] = useState<string>('all')
   const [selectedOutcome, setSelectedOutcome] = useState<string>('all')
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
+  const aiCountTotal = useMemo(() => (auditEvents || []).filter(e => e.module === 'ai').length, [auditEvents])
 
   const stats = useMemo(() => {
     const totals: Record<AuditOutcome, number> = {
@@ -396,9 +397,25 @@ export function AuditTrail() {
 
   return (
     <div className="p-6 space-y-6 overflow-auto h-full">
-      <div>
-        <h1 className="text-3xl font-bold">Audit Trail</h1>
-        <p className="text-muted-foreground">Complete audit trail with 21 CFR Part 11 compliance and digital signatures</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Audit Trail</h1>
+          <p className="text-muted-foreground">Complete audit trail with 21 CFR Part 11 compliance and digital signatures</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              log('Open AI Audit', 'navigation', 'Navigate to AI audit trail')
+              window.location.hash = '#audit/ai'
+            }}
+          >
+            <Brain className="h-4 w-4 mr-2" /> AI Audit Trail
+            {aiCountTotal > 0 && (
+              <Badge variant="secondary" className="ml-2 text-[10px] uppercase">{aiCountTotal}</Badge>
+            )}
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="events" className="w-full">
