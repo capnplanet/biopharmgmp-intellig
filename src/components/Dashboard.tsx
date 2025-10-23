@@ -735,7 +735,13 @@ export function Dashboard() {
           <CardContent>
             <div className="space-y-4">
               {equipment.map((item) => (
-                <div key={item.id} className="flex items-center justify-between">
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between rounded-md hover:bg-muted/50 cursor-pointer p-2"
+                  onClick={() => { window.location.hash = `#dashboard/equipment/${item.id}` }}
+                  role="button"
+                  aria-label={`View details for ${item.name}`}
+                >
                   <div>
                     <div className="font-medium">{item.name}</div>
                     <div className="text-sm text-muted-foreground">{item.type}</div>

@@ -27,6 +27,8 @@ import { DeviationCreationWizard } from '@/components/DeviationCreationWizard'
 import { CapaCreationWizard } from '@/components/CapaCreationWizard'
 import { cn } from '@/lib/utils'
 import { OperationsAssistantPage } from '@/components/OperationsAssistantPage'
+import { AIAuditTrail } from '@/components/AIAuditTrail'
+import { useAuditLogger } from '@/hooks/use-audit'
 import { EquipmentDetails } from '@/components/EquipmentDetails'
 
 export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'advanced-analytics' | 'audit' | 'assistant'
@@ -39,6 +41,7 @@ const normalizeQualityRoute = (value: string | undefined) => {
 }
 
 function App() {
+  const { log } = useAuditLogger()
   const [activeTabKV, setActiveTabKV] = useKV<NavigationItem>('active-tab', 'dashboard')
   const [routeKV, setRouteKV] = useKV<string>('route', '')
 
@@ -110,6 +113,11 @@ function App() {
         window.location.hash = nextHash
       }
     }
+    // Audit: navigation logging
+    try {
+      const detail = suffix ? `${base}/${route}` : base
+      log('Navigate', 'navigation', `Route changed to ${detail}`)
+    } catch {}
   }, [activeTab, route])
 
   useEffect(() => {
@@ -202,6 +210,9 @@ function App() {
       case 'advanced-analytics':
         return <AdvancedAnalytics />
       case 'audit':
+        if ((route || '').trim() === 'ai') {
+          return <AIAuditTrail onBack={() => setRoute('')} />
+        }
         return <AuditTrail />
       case 'assistant':
         return <OperationsAssistantPage />

@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { getSpark } from '@/lib/spark'
 import { useOperationsAssistant } from '@/hooks/use-operations-assistant'
 import { Robot, Sparkle, PaperPlaneTilt, ArrowCounterClockwise, ListBullets } from '@phosphor-icons/react'
+import { useAuditLogger } from '@/hooks/use-audit'
 
 type AssistantMessage = {
   id: string
@@ -22,6 +23,7 @@ const MAX_HISTORY = 50
 
 export function OperationsAssistant() {
   const digest = useOperationsAssistant()
+  const { log } = useAuditLogger()
 
   const [messages = [], setMessages] = useKV<AssistantMessage[]>('operations-assistant-history', [])
   const [input, setInput] = useState('')
@@ -74,6 +76,8 @@ export function OperationsAssistant() {
     const now = new Date()
     const userMessage: AssistantMessage = { id: `${now.getTime()}-user`, role: 'user', content: trimmed, createdAt: now.toISOString() }
     appendMessage(userMessage)
+    // Audit: record user prompt to AI
+    try { log('AI Assistant Prompt', 'ai', trimmed.slice(0, 400)) } catch {}
     setInput('')
     const spark = getSpark()
     if (!spark?.llm || !spark.llmPrompt) {
@@ -120,9 +124,12 @@ export function OperationsAssistant() {
       const cleaned = output.trim()
       const responseContent = cleaned.length > 0 ? output : buildFallbackResponse(trimmed)
       appendMessage({ id: `${Date.now()}-assistant`, role: 'assistant', content: responseContent, createdAt: new Date().toISOString() })
+      // Audit: record assistant response (truncated for size)
+      try { log('AI Assistant Response', 'ai', responseContent.slice(0, 1200)) } catch {}
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
       appendMessage({ id: `${Date.now()}-assistant-error`, role: 'assistant', content: `${buildFallbackResponse(trimmed)}\n\nError details: ${message}`, createdAt: new Date().toISOString() })
+      try { log('AI Assistant Error', 'ai', message) } catch {}
     } finally {
       setLoading(false)
       setRateLimited(false)
