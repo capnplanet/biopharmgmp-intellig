@@ -81,7 +81,9 @@ export function OperationsAssistant() {
     setInput('')
     const spark = getSpark()
     if (!spark?.llm || !spark.llmPrompt) {
-      appendMessage({ id: `${now.getTime()}-fallback`, role: 'assistant', content: buildFallbackResponse(trimmed), createdAt: new Date().toISOString() })
+      const content = buildFallbackResponse(trimmed)
+      appendMessage({ id: `${now.getTime()}-fallback`, role: 'assistant', content, createdAt: new Date().toISOString() })
+      try { log('AI Assistant Response', 'ai', content.slice(0, 1200)) } catch {}
       return
     }
 

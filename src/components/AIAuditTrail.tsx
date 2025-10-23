@@ -5,8 +5,9 @@ import { Badge } from '@/components/ui/badge'
 import { useKV } from '@github/spark/hooks'
 import type { AuditEvent } from '@/hooks/use-audit'
 
-import { Robot, DownloadSimple, ArrowLeft } from '@phosphor-icons/react'
+import { Robot, DownloadSimple, ArrowLeft, ArrowClockwise } from '@phosphor-icons/react'
 import { monitor, decisionThreshold, type ModelId, getLogisticState, sampleAndRecordPredictions } from '@/lib/modeling'
+import { toast } from 'sonner'
 import { ChartContainer, ChartLegendInline, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts'
 
@@ -33,6 +34,7 @@ export function AIAuditTrail({ onBack }: Props) {
   const [events = [], setEvents] = useKV<AuditEvent[]>('audit-events', [])
   const [chat = []] = useKV<AssistantMessage[]>('operations-assistant-history', [])
   const [metricsHistory = [], setMetricsHistory] = useKV<MetricsPoint[]>('model-metrics-history', [])
+  const [refreshTick, setRefreshTick] = useState(0)
   const [metric, setMetric] = useState<'auroc' | 'brier' | 'ece'>('auroc')
 
   const aiEvents = useMemo(() => (events || []).filter(e => e.module === 'ai'), [events])
@@ -49,7 +51,8 @@ export function AIAuditTrail({ onBack }: Props) {
       content: e.details || '',
       createdAt: (e.timestamp instanceof Date ? e.timestamp : new Date(e.timestamp as unknown as string)).toISOString(),
     }))
-  }, [chat, events])
+  }, [chat, events, refreshTick])
+  const usingAuditReconstruction = (!chat || chat.length === 0) && (chatFromAudit.length > 0)
   const chatEffective = (chat && chat.length > 0) ? chat : chatFromAudit
 
   // Prepare timeseries data: one record per timestamp, fields per model id
@@ -165,6 +168,45 @@ export function AIAuditTrail({ onBack }: Props) {
     URL.revokeObjectURL(url)
   }
 
+  const handleRefresh = () => {
+    setRefreshTick(Date.now())
+    // Add a small navigation audit event for traceability
+    try {
+      const ev: AuditEvent = {
+        id: `AUD-${Date.now()}-REFRESH`,
+        timestamp: new Date(),
+        userId: 'system@local',
+        userRole: 'System',
+        action: 'AI Audit Refresh',
+        module: 'navigation',
+        details: 'Manual refresh triggered on AI Audit page',
+        ipAddress: '127.0.0.1',
+        sessionId: 'sess-local',
+        outcome: 'success',
+      }
+      setEvents((curr = []) => [ev, ...curr])
+    } catch {}
+    toast.success(`Refreshed • source: ${usingAuditReconstruction ? 'audit reconstruction' : 'chat store'}`)
+  }
+
+  // Also refresh when the page becomes visible or hash changes back to this view
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && window.location.hash.startsWith('#audit')) {
+        setRefreshTick(Date.now())
+      }
+    }
+    const onHash = () => {
+      if (window.location.hash === '#audit/ai') setRefreshTick(Date.now())
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('hashchange', onHash)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('hashchange', onHash)
+    }
+  }, [])
+
   return (
     <div className="p-6 space-y-6 overflow-auto h-full">
       <div className="flex items-center justify-between">
@@ -175,6 +217,7 @@ export function AIAuditTrail({ onBack }: Props) {
           <p className="text-muted-foreground">Transparency for AI prompts, responses, and related audit events. Export for review and compliance.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleRefresh} className="flex items-center gap-2"><ArrowClockwise className="h-4 w-4" /> Refresh</Button>
           <Button variant="outline" onClick={exportCsv} className="flex items-center gap-2"><DownloadSimple className="h-4 w-4" /> CSV</Button>
           <Button variant="default" onClick={exportJson} className="flex items-center gap-2"><DownloadSimple className="h-4 w-4" /> JSON</Button>
           <Button variant="secondary" onClick={sampleNow} className="flex items-center gap-2">Sample now</Button>
@@ -278,6 +321,9 @@ export function AIAuditTrail({ onBack }: Props) {
             <CardTitle>Operations Copilot Conversation Archive</CardTitle>
           </CardHeader>
           <CardContent>
+            {usingAuditReconstruction && (
+              <div className="mb-3 text-[11px] text-muted-foreground">Showing conversation reconstructed from audit events.</div>
+            )}
             {chatEffective.length === 0 ? (
               <div className="text-sm text-muted-foreground">
                 No messages yet. Open the Operations Copilot to start a conversation.
