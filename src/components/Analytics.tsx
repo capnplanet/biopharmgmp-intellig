@@ -21,7 +21,7 @@ import { equipmentTelemetry, batches, equipmentCalibration, getCPPCompliance } f
 import { monitor, sampleAndRecordPredictions, predictQuality, predictDeviationRisk, predictEquipmentFailure, decisionThreshold, trainLogisticForModel, predictLogisticProb, getLogisticState, type ModelId } from '@/lib/modeling'
 import { useAlerts } from '@/hooks/use-alerts'
 import { useKV } from '@github/spark/hooks'
-import { subscribeToTwin, startDigitalTwin } from '@/lib/digitalTwin'
+import { ensureEquipmentFeed, subscribeToEquipmentFeed } from '@/lib/equipmentFeed'
 import type { TwinSnapshot } from '@/lib/digitalTwin'
 import type { AutomationSuggestion } from '@/types/automation'
 import type { Deviation } from '@/types/quality'
@@ -542,9 +542,8 @@ export function Analytics() {
   }, [])
 
   useEffect(() => {
-    const twin = startDigitalTwin()
-    twin.start()
-    const unsubscribe = subscribeToTwin(snapshot => {
+    ensureEquipmentFeed()
+    const unsubscribe = subscribeToEquipmentFeed(snapshot => {
       setLatestTwin(snapshot)
     })
     return () => {

@@ -27,8 +27,9 @@ import {
 import { formatDistanceToNow } from 'date-fns'
 import { useAlerts } from '@/hooks/use-alerts'
 import type { AlertSeverity } from '@/types/alerts'
-import { subscribeToTwin, startDigitalTwin } from '@/lib/digitalTwin'
+import { ensureEquipmentFeed, subscribeToEquipmentFeed } from '@/lib/equipmentFeed'
 import { batches as seedBatches, equipmentTelemetry as seedEquipmentTelemetry, getCPPCompliance } from '@/data/seed'
+import { deriveDisplayData, getEquipmentMeta } from '@/data/equipmentCatalog'
 import type { BatchData, EquipmentTelemetry } from '@/data/seed'
 import type { AutomationSuggestion } from '@/types/automation'
 import type { CAPA, ChangeControl, Deviation, Investigation } from '@/types/quality'
@@ -88,19 +89,6 @@ type TwinHistoryPoint = {
   cppCompliance: number
 }
 
-const equipmentCatalog: Record<string, { name: string; type: string }> = {
-  'BIO-001': { name: 'Bioreactor 1', type: 'Fermentation' },
-  'BIO-002': { name: 'Bioreactor 2', type: 'Fermentation' },
-  'CHR-001': { name: 'Chromatography Skid A', type: 'Purification' },
-  'CHR-002': { name: 'Chromatography Skid B', type: 'Purification' },
-  'DRY-001': { name: 'Spray Dryer 1', type: 'Drying' },
-  'DRY-002': { name: 'Spray Dryer 2', type: 'Drying' },
-  'FIL-001': { name: 'Filter Train 1', type: 'Filtration' },
-  'FIL-002': { name: 'Filter Train 2', type: 'Filtration' },
-  'REA-001': { name: 'Reactor 1', type: 'Synthesis' },
-  'CRY-001': { name: 'Crystallizer 1', type: 'Crystallization' },
-}
-
 export function Dashboard() {
   const [batchState, setBatchState] = useState<BatchData[]>(seedBatches)
   const [equipmentTelemetryState, setEquipmentTelemetryState] = useState<EquipmentTelemetry[]>(seedEquipmentTelemetry)
@@ -123,20 +111,19 @@ export function Dashboard() {
 
   const equipment = useMemo<EquipmentSnapshot[]>(() => {
     return equipmentTelemetryState.map(item => {
-      const meta = equipmentCatalog[item.id] ?? { name: item.id, type: 'Equipment' }
-      const utilization = Math.min(100, Math.round(((item.uptimeHours % 720) / 720) * 100))
-      let status: EquipmentDisplayStatus = 'online'
-      if (item.vibrationAlert) {
+      const summary = deriveDisplayData(item)
+      const meta = summary.meta ?? getEquipmentMeta(item.id)
+      const label = meta ? `${meta.classification} • ${meta.processArea}` : 'Equipment'
+      let status: EquipmentDisplayStatus = summary.status
+      if (summary.status === 'online' && item.vibrationAlert) {
         status = 'warning'
-      } else if (utilization < 20) {
-        status = 'maintenance'
       }
       return {
         id: item.id,
-        name: meta.name,
-        type: meta.type,
+        name: meta?.name ?? item.id,
+        type: label,
         status,
-        utilization,
+        utilization: summary.utilization,
         vibrationRMS: Number(item.vibrationRMS.toFixed(2)),
       }
     })
@@ -362,9 +349,8 @@ export function Dashboard() {
   }
 
   useEffect(() => {
-    const twin = startDigitalTwin()
-    twin.start()
-    const unsubscribe = subscribeToTwin(snapshot => {
+    ensureEquipmentFeed()
+    const unsubscribe = subscribeToEquipmentFeed(snapshot => {
       setBatchState(snapshot.batches)
       setEquipmentTelemetryState(snapshot.equipmentTelemetry)
       const runningCount = snapshot.batches.filter(batch => batch.status === 'running').length

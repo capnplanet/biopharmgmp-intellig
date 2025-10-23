@@ -27,6 +27,7 @@ import { DeviationCreationWizard } from '@/components/DeviationCreationWizard'
 import { CapaCreationWizard } from '@/components/CapaCreationWizard'
 import { cn } from '@/lib/utils'
 import { OperationsAssistantPage } from '@/components/OperationsAssistantPage'
+import { EquipmentDetails } from '@/components/EquipmentDetails'
 
 export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'advanced-analytics' | 'audit' | 'assistant'
 
@@ -75,7 +76,7 @@ function App() {
       const safeTab: NavigationItem = validTabs.includes(tab) ? tab : 'dashboard'
       const r = parts.slice(1).join('/')
       // Only keep route for tabs that support overlays
-  const safeRoute = safeTab === 'batches' || safeTab === 'quality' ? r : ''
+  const safeRoute = (safeTab === 'batches' || safeTab === 'quality' || safeTab === 'dashboard') ? r : ''
       return { tab: safeTab, r: safeRoute }
     }
 
@@ -98,8 +99,8 @@ function App() {
 
   // Keep hash in sync with state
   useEffect(() => {
-    const base = activeTab || 'dashboard'
-    const suffix = (base === 'batches' || base === 'quality') && route ? `/${route}` : ''
+  const base = activeTab || 'dashboard'
+  const suffix = (base === 'batches' || base === 'quality' || base === 'dashboard') && route ? `/${route}` : ''
     const nextHash = `#${base}${suffix}`
     if (window.location.hash !== nextHash) {
       // Avoid adding entries to history on every navigation to keep back button useful
@@ -117,8 +118,18 @@ function App() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard':
+      case 'dashboard': {
+        const safeRoute = route || ''
+        if (safeRoute.startsWith('equipment/')) {
+          const parts = safeRoute.split('/').filter(Boolean)
+          // Expected: equipment/:id
+          const [, equipmentId] = parts
+          if (parts.length >= 2 && equipmentId) {
+            return <EquipmentDetails id={equipmentId} onBack={() => setRoute('')} />
+          }
+        }
         return <Dashboard />
+      }
       case 'batches': {
         // If a batch sub-route is set, render its page instead of the list
         const safeRoute = route || ''

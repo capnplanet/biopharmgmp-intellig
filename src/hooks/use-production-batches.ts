@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { batches as seedBatches, type BatchData } from '@/data/seed'
-import { subscribeToTwin } from '@/lib/digitalTwin'
+import { ensureEquipmentFeed, subscribeToEquipmentFeed } from '@/lib/equipmentFeed'
 
 type BatchProgressInfo = {
   id: string
@@ -39,7 +39,8 @@ export function useProductionBatches() {
   const [currentBatches, setCurrentBatches] = useState<BatchData[]>(() => seedBatches.map(cloneBatch))
 
   useEffect(() => {
-    const unsubscribe = subscribeToTwin(snapshot => {
+    ensureEquipmentFeed()
+    const unsubscribe = subscribeToEquipmentFeed(snapshot => {
       setCurrentBatches(snapshot.batches.map(cloneBatch))
     })
     return () => {
