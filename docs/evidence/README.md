@@ -11,6 +11,7 @@ Contents
 - 04-prompts-and-controls.md
 - 05-security-and-privacy.md
 - 06-change-control.md
+ - PROTOCOL.md (step-by-step instructions to complete this package)
 
 How to populate
 - Export audit logs and AI audit events from the app UI (Audit Trail and AI Audit Trail pages) and attach under the appropriate sections.
