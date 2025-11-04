@@ -28,6 +28,7 @@ import { CapaCreationWizard } from '@/components/CapaCreationWizard'
 import { cn } from '@/lib/utils'
 import { OperationsAssistantPage } from '@/components/OperationsAssistantPage'
 import { AIAuditTrail } from '@/components/AIAuditTrail'
+import { EvidenceExportHelper } from '@/components/EvidenceExportHelper'
 import { useAuditLogger } from '@/hooks/use-audit'
 import { EquipmentDetails } from '@/components/EquipmentDetails'
 import { ModelMetricsSampler } from '@/components/ModelMetricsSampler'
@@ -213,6 +214,9 @@ function App() {
       case 'audit':
         if ((route || '').trim() === 'ai') {
           return <AIAuditTrail onBack={() => setRoute('')} />
+        }
+        if ((route || '').trim() === 'evidence') {
+          return <EvidenceExportHelper onBack={() => setRoute('')} />
         }
         return <AuditTrail />
       case 'assistant':

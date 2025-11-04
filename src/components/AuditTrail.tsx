@@ -20,7 +20,8 @@ import {
   Brain,
   Compass,
   FingerprintSimple,
-  CopySimple
+  CopySimple,
+  Package
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import type { AuditEvent, AuditOutcome } from '@/hooks/use-audit'
@@ -735,6 +736,10 @@ export function AuditTrail() {
                       <Button variant="outline" onClick={() => exportFiltered('json')}>
                         <Download className="h-4 w-4 mr-2" />
                         JSON Export
+                      </Button>
+                      <Button variant="outline" onClick={() => { window.location.hash = '#audit/evidence' }}>
+                        <Package className="h-4 w-4 mr-2" />
+                        Evidence Bundle
                       </Button>
                     </div>
                   </div>

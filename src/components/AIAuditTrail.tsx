@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { useKV } from '@github/spark/hooks'
 import type { AuditEvent } from '@/hooks/use-audit'
 
-import { Robot, DownloadSimple, ArrowLeft, ArrowClockwise } from '@phosphor-icons/react'
+import { Robot, DownloadSimple, ArrowLeft, ArrowClockwise, Package } from '@phosphor-icons/react'
 import { monitor, decisionThreshold, type ModelId, getLogisticState, sampleAndRecordPredictions } from '@/lib/modeling'
 import { toast } from 'sonner'
 import { ChartContainer, ChartLegendInline, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
@@ -220,6 +220,7 @@ export function AIAuditTrail({ onBack }: Props) {
           <Button variant="outline" onClick={handleRefresh} className="flex items-center gap-2"><ArrowClockwise className="h-4 w-4" /> Refresh</Button>
           <Button variant="outline" onClick={exportCsv} className="flex items-center gap-2"><DownloadSimple className="h-4 w-4" /> CSV</Button>
           <Button variant="default" onClick={exportJson} className="flex items-center gap-2"><DownloadSimple className="h-4 w-4" /> JSON</Button>
+          <Button variant="secondary" onClick={() => { window.location.hash = '#audit/evidence' }} className="flex items-center gap-2"><Package className="h-4 w-4" /> Bundle Evidence</Button>
           <Button variant="secondary" onClick={sampleNow} className="flex items-center gap-2">Sample now</Button>
           <Button variant="ghost" onClick={onBack}><ArrowLeft className="h-4 w-4 mr-2" /> Back</Button>
         </div>
