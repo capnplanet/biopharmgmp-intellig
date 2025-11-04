@@ -33,6 +33,26 @@ npm run kill
 - POST /api/metrics → append a metrics summary point
 - GET /api/metrics?from=&to=&limit= → query metrics points
 
+### Security (optional, non-breaking)
+
+You can enable lightweight auth and RBAC via environment variables when starting the server:
+
+```bash
+# Example: enable token auth and RBAC + immutable archive
+AUTH_TOKEN=dev-secret RBAC_ENABLED=true ARCHIVE_ENABLED=true npm run server
+```
+
+- If `AUTH_TOKEN` is set, mutating endpoints require `Authorization: Bearer <token>`.
+- If `RBAC_ENABLED=true`, the server enforces roles via `X-User-Role` header on certain endpoints.
+	- Allowed roles (example): Admin, Quality Approver, Supervisor, System
+- If `ARCHIVE_ENABLED=true`, each append is also stored in a write-once archive under `server/.archive/`.
+	- Check archive status: `GET /api/audit/archive/status`
+
+### E-signature verification (scaffold)
+
+- `POST /api/esign/verify` with `{ userId, reason, timestamp? }` returns `{ signature, timestamp }`.
+	- In production, integrate with your IdP/PKI/HSM. This endpoint is a deterministic scaffold for pilots.
+
 Data is stored under `server/.data/*.jsonl` and can be backed up or shipped to an immutable store.
 
 ## Compliance notes
