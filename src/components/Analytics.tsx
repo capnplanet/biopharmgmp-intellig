@@ -130,11 +130,8 @@ function computeQualitySnapshot(snapshot: TwinSnapshot): QualitySnapshot {
   const deviationProbs = formattedBatches.map(item => item.deviationProbability / 100)
   const progressFactors = snapshot.batches.map(batch => Math.max(0, Math.min(1, batch.progress / 100)))
 
-  const batchYield = Number((
-    formattedBatches.reduce((sum, _item, index) => sum + qualityProbs[index] * (progressFactors[index] ?? 1), 0) /
-    totalBatches *
-    100
-  ).toFixed(1))
+  // Use aggregated probability for yield to align with other views
+  const batchYield = Number((aggregateBatchProbability('quality_prediction', snapshot.batches) * 100).toFixed(1))
 
   const firstPassRate = Number((
     (qualityProbs.filter(p => p >= decisionThreshold.quality_prediction).length / totalBatches) * 100
@@ -147,11 +144,6 @@ function computeQualitySnapshot(snapshot: TwinSnapshot): QualitySnapshot {
   const averageDeviationRisk = Number((
     aggregateBatchProbability('deviation_risk', snapshot.batches) * 100
   ).toFixed(1))
-
-  const equipmentPredictions = snapshot.equipmentTelemetry.map(eq => {
-    const equipmentBase = predictEquipmentFailure(eq)
-    return predictLogisticProb('equipment_failure', equipmentBase.features) ?? equipmentBase.p
-  })
 
   const equipmentOEE = Number(((1 - aggregateEquipmentFailureProbability(snapshot.equipmentTelemetry)) * 100).toFixed(1))
 
@@ -229,7 +221,7 @@ function buildRuntimeModels(snapshot: TwinSnapshot): PredictiveModel[] {
   const eP = aggregateEquipmentFailureProbability(snapEq)
   const qSource: 'heuristic' | 'logistic' = predictLogisticProb('quality_prediction', qH.features) != null ? 'logistic' : 'heuristic'
   const dSource: 'heuristic' | 'logistic' = predictLogisticProb('deviation_risk', dH.features) != null ? 'logistic' : 'heuristic'
-  const eSource: 'heuristic' | 'logistic' = predictLogisticProb('equipment_failure', eH.features) != null ? 'logistic' : 'heuristic'
+  const eSource: 'heuristic' | 'logistic' = predictLogisticProb('equipment_failure', eH.features, topEq.id) != null || predictLogisticProb('equipment_failure', eH.features) != null ? 'logistic' : 'heuristic'
   const qSummary = qSource === 'logistic'
     ? 'Local logistic regression on engineered CPP features; calibrated to produce probability.'
     : 'Rule-based mapping of CPP compliance and parameter deltas to a probability-like quality score.'
@@ -291,9 +283,9 @@ function buildRuntimeModels(snapshot: TwinSnapshot): PredictiveModel[] {
       value: eP * 100,
       confidence: conf(eP),
       timestamp: new Date(),
-        explanation: predictLogisticProb('equipment_failure', eH.features) != null
-          ? `Logistic model (local) on vibration/thermal features; outputs σ(w·x + b). Fallback to heuristic if model untrained. For ${topEq.id}, rms_norm=${eH.features.rms_norm.toFixed(2)}, temp_var_norm=${eH.features.temp_var_norm.toFixed(2)}, alert=${eH.features.alert_flag}.`
-          : `Heuristic: p = 0.6*rms_norm + 0.3*temp_var_norm + 0.2*alert. For ${topEq.id}, rms_norm=${eH.features.rms_norm.toFixed(2)}, temp_var_norm=${eH.features.temp_var_norm.toFixed(2)}, alert=${eH.features.alert_flag}.`,
+        explanation: (predictLogisticProb('equipment_failure', eH.features, topEq.id) != null || predictLogisticProb('equipment_failure', eH.features) != null)
+          ? `Fleet average failure probability across equipment (value). Example features shown for top-risk unit ${topEq.id}. Logistic model (local) on vibration/thermal features; outputs σ(w·x + b). Fallback to heuristic if model untrained. Example: rms_norm=${eH.features.rms_norm.toFixed(2)}, temp_var_norm=${eH.features.temp_var_norm.toFixed(2)}, alert=${eH.features.alert_flag}.`
+          : `Fleet average failure probability across equipment (value). Example features shown for top-risk unit ${topEq.id}. Heuristic: p = 0.6*rms_norm + 0.3*temp_var_norm + 0.2*alert. Example: rms_norm=${eH.features.rms_norm.toFixed(2)}, temp_var_norm=${eH.features.temp_var_norm.toFixed(2)}, alert=${eH.features.alert_flag}.`,
         source: eSource,
         summary: eSummary,
     }]
@@ -610,7 +602,7 @@ export function Analytics() {
     // Align risk trend history with iterative summaries; compute averages from current snapshot
     const snapshotBatches = latestTwin?.batches ?? batches
     const avgQual = snapshotBatches.length
-      ? (snapshotBatches.reduce((sum, b) => sum + predictQuality(b).p, 0) / snapshotBatches.length) * 100
+      ? aggregateBatchProbability('quality_prediction', snapshotBatches) * 100
       : 0
     const now = new Date()
     const entry: RiskHistoryPoint = {
@@ -667,10 +659,11 @@ export function Analytics() {
     return snapshot
       .map(item => {
         const prediction = predictEquipmentFailure(item)
+        const p = predictLogisticProb('equipment_failure', prediction.features, item.id) ?? predictLogisticProb('equipment_failure', prediction.features) ?? prediction.p
         return {
           id: item.id,
           name: equipmentCatalog[item.id] ?? item.id,
-          risk: Number((prediction.p * 100).toFixed(1)),
+          risk: Number((p * 100).toFixed(1)),
           vibrationRMS: Number(item.vibrationRMS.toFixed(2)),
           alert: item.vibrationAlert,
         }
@@ -698,8 +691,7 @@ export function Analytics() {
   const averageQualityConfidence = useMemo(() => {
     const snapshot = latestTwin?.batches ?? batches
     if (snapshot.length === 0) return 0
-    const total = snapshot.reduce((sum, batch) => sum + predictQuality(batch).p, 0)
-    return Number(((total / snapshot.length) * 100).toFixed(1))
+    return Number((aggregateBatchProbability('quality_prediction', snapshot) * 100).toFixed(1))
   }, [latestTwin])
 
   const cppOutOfSpecCount = useMemo(() => {

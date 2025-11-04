@@ -12,6 +12,7 @@ import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'r
 import { useProductionBatches } from '@/hooks/use-production-batches'
 import { useKV } from '@github/spark/hooks'
 import type { CAPA, ChangeControl, Deviation } from '@/types/quality'
+import { predictEquipmentFailure, predictLogisticProb, trainLogisticForModel, getLogisticState } from '@/lib/modeling'
 
 type Props = {
   id: string
@@ -113,6 +114,40 @@ export function EquipmentDetails({ id, onBack }: Props) {
           <ArrowLeft className="h-4 w-4 mr-2" /> Back to Dashboard
         </Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Predictive Health (This Unit)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {telemetry ? (
+            (() => {
+              const base = predictEquipmentFailure(telemetry)
+              const lp = predictLogisticProb('equipment_failure', base.features, id) ?? predictLogisticProb('equipment_failure', base.features)
+              const p = lp ?? base.p
+              const source = lp != null ? 'logistic' : 'heuristic'
+              const state = getLogisticState('equipment_failure', id) ?? getLogisticState('equipment_failure')
+              return (
+                <div className="space-y-2">
+                  <div className="text-sm text-muted-foreground">Model source: <Badge variant="outline">{source}</Badge>{state ? <span className="ml-2 text-xs">(trained {new Date(state.trainedAt).toLocaleTimeString()})</span> : null}</div>
+                  <div className="text-3xl font-mono font-bold">{(p * 100).toFixed(1)}%</div>
+                  <div className="text-xs text-muted-foreground">Probability of failure (local, unit-level). Fleet aggregates are shown in Analytics.</div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                    <div>rms_norm: <span className="font-mono">{base.features.rms_norm.toFixed(2)}</span></div>
+                    <div>temp_var_norm: <span className="font-mono">{base.features.temp_var_norm.toFixed(2)}</span></div>
+                    <div>alert: <span className="font-mono">{base.features.alert_flag}</span></div>
+                  </div>
+                  <div className="mt-3">
+                    <Button size="sm" variant="secondary" onClick={() => { try { trainLogisticForModel('equipment_failure', { minSamples: 60, requireBothClasses: true }, id) } catch {} }}>Retrain Local Model</Button>
+                  </div>
+                </div>
+              )
+            })()
+          ) : (
+            <div className="text-sm text-muted-foreground">No telemetry available yet.</div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

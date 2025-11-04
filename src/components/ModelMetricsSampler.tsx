@@ -32,6 +32,12 @@ export function ModelMetricsSampler() {
         const next = [...curr, ...initial]
         return next.length > MAX_POINTS ? next.slice(next.length - MAX_POINTS) : next
       })
+      // Best-effort forward metrics summary to backend
+      try {
+        for (const p of initial) {
+          fetch('/api/metrics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p), keepalive: true }).catch(() => {})
+        }
+      } catch {}
     } catch {}
 
     const timer = window.setInterval(() => {
@@ -46,6 +52,12 @@ export function ModelMetricsSampler() {
           // Retain only the last MAX_POINTS
           return next.length > MAX_POINTS ? next.slice(next.length - MAX_POINTS) : next
         })
+        // Best-effort forward metrics summary to backend
+        try {
+          for (const p of pts) {
+            fetch('/api/metrics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p), keepalive: true }).catch(() => {})
+          }
+        } catch {}
       } catch {
         // ignore sampling errors
       }

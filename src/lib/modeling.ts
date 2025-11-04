@@ -192,7 +192,12 @@ type LRState = {
   n: number // samples used to train
 }
 
-const lrRegistry: Partial<Record<ModelId, LRState>> = {}
+// Allow per-entity (e.g., per-equipment) logistic models by keying registry with model[:entityId]
+const lrRegistry: Record<string, LRState> = {}
+
+function lrKey(model: ModelId, entityId?: string | null) {
+  return entityId ? `${model}:${entityId}` : model
+}
 
 function sigmoid(z: number) {
   // clamp to avoid overflow
@@ -258,13 +263,15 @@ export type LRTrainOptions = {
  * Train a per-model logistic regression from monitor records. Stores the model in-memory.
  * Returns true if trained/updated; false if insufficient data.
  */
-export function trainLogisticForModel(model: ModelId, opts?: LRTrainOptions): boolean {
+export function trainLogisticForModel(model: ModelId, opts?: LRTrainOptions, entityId?: string): boolean {
   const lr = opts?.learningRate ?? 0.1
   const epochs = opts?.epochs ?? 200
   const l2 = opts?.l2 ?? 1e-3
   const minN = opts?.minSamples ?? 60
   const needBoth = opts?.requireBothClasses ?? true
-  const rs = monitor.getRecords(model)
+  let rs = monitor.getRecords(model)
+  // If training a per-entity model, filter by record id (entity identifier)
+  if (entityId) rs = rs.filter(r => r.id === entityId)
   if (rs.length < minN) return false
   const pos = rs.filter(r => r.y === 1).length
   const neg = rs.filter(r => r.y === 0).length
@@ -301,7 +308,7 @@ export function trainLogisticForModel(model: ModelId, opts?: LRTrainOptions): bo
     b -= lr * gradB
   }
 
-  lrRegistry[model] = {
+  lrRegistry[lrKey(model, entityId)] = {
     featureKeys: keys,
     weights: w,
     bias: b,
@@ -314,8 +321,9 @@ export function trainLogisticForModel(model: ModelId, opts?: LRTrainOptions): bo
 }
 
 /** Predict probability using the learned logistic model if available; returns null if not present */
-export function predictLogisticProb(model: ModelId, features: Features): number | null {
-  const st = lrRegistry[model]
+export function predictLogisticProb(model: ModelId, features: Features, entityId?: string): number | null {
+  // Prefer entity-specific model, else fallback to global model
+  const st = lrRegistry[lrKey(model, entityId)] ?? lrRegistry[lrKey(model)]
   if (!st) return null
   const x = vectorize(features, st.featureKeys)
   const z = standardizeApply(x, st.mean, st.std)
@@ -324,9 +332,12 @@ export function predictLogisticProb(model: ModelId, features: Features): number 
   return clamp(sigmoid(s), 0, 1)
 }
 
-export function getLogisticState(model: ModelId): (LRState & { model: ModelId }) | null {
-  const st = lrRegistry[model]
-  return st ? { ...st, model } : null
+export function getLogisticState(model: ModelId, entityId?: string): (LRState & { model: ModelId; entityId?: string }) | null {
+  const key = lrKey(model, entityId)
+  const st = lrRegistry[key]
+  if (st) return { ...st, model, entityId }
+  const g = lrRegistry[lrKey(model)]
+  return g ? { ...g, model } : null
 }
 
 // ---------- Aggregation helpers to align model outputs with iterative summaries ----------
@@ -355,7 +366,7 @@ export function aggregateEquipmentFailureProbability(eqList: EqT[]): number {
   let sum = 0
   for (const eq of eqList) {
     const e = predictEquipmentFailure(eq)
-    const p = predictLogisticProb('equipment_failure', e.features) ?? e.p
+    const p = predictLogisticProb('equipment_failure', e.features, eq.id) ?? predictLogisticProb('equipment_failure', e.features) ?? e.p
     sum += p
   }
   return clamp(sum / eqList.length, 0, 1)
@@ -376,7 +387,7 @@ export function sampleAndRecordPredictions() {
   // Record for all equipment to mix alert/non-alert
   for (const eq of equipmentTelemetry) {
     const e = predictEquipmentFailure(eq)
-    const ep = predictLogisticProb('equipment_failure', e.features) ?? e.p
+    const ep = predictLogisticProb('equipment_failure', e.features, eq.id) ?? predictLogisticProb('equipment_failure', e.features) ?? e.p
     monitor.add({ id: eq.id, model: 'equipment_failure', timestamp: now, p: ep, y: e.y, features: e.features })
   }
 }

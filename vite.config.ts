@@ -18,7 +18,16 @@ export default defineConfig({
     sparkPlugin() as PluginOption,
   ],
   server: {
-    port: 4000
+    port: 4000,
+    proxy: {
+      // Proxy API calls to the local backend during development
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false,
+        ws: true,
+      },
+    },
   },
   resolve: {
     alias: {

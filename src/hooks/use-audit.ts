@@ -63,6 +63,19 @@ export function useAuditLogger(user?: { id: string; role: string; ipAddress?: st
       digitalSignature: opts?.digitalSignature,
     }
     setEvents((curr = []) => [event, ...curr])
+    // Best-effort forward to backend audit API (tamper-evident chain) when available
+    try {
+      const payload = { ...event, timestamp: event.timestamp.toISOString() }
+      if (typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
+        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
+        // sendBeacon is fire-and-forget; ignore result
+        ;(navigator as any).sendBeacon('/api/audit', blob)
+      } else if (typeof fetch !== 'undefined') {
+        fetch('/api/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), keepalive: true }).catch(() => {})
+      }
+    } catch {
+      // non-blocking
+    }
   }
 
   async function withAudit<T>(actionName: string, module: AuditModule, details: string, fn: () => Promise<T>, opts?: { recordId?: string }) {

@@ -177,11 +177,30 @@ export function BatchMonitoring() {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => { setRoute(`batch/${selectedBatch.id}/view`); log('View Batch Details', 'batch', `Viewed details for ${selectedBatch.id}`, { recordId: selectedBatch.id }) }}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      // Update KV route and hash to guarantee overlay navigation
+                      const path = `batch/${selectedBatch.id}/view`
+                      setRoute(path)
+                      try { window.location.hash = `#batches/${path}` } catch {}
+                      try { log('View Batch Details', 'batch', `Viewed details for ${selectedBatch.id}`, { recordId: selectedBatch.id }) } catch {}
+                    }}
+                  >
                     <Eye className="h-4 w-4 mr-2" />
                     View Details
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => { setRoute(`batch/${selectedBatch.id}/analytics`); log('Open Batch Analytics', 'batch', `Opened analytics for ${selectedBatch.id}`, { recordId: selectedBatch.id }) }}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const path = `batch/${selectedBatch.id}/analytics`
+                      setRoute(path)
+                      try { window.location.hash = `#batches/${path}` } catch {}
+                      try { log('Open Batch Analytics', 'batch', `Opened analytics for ${selectedBatch.id}`, { recordId: selectedBatch.id }) } catch {}
+                    }}
+                  >
                     <TrendUp className="h-4 w-4 mr-2" />
                     Analytics
                   </Button>
