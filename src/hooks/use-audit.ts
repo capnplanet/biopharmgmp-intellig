@@ -66,12 +66,22 @@ export function useAuditLogger(user?: { id: string; role: string; ipAddress?: st
     // Best-effort forward to backend audit API (tamper-evident chain) when available
     try {
       const payload = { ...event, timestamp: event.timestamp.toISOString() }
+      const auth = import.meta?.env?.VITE_BACKEND_AUTH_TOKEN
+      const role = import.meta?.env?.VITE_RBAC_ROLE
+      const commonHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (auth) commonHeaders['Authorization'] = `Bearer ${auth}`
+      if (role) commonHeaders['X-User-Role'] = role
       if (typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
         const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
         const nb = navigator as Navigator & { sendBeacon: (url: string, data?: BodyInit) => boolean }
-        nb.sendBeacon('/api/audit', blob)
+        // sendBeacon cannot add headers; fallback to fetch if auth is required
+        if (auth || role) {
+          fetch('/api/audit', { method: 'POST', headers: commonHeaders, body: JSON.stringify(payload), keepalive: true }).catch(() => {})
+        } else {
+          nb.sendBeacon('/api/audit', blob)
+        }
       } else if (typeof fetch !== 'undefined') {
-        fetch('/api/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), keepalive: true }).catch(() => {})
+        fetch('/api/audit', { method: 'POST', headers: commonHeaders, body: JSON.stringify(payload), keepalive: true }).catch(() => {})
       }
     } catch {
       // non-blocking

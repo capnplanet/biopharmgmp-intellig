@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import crypto from 'crypto'
 
 const ARCHIVE_DIR = path.resolve(process.cwd(), 'server', '.archive')
 
@@ -25,14 +26,22 @@ export function createImmutableArchive() {
       ensureDir(dir)
       const fname = `${ts.getTime()}-${record.id || 'rec'}.json`
       const fpath = path.join(dir, fname)
+      const body = Buffer.from(JSON.stringify(record, null, 2), 'utf8')
       // Write-once: use flag 'wx' to avoid overwrite; mark read-only after writing
-      await fs.promises.writeFile(fpath, JSON.stringify(record, null, 2), { flag: 'wx' })
+      await fs.promises.writeFile(fpath, body, { flag: 'wx' })
       await fs.promises.chmod(fpath, 0o444)
+      try {
+        // Sidecar checksum for verifiability
+        const sum = crypto.createHash('sha256').update(body).digest('hex')
+        const sumPath = fpath + '.sha256'
+        await fs.promises.writeFile(sumPath, sum + '  ' + path.basename(fpath) + '\n', { flag: 'wx' })
+        await fs.promises.chmod(sumPath, 0o444)
+      } catch {}
       return { path: fpath }
     },
     async status() {
-      // Count files for a quick health check
-      const res = { totalFiles: 0, kinds: {} }
+      // Count files and verify checksums
+      const res = { root: ARCHIVE_DIR, totalFiles: 0, kinds: {}, verify: { ok: true, checked: 0, failed: [] } }
       const kinds = ['audit', 'metrics']
       for (const k of kinds) {
         const kdir = path.join(ARCHIVE_DIR, k)
@@ -42,7 +51,29 @@ export function createImmutableArchive() {
           for (const day of days) {
             const ddir = path.join(kdir, day)
             const files = await fs.promises.readdir(ddir)
-            count += files.length
+            for (const f of files) {
+              if (!f.endsWith('.json')) continue
+              count++
+              try {
+                const p = path.join(ddir, f)
+                const body = await fs.promises.readFile(p)
+                const got = crypto.createHash('sha256').update(body).digest('hex')
+                const sumPath = p + '.sha256'
+                let expect = ''
+                try {
+                  const s = await fs.promises.readFile(sumPath, 'utf8')
+                  expect = (s.split(/\s+/)[0] || '').trim()
+                } catch {}
+                res.verify.checked++
+                if (!expect || expect !== got) {
+                  res.verify.ok = false
+                  res.verify.failed.push({ file: p, expect, got })
+                }
+              } catch (err) {
+                res.verify.ok = false
+                res.verify.failed.push({ file: path.join(ddir, f), error: String(err) })
+              }
+            }
           }
         } catch {}
         res.kinds[k] = count

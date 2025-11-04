@@ -52,7 +52,7 @@ app.post('/api/audit', requireAuth, requireRole(['Admin','Quality Approver','Sys
     }
     const stored = await audit.append(event)
     if (ARCHIVE_ENABLED) {
-      try { await archive.save('audit', stored) } catch (e) { /* non-blocking */ }
+      try { await archive.save('audit', stored) } catch { /* non-blocking */ }
     }
     res.json({ ok: true, event: stored })
   } catch (err) {
@@ -91,7 +91,7 @@ app.post('/api/metrics', requireAuth, requireRole(['Admin','System']), async (re
     const point = req.body
     const stored = await metrics.append(point)
     if (ARCHIVE_ENABLED) {
-      try { await archive.save('metrics', stored) } catch (e) { /* non-blocking */ }
+      try { await archive.save('metrics', stored) } catch { /* non-blocking */ }
     }
     res.json({ ok: true, point: stored })
   } catch (err) {

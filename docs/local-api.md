@@ -55,8 +55,48 @@ AUTH_TOKEN=dev-secret RBAC_ENABLED=true ARCHIVE_ENABLED=true npm run server
 
 Data is stored under `server/.data/*.jsonl` and can be backed up or shipped to an immutable store.
 
+## Immutable archive (optional)
+
+You can enable a WORM-like append-only archive for audit payloads. When enabled, each audit record is also written as a standalone JSON file under `server/.archive/YYYY/MM/DD/` with a SHA‑256 checksum. Files are marked read-only after creation to discourage edits. This isn’t a replacement for true object-lock/WORM storage but provides local immutability semantics and verifiability.
+
+Enable via env vars when starting the API:
+
+```bash
+# write to server/.archive (default)
+ARCHIVE_ENABLED=true npm run server
+
+# or specify a custom directory
+ARCHIVE_ENABLED=true ARCHIVE_DIR=/data/immutable-archive npm run server
+```
+
+Endpoints:
+
+- `GET /api/audit/archive/status` → basic archive status (enabled flag, root path, counts, verification ok/failed summary).
+
+Notes:
+
+- For true immutability in production, place the archive on object storage with object lock (e.g., S3 with WORM) or a filesystem with policy controls. This adapter is intentionally simple to keep pilots moving.
+
 ## Compliance notes
 
 - Audit trail entries are chained via SHA‑256 of `{prevHash, payload}` and verified by `GET /api/audit/verify`.
+## Auth and RBAC (optional)
+
+Environment variables:
+
+- `AUTH_TOKEN` → when set, mutating endpoints require `Authorization: Bearer <token>`
+- `RBAC_ENABLED=true` → when enabled, set `X-User-Role` header; examples: `Admin`, `Quality Approver`, `Supervisor`, `System`
+
+Example:
+
+```bash
+AUTH_TOKEN=devtoken RBAC_ENABLED=true npm run server
+
+# curl with headers
+curl -H 'Authorization: Bearer devtoken' -H 'X-User-Role: Admin' -d '{"action":"Test","module":"system","details":"ok"}' \
+	-H 'Content-Type: application/json' http://localhost:5000/api/audit
+```
+
 - The UI continues to work without the API (offline-friendly); it forwards audit and metrics best‑effort when the API is available.
 - Digital signatures created in the UI (Web Crypto SHA‑256) are preserved by the API when provided.
+ - Optional immutable archive provides verifiable, append-only copies of audit records with per-file checksums and a verification endpoint.
