@@ -4,7 +4,7 @@ import { useAlerts } from '@/hooks/use-alerts'
 import { subscribeToTwin, type TwinSnapshot } from '@/lib/digitalTwin'
 import { batches as seedBatches, equipmentTelemetry as seedEquipmentTelemetry } from '@/data/seed'
 import { getCPPCompliance } from '@/data/seed'
-import { decisionThreshold, monitor, predictDeviationRisk, predictEquipmentFailure, predictQuality, predictLogisticProb } from '@/lib/modeling'
+import { decisionThreshold, monitor, predictDeviationRisk, predictEquipmentFailure, predictQuality, predictLogisticProb, aggregateBatchProbability, aggregateEquipmentFailureProbability } from '@/lib/modeling'
 import type { AutomationSuggestion } from '@/types/automation'
 import type { CAPA, ChangeControl, Deviation } from '@/types/quality'
 
@@ -162,8 +162,9 @@ const deriveDigest = (
   const qualityProbs = formattedBatches.map(item => item.qualityProbability / 100)
   const deviationProbs = formattedBatches.map(item => item.deviationProbability / 100)
 
+  // Normalize summary metrics to use aggregate probabilities consistent with Analytics
   const batchYield = total
-    ? formatNumber((formattedBatches.reduce((sum, _item, index) => sum + qualityProbs[index] * (progressFactors[index] ?? 1), 0) / total) * 100)
+    ? formatNumber(aggregateBatchProbability('quality_prediction', batches) * 100)
     : 0
 
   const firstPassRate = total
@@ -174,16 +175,14 @@ const deriveDigest = (
     ? formatNumber((deviationProbs.filter(p => p >= decisionThreshold.deviation_risk).length / total) * 100)
     : 0
 
-  const averageDeviationRisk = total ? formatNumber((deviationProbs.reduce((sum, p) => sum + p, 0) / total) * 100) : 0
-
-  const equipmentPredictions = equipment.map(eq => {
-    const base = predictEquipmentFailure(eq)
-    return predictLogisticProb('equipment_failure', base.features) ?? base.p
-  })
-
-  const equipmentOee = equipmentPredictions.length
-    ? formatNumber((equipmentPredictions.reduce((sum, p) => sum + (1 - p), 0) / equipmentPredictions.length) * 100)
+  const averageDeviationRisk = total
+    ? formatNumber(aggregateBatchProbability('deviation_risk', batches) * 100)
     : 0
+
+  const equipmentAvgFailureProb = equipment.length
+    ? aggregateEquipmentFailureProbability(equipment)
+    : 0
+  const equipmentOee = formatNumber((1 - equipmentAvgFailureProb) * 100)
 
   const averageCompliance = formattedBatches.length
     ? formatNumber(formattedBatches.reduce((sum, item) => sum + item.compliance, 0) / formattedBatches.length)

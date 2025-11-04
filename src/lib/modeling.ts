@@ -329,6 +329,38 @@ export function getLogisticState(model: ModelId): (LRState & { model: ModelId })
   return st ? { ...st, model } : null
 }
 
+// ---------- Aggregation helpers to align model outputs with iterative summaries ----------
+
+/** Compute probability for a single batch for the given model, using logistic if available */
+export function predictBatchProbability(model: Extract<ModelId, 'quality_prediction' | 'deviation_risk'>, batch: BatchData): number {
+  if (model === 'quality_prediction') {
+    const q = predictQuality(batch)
+    return predictLogisticProb('quality_prediction', q.features) ?? q.p
+  }
+  const d = predictDeviationRisk(batch)
+  return predictLogisticProb('deviation_risk', d.features) ?? d.p
+}
+
+/** Average probability across batches for a model (0..1). Falls back to heuristic if logistic not trained. */
+export function aggregateBatchProbability(model: Extract<ModelId, 'quality_prediction' | 'deviation_risk'>, bs: BatchData[]): number {
+  if (!bs || bs.length === 0) return 0
+  let sum = 0
+  for (const b of bs) sum += predictBatchProbability(model, b)
+  return clamp(sum / bs.length, 0, 1)
+}
+
+/** Average equipment failure probability across telemetry entries (0..1). */
+export function aggregateEquipmentFailureProbability(eqList: EqT[]): number {
+  if (!eqList || eqList.length === 0) return 0
+  let sum = 0
+  for (const eq of eqList) {
+    const e = predictEquipmentFailure(eq)
+    const p = predictLogisticProb('equipment_failure', e.features) ?? e.p
+    sum += p
+  }
+  return clamp(sum / eqList.length, 0, 1)
+}
+
 // Convenience: produce a few fresh predictions and record them
 export function sampleAndRecordPredictions() {
   const now = Date.now()

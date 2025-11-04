@@ -33,6 +33,7 @@ import { deriveDisplayData, getEquipmentMeta } from '@/data/equipmentCatalog'
 import type { BatchData, EquipmentTelemetry } from '@/data/seed'
 import type { AutomationSuggestion } from '@/types/automation'
 import type { CAPA, ChangeControl, Deviation, Investigation } from '@/types/quality'
+import { getActiveCapaCount, getActiveDeviationCount, getCriticalDeviationCountNonClosed } from '@/utils/qualitySelectors'
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 
 interface KPICardProps {
@@ -142,14 +143,8 @@ export function Dashboard() {
     const avg = equipment.reduce((acc, item) => acc + item.vibrationRMS, 0) / equipment.length
     return Number(avg.toFixed(2))
   }, [equipment])
-  const openDeviationCount = useMemo(
-    () => deviations.filter(dev => dev.status === 'open' || dev.status === 'investigating').length,
-    [deviations]
-  )
-  const criticalDeviationCount = useMemo(
-    () => deviations.filter(dev => dev.severity === 'critical' && dev.status !== 'closed').length,
-    [deviations]
-  )
+  const openDeviationCount = useMemo(() => getActiveDeviationCount(deviations), [deviations])
+  const criticalDeviationCount = useMemo(() => getCriticalDeviationCountNonClosed(deviations), [deviations])
   const automationPending = useMemo(
     () => automationQueue.filter(item => item.status === 'pending').length,
     [automationQueue]
@@ -158,10 +153,7 @@ export function Dashboard() {
     () => automationQueue.filter(item => item.status === 'accepted').length,
     [automationQueue]
   )
-  const capaActive = useMemo(
-    () => capas.filter(item => item.status !== 'complete').length,
-    [capas]
-  )
+  const capaActive = useMemo(() => getActiveCapaCount(capas), [capas])
   const activeChangeControls = useMemo(
     () => changeControls.filter(item => item.status !== 'closed').length,
     [changeControls]
@@ -233,7 +225,7 @@ export function Dashboard() {
   }
 
   const deviationChartConfig: ChartConfig = {
-    count: { label: 'Open Deviations', color: '#9333ea' },
+    count: { label: 'Active Deviations', color: '#9333ea' },
   }
 
   const capaChartConfig: ChartConfig = {
@@ -470,7 +462,7 @@ export function Dashboard() {
           <TooltipTrigger asChild>
             <div>
               <KPICard
-                title="Open Deviations"
+                title="Active Deviations"
                 value={openDeviationCount}
                 change={`${criticalDeviationCount} critical`}
                 status={criticalDeviationCount > 0 ? 'critical' : openDeviationCount > 0 ? 'warning' : 'normal'}
@@ -631,10 +623,14 @@ export function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => { window.location.hash = '#quality' }}>Open eQMS</Button>
+              <Button size="sm" onClick={() => { window.location.hash = '#quality/deviation/new' }}>Log Deviation</Button>
+            </div>
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-sm font-medium text-muted-foreground">Deviation Severity Mix</h4>
-                <Badge variant="outline">{openDeviationCount} open</Badge>
+                <Badge variant="outline">{openDeviationCount} active</Badge>
               </div>
               {hasDeviationData ? (
                 <ChartContainer className="h-52" config={deviationChartConfig}>

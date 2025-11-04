@@ -18,7 +18,7 @@ import {
   Info
 } from '@phosphor-icons/react'
 import { equipmentTelemetry, batches, equipmentCalibration, getCPPCompliance } from '@/data/seed'
-import { monitor, sampleAndRecordPredictions, predictQuality, predictDeviationRisk, predictEquipmentFailure, decisionThreshold, trainLogisticForModel, predictLogisticProb, getLogisticState, type ModelId } from '@/lib/modeling'
+import { monitor, sampleAndRecordPredictions, predictQuality, predictDeviationRisk, predictEquipmentFailure, decisionThreshold, trainLogisticForModel, predictLogisticProb, getLogisticState, type ModelId, aggregateBatchProbability, aggregateEquipmentFailureProbability } from '@/lib/modeling'
 import { useAlerts } from '@/hooks/use-alerts'
 import { useKV } from '@github/spark/hooks'
 import { ensureEquipmentFeed, subscribeToEquipmentFeed } from '@/lib/equipmentFeed'
@@ -145,7 +145,7 @@ function computeQualitySnapshot(snapshot: TwinSnapshot): QualitySnapshot {
   ).toFixed(1))
 
   const averageDeviationRisk = Number((
-    (deviationProbs.reduce((sum, p) => sum + p, 0) / totalBatches) * 100
+    aggregateBatchProbability('deviation_risk', snapshot.batches) * 100
   ).toFixed(1))
 
   const equipmentPredictions = snapshot.equipmentTelemetry.map(eq => {
@@ -153,9 +153,7 @@ function computeQualitySnapshot(snapshot: TwinSnapshot): QualitySnapshot {
     return predictLogisticProb('equipment_failure', equipmentBase.features) ?? equipmentBase.p
   })
 
-  const equipmentOEE = equipmentPredictions.length
-    ? Number((equipmentPredictions.reduce((sum, p) => sum + (1 - p), 0) / equipmentPredictions.length * 100).toFixed(1))
-    : 0
+  const equipmentOEE = Number(((1 - aggregateEquipmentFailureProbability(snapshot.equipmentTelemetry)) * 100).toFixed(1))
 
   const averageCompliance = formattedBatches.length
     ? Number((formattedBatches.reduce((sum, item) => sum + item.compliance, 0) / formattedBatches.length).toFixed(1))
@@ -199,7 +197,10 @@ const classifyConfidenceLevel = (value: number) => {
 }
 
 // Build functional models from current data using LR if available; fallback to lightweight predictors
-function buildRuntimeModels(): PredictiveModel[] {
+
+function buildRuntimeModels(snapshot: TwinSnapshot): PredictiveModel[] {
+  const snapBatches = snapshot.batches
+  const snapEq = snapshot.equipmentTelemetry
   const pickQualityBatch = batches.reduce((best, b) => {
     if (!best) return b
     const pb = predictQuality(best).p
@@ -222,15 +223,13 @@ function buildRuntimeModels(): PredictiveModel[] {
   const eH = predictEquipmentFailure(equipmentTelemetry.find(x => x.id === topEq.id)!)
 
   // Try LR probabilities if a trained model exists; otherwise use heuristics
-  const qLog = predictLogisticProb('quality_prediction', qH.features)
-  const dLog = predictLogisticProb('deviation_risk', dH.features)
-  const eLog = predictLogisticProb('equipment_failure', eH.features)
-  const qSource: 'heuristic' | 'logistic' = qLog != null ? 'logistic' : 'heuristic'
-  const dSource: 'heuristic' | 'logistic' = dLog != null ? 'logistic' : 'heuristic'
-  const eSource: 'heuristic' | 'logistic' = eLog != null ? 'logistic' : 'heuristic'
-  const qP = qLog ?? qH.p
-  const dP = dLog ?? dH.p
-  const eP = eLog ?? eH.p
+  // Aggregate probabilities across all current items to align with iterative summaries
+  const qP = aggregateBatchProbability('quality_prediction', snapBatches)
+  const dP = aggregateBatchProbability('deviation_risk', snapBatches)
+  const eP = aggregateEquipmentFailureProbability(snapEq)
+  const qSource: 'heuristic' | 'logistic' = predictLogisticProb('quality_prediction', qH.features) != null ? 'logistic' : 'heuristic'
+  const dSource: 'heuristic' | 'logistic' = predictLogisticProb('deviation_risk', dH.features) != null ? 'logistic' : 'heuristic'
+  const eSource: 'heuristic' | 'logistic' = predictLogisticProb('equipment_failure', eH.features) != null ? 'logistic' : 'heuristic'
   const qSummary = qSource === 'logistic'
     ? 'Local logistic regression on engineered CPP features; calibrated to produce probability.'
     : 'Rule-based mapping of CPP compliance and parameter deltas to a probability-like quality score.'
@@ -520,7 +519,12 @@ function PredictionCard({ model }: { model: PredictiveModel }) {
 }
 
 export function Analytics() {
-  const [models, setModels] = useState<PredictiveModel[]>(buildRuntimeModels())
+  const [latestTwin, setLatestTwin] = useState<TwinSnapshot>({
+    timestamp: new Date(),
+    batches,
+    equipmentTelemetry,
+  })
+  const [models, setModels] = useState<PredictiveModel[]>(buildRuntimeModels(latestTwin))
   const [metrics, setMetrics] = useState<QualityMetrics>(() => createEmptyMetrics())
   const [qualitySnapshot, setQualitySnapshot] = useState<QualitySnapshot>(() =>
     computeQualitySnapshot({ timestamp: new Date(), batches, equipmentTelemetry })
@@ -531,11 +535,7 @@ export function Analytics() {
   const [deviations = []] = useKV<Deviation[]>('deviations', [])
   const [automationQueue = []] = useKV<AutomationSuggestion[]>('automation-queue', [])
   const [riskHistory, setRiskHistory] = useState<RiskHistoryPoint[]>([])
-  const [latestTwin, setLatestTwin] = useState<TwinSnapshot>({
-    timestamp: new Date(),
-    batches,
-    equipmentTelemetry,
-  })
+  
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000)
     return () => clearInterval(timer)
@@ -561,9 +561,11 @@ export function Analytics() {
 
   // Refresh models periodically to reflect latest data
   useEffect(() => {
-    const id = setInterval(() => setModels(buildRuntimeModels()), 30000)
+    const refresh = () => setModels(buildRuntimeModels(latestTwin))
+    refresh()
+    const id = setInterval(refresh, 30000)
     return () => clearInterval(id)
-  }, [])
+  }, [latestTwin])
 
   // Train/update local logistic regressions periodically from monitor
   useEffect(() => {
@@ -605,18 +607,17 @@ export function Analytics() {
   }, [latestTwin])
 
   useEffect(() => {
-    const equipmentModel = models.find(m => m.type === 'equipment_failure')
-    const deviationModel = models.find(m => m.type === 'deviation_risk')
-    const qualityModel = models.find(m => m.type === 'quality_prediction')
-    const eqValue = equipmentModel?.predictions?.[0]?.value ?? 0
-    const devValue = deviationModel?.predictions?.[0]?.value ?? 0
-    const qualValue = qualityModel?.predictions?.[0]?.value ?? 0
+    // Align risk trend history with iterative summaries; compute averages from current snapshot
+    const snapshotBatches = latestTwin?.batches ?? batches
+    const avgQual = snapshotBatches.length
+      ? (snapshotBatches.reduce((sum, b) => sum + predictQuality(b).p, 0) / snapshotBatches.length) * 100
+      : 0
     const now = new Date()
     const entry: RiskHistoryPoint = {
       timestamp: now.toISOString(),
-      equipmentRisk: Number(eqValue.toFixed(2)),
-      deviationRisk: Number(devValue.toFixed(2)),
-      qualityConfidence: Number(qualValue.toFixed(2)),
+      equipmentRisk: Number((100 - (qualitySnapshot.equipmentOEE || 0)).toFixed(2)),
+      deviationRisk: Number((qualitySnapshot.averageDeviationRisk || 0).toFixed(2)),
+      qualityConfidence: Number(avgQual.toFixed(2)),
       alertCount: alerts.length,
     }
     setRiskHistory(prev => {
@@ -634,7 +635,7 @@ export function Analytics() {
       if (next.length > limit) next.shift()
       return next
     })
-  }, [models, alerts.length])
+  }, [qualitySnapshot, alerts.length, latestTwin])
 
   // Simulated local retrain on in-memory data (stub):
   // In production, replace with a real, local training job that reads approved datasets and writes versioned model artifacts.

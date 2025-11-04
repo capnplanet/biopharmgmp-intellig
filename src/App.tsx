@@ -32,6 +32,8 @@ import { EvidenceExportHelper } from '@/components/EvidenceExportHelper'
 import { useAuditLogger } from '@/hooks/use-audit'
 import { EquipmentDetails } from '@/components/EquipmentDetails'
 import { ModelMetricsSampler } from '@/components/ModelMetricsSampler'
+import { useSeedDeviationsFromTwin } from '@/hooks/useSeedDeviationsFromTwin'
+import { useBootstrapQualityData } from '@/hooks/useBootstrapQualityData'
 
 export type NavigationItem = 'dashboard' | 'batches' | 'quality' | 'analytics' | 'advanced-analytics' | 'audit' | 'assistant'
 
@@ -125,6 +127,10 @@ function App() {
   useEffect(() => {
     initializeQualityAutomation()
   }, [])
+
+  // Seed deviations from digital twin globally so all views stay consistent
+  useBootstrapQualityData()
+  useSeedDeviationsFromTwin()
 
   const renderContent = () => {
     switch (activeTab) {
