@@ -17,7 +17,7 @@ const SAMPLE_INTERVAL_MS = 30_000 // real-time sampling cadence
 const MAX_POINTS = 500 // retention across all models combined
 
 export function ModelMetricsSampler() {
-  const [history = [], setHistory] = useKV<MetricsPoint[]>('model-metrics-history', [])
+  const [, setHistory] = useKV<MetricsPoint[]>('model-metrics-history', [])
 
   useEffect(() => {
     // Kickstart: generate prediction records immediately, then record first metrics sample

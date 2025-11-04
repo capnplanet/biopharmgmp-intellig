@@ -1,3 +1,4 @@
+import type { SparkAPI } from '@/types/spark'
 // Minimal on-prem LLM provider scaffold
 // Registers window.spark to forward prompts to your internal gateway endpoint.
 
@@ -7,7 +8,7 @@ export type OnPremOptions = {
   model?: string // default model name to pass through
 }
 
-function buildPrompt(strings: any, ...values: any[]): string {
+function buildPrompt(strings: TemplateStringsArray, ...values: unknown[]): string {
   let out = ''
   for (let i = 0; i < strings.length; i++) {
     out += strings[i]
@@ -24,15 +25,19 @@ async function callOnPrem(endpoint: string, token: string | undefined, payload: 
   // Expect JSON { output: string } but fall back to text
   const ct = res.headers.get('content-type') || ''
   if (ct.includes('application/json')) {
-    const data = await res.json().catch(() => ({})) as any
-    return typeof data?.output === 'string' ? data.output : JSON.stringify(data)
+    const data: unknown = await res.json().catch(() => ({}))
+    if (data && typeof data === 'object' && 'output' in data) {
+      const o = (data as { output?: unknown }).output
+      if (typeof o === 'string') return o
+    }
+    return JSON.stringify(data)
   }
   return await res.text()
 }
 
 export function registerOnPremSpark(opts: OnPremOptions) {
   if (typeof window === 'undefined') return
-  const w = window as any
+  const w = window as unknown as Window & { spark?: SparkAPI }
   if (w.spark) return // respect an existing provider
   const endpoint = opts.endpoint
   const token = opts.token

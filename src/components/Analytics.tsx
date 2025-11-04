@@ -128,7 +128,7 @@ function computeQualitySnapshot(snapshot: TwinSnapshot): QualitySnapshot {
   const totalBatches = formattedBatches.length || 1
   const qualityProbs = formattedBatches.map(item => item.qualityProbability / 100)
   const deviationProbs = formattedBatches.map(item => item.deviationProbability / 100)
-  const progressFactors = snapshot.batches.map(batch => Math.max(0, Math.min(1, batch.progress / 100)))
+  // progressFactors removed (unused)
 
   // Use aggregated probability for yield to align with other views
   const batchYield = Number((aggregateBatchProbability('quality_prediction', snapshot.batches) * 100).toFixed(1))

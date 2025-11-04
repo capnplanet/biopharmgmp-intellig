@@ -46,7 +46,7 @@ export default tseslint.config(
   },
   // React ecosystem plugins
   {
-    files: ["**/*.{jsx,tsx}"],
+    files: ["**/*.{js,jsx,ts,tsx}"],
     plugins: {
       "react-hooks": reactHooks,
       "react-refresh": reactRefresh,
@@ -57,6 +57,8 @@ export default tseslint.config(
         "warn",
         { allowConstantExport: true },
       ],
+      // Allow intentional empty catch blocks in UI to ignore optional failures
+      "no-empty": ["error", { allowEmptyCatch: true }],
     },
   }
 );

@@ -1,7 +1,9 @@
 // Dev-only Spark mock: if no LLM is injected, provide a minimal local implementation
 // This avoids empty assistant responses and ensures AI audit logs populate during development.
 
-function makePrompt(strings: any, ...expr: any[]) {
+import type { SparkAPI } from '@/types/spark'
+
+function makePrompt(strings: TemplateStringsArray, ...expr: unknown[]) {
   let out = ''
   for (let i = 0; i < strings.length; i++) {
     out += strings[i]
@@ -26,7 +28,7 @@ async function mockLlm(prompt: unknown, model: string): Promise<string> {
 
 export function ensureDevSparkMock() {
   if (typeof window === 'undefined') return
-  const w = window as any
+  const w = window as unknown as Window & { spark?: SparkAPI }
   if (w.spark) return
   w.spark = {
     llmPrompt: makePrompt,

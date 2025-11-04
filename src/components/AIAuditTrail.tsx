@@ -39,7 +39,7 @@ export function AIAuditTrail({ onBack }: Props) {
 
   const aiEvents = useMemo(() => (events || []).filter(e => e.module === 'ai'), [events])
   const modelIds: ModelId[] = ['quality_prediction', 'deviation_risk', 'equipment_failure']
-  const modelMetrics = useMemo(() => modelIds.map(id => ({ id, metrics: monitor.metrics(id, { threshold: decisionThreshold[id], minN: 10, requireBothClasses: false }), lr: getLogisticState(id) })), [])
+  const modelMetrics = useMemo(() => modelIds.map(id => ({ id, metrics: monitor.metrics(id, { threshold: decisionThreshold[id], minN: 10, requireBothClasses: false }), lr: getLogisticState(id) })), [modelIds])
   // Fallback: reconstruct conversation from AI audit events if KV chat is empty
   const chatFromAudit: AssistantMessage[] = useMemo(() => {
     if ((chat || []).length > 0) return []

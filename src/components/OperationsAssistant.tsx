@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -63,7 +62,7 @@ export function OperationsAssistant() {
     setInput('')
   }, [setMessages])
 
-  const buildFallbackResponse = useCallback((question: string) => {
+  const buildFallbackResponse = useCallback(() => {
     const lines: string[] = []
     lines.push(latestSummary)
     lines.push('_(Generated from the latest operations snapshot—Spark runtime not connected.)_')
@@ -81,7 +80,7 @@ export function OperationsAssistant() {
     setInput('')
     const spark = getSpark()
     if (!spark?.llm || !spark.llmPrompt) {
-      const content = buildFallbackResponse(trimmed)
+  const content = buildFallbackResponse()
       appendMessage({ id: `${now.getTime()}-fallback`, role: 'assistant', content, createdAt: new Date().toISOString() })
       try { log('AI Assistant Response', 'ai', content.slice(0, 1200)) } catch {}
       return
@@ -124,13 +123,13 @@ export function OperationsAssistant() {
         }
       }
       const cleaned = output.trim()
-      const responseContent = cleaned.length > 0 ? output : buildFallbackResponse(trimmed)
+  const responseContent = cleaned.length > 0 ? output : buildFallbackResponse()
       appendMessage({ id: `${Date.now()}-assistant`, role: 'assistant', content: responseContent, createdAt: new Date().toISOString() })
       // Audit: record assistant response (truncated for size)
       try { log('AI Assistant Response', 'ai', responseContent.slice(0, 1200)) } catch {}
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
-      appendMessage({ id: `${Date.now()}-assistant-error`, role: 'assistant', content: `${buildFallbackResponse(trimmed)}\n\nError details: ${message}`, createdAt: new Date().toISOString() })
+  appendMessage({ id: `${Date.now()}-assistant-error`, role: 'assistant', content: `${buildFallbackResponse()}\n\nError details: ${message}`, createdAt: new Date().toISOString() })
       try { log('AI Assistant Error', 'ai', message) } catch {}
     } finally {
       setLoading(false)

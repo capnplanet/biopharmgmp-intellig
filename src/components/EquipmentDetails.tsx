@@ -8,7 +8,7 @@ import type { TwinSnapshot } from '@/lib/digitalTwin'
 import { equipmentCalibration, type EquipmentTelemetry, batches as seedBatches } from '@/data/seed'
 import { getEquipmentMeta } from '@/data/equipmentCatalog'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
-import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import { useProductionBatches } from '@/hooks/use-production-batches'
 import { useKV } from '@github/spark/hooks'
 import type { CAPA, ChangeControl, Deviation } from '@/types/quality'
@@ -57,7 +57,7 @@ export function EquipmentDetails({ id, onBack }: Props) {
       })
     })
     return () => unsub()
-  }, [])
+  }, [id])
 
   const telemetry = useMemo<EquipmentTelemetry | undefined>(() => {
     const list = latest?.equipmentTelemetry

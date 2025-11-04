@@ -158,7 +158,7 @@ const deriveDigest = (
       progress: item.progress,
     }))
 
-  const progressFactors = batches.map(batch => Math.max(0, Math.min(1, batch.progress / 100)))
+  // removed unused progressFactors
   const qualityProbs = formattedBatches.map(item => item.qualityProbability / 100)
   const deviationProbs = formattedBatches.map(item => item.deviationProbability / 100)
 

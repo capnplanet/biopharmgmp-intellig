@@ -35,7 +35,7 @@ export function EvidenceExportHelper({ onBack }: { onBack: () => void }) {
   const [to, setTo] = useState<string>('')
 
   const modelIds: ModelId[] = ['quality_prediction', 'deviation_risk', 'equipment_failure']
-  const modelMetrics = useMemo(() => modelIds.map(id => ({ id, metrics: monitor.metrics(id, { threshold: decisionThreshold[id], minN: 10, requireBothClasses: false }), lr: getLogisticState(id) })), [])
+  const modelMetrics = useMemo(() => modelIds.map(id => ({ id, metrics: monitor.metrics(id, { threshold: decisionThreshold[id], minN: 10, requireBothClasses: false }), lr: getLogisticState(id) })), [modelIds])
 
   const fromTs = useMemo(() => from ? Date.parse(from) : undefined, [from])
   const toTs = useMemo(() => to ? Date.parse(to) : undefined, [to])
@@ -46,10 +46,10 @@ export function EvidenceExportHelper({ onBack }: { onBack: () => void }) {
     return true
   }
 
-  const aiEvents = useMemo(() => (events || []).filter(e => e.module === 'ai' && inRange(new Date(e.timestamp as unknown as string).getTime())), [events, fromTs, toTs])
-  const filteredAudit = useMemo(() => (events || []).filter(e => inRange(new Date(e.timestamp as unknown as string).getTime())), [events, fromTs, toTs])
-  const filteredMetrics = useMemo(() => (metricsHistory || []).filter(p => inRange(p.t)), [metricsHistory, fromTs, toTs])
-  const filteredChat = useMemo(() => (chat || []).filter(m => inRange(new Date(m.createdAt).getTime() )), [chat, fromTs, toTs])
+  const aiEvents = useMemo(() => (events || []).filter(e => e.module === 'ai' && inRange(new Date(e.timestamp as unknown as string).getTime())), [events, inRange])
+  const filteredAudit = useMemo(() => (events || []).filter(e => inRange(new Date(e.timestamp as unknown as string).getTime())), [events, inRange])
+  const filteredMetrics = useMemo(() => (metricsHistory || []).filter(p => inRange(p.t)), [metricsHistory, inRange])
+  const filteredChat = useMemo(() => (chat || []).filter(m => inRange(new Date(m.createdAt).getTime() )), [chat, inRange])
 
   const buildZip = async () => {
     try {
@@ -135,7 +135,7 @@ export function EvidenceExportHelper({ onBack }: { onBack: () => void }) {
       // Noises: optionally log an audit event
       try {
         const ev: AuditEvent = {
-          id: `AUD-${Date.now()}-EVIDENCE` as any,
+          id: `AUD-${Date.now()}-EVIDENCE`,
           timestamp: new Date(),
           userId: 'system@local',
           userRole: 'System',

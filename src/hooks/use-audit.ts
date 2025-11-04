@@ -30,7 +30,7 @@ export type AuditEvent = {
 }
 
 export function useAuditLogger(user?: { id: string; role: string; ipAddress?: string; sessionId?: string }) {
-  const [events, setEvents] = useKV<AuditEvent[]>('audit-events')
+  const [, setEvents] = useKV<AuditEvent[]>('audit-events')
   const { user: currentUser } = useCurrentUser()
 
   function genId() {
@@ -68,8 +68,8 @@ export function useAuditLogger(user?: { id: string; role: string; ipAddress?: st
       const payload = { ...event, timestamp: event.timestamp.toISOString() }
       if (typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
         const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
-        // sendBeacon is fire-and-forget; ignore result
-        ;(navigator as any).sendBeacon('/api/audit', blob)
+        const nb = navigator as Navigator & { sendBeacon: (url: string, data?: BodyInit) => boolean }
+        nb.sendBeacon('/api/audit', blob)
       } else if (typeof fetch !== 'undefined') {
         fetch('/api/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), keepalive: true }).catch(() => {})
       }
