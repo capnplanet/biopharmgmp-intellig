@@ -19,6 +19,12 @@ export default defineConfig({
   ],
   server: {
     port: 4000,
+    // Ignore backend file changes to prevent dev reload loops when the API writes to disk
+    watch: {
+      ignored: [
+        '**/server/**',
+      ],
+    },
     proxy: {
       // Proxy API calls to the local backend during development
       '/api': {
