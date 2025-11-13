@@ -1,6 +1,29 @@
 # BioPharm GMP Intelligence Platform
 
+**Version:** 1.0  
+**Platform Version:** 0.1.0
+
 An AI-powered platform for real-time manufacturing oversight, quality management, and predictive analytics in biotechnology and pharmaceutical GMP (Good Manufacturing Practice) environments.
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Key Features](#key-features)
+3. [Architecture](#architecture)
+4. [Technology Stack](#technology-stack)
+5. [Getting Started](#getting-started)
+6. [Repository Structure](#repository-structure)
+7. [Core Components](#core-components)
+8. [Digital Twin Simulation](#digital-twin-simulation)
+9. [Quality Automation Engine](#quality-automation-engine)
+10. [Predictive Analytics](#predictive-analytics)
+11. [API Reference](#api-reference)
+12. [Integration Patterns](#integration-patterns)
+13. [Security & Compliance](#security--compliance)
+14. [Configuration](#configuration)
+15. [Scripts](#scripts)
+16. [Documentation](#documentation)
+17. [License](#license)
 
 ## Overview
 
@@ -12,22 +35,116 @@ This platform provides comprehensive manufacturing intelligence and quality assu
 - **Regulatory Compliance**: Complete audit trails, e-signatures, and evidence packages aligned with ICH, ISO, and GMP standards
 - **Digital Twin Simulation**: Equipment behavior simulation for testing and training scenarios
 
+## Key Features
+
+### 1. Real-Time Dashboard
+- Live equipment status monitoring
+- Batch execution tracking
+- Critical alerts and notifications
+- KPI visualization
+- Historical trend charts
+
+### 2. Quality Management System (eQMS)
+- **Deviations**: Create, investigate, and resolve manufacturing deviations with severity tracking
+- **Investigations**: AI-assisted root cause analysis workflows with stage gates
+- **CAPAs**: Corrective and preventive action management with effectiveness checks
+- **Change Controls**: Structured change management process with approval workflows
+- **E-Signatures**: Electronic signature capture with audit trail and 21 CFR Part 11 compliance
+
+### 3. Batch Monitoring
+- Real-time batch status and progress tracking
+- Critical Process Parameter (CPP) monitoring with compliance checking
+- Batch analytics and trending
+- Historical batch comparison
+- Timeline visualization
+
+### 4. Predictive Analytics
+- Equipment failure prediction using ML models
+- Quality risk scoring for proactive management
+- Trend analysis and pattern recognition
+- Model performance metrics (AUROC, Brier, ECE)
+- Automated deviation risk assessment
+
+### 5. Audit & Compliance
+- Tamper-evident audit trail with SHA-256 hash chain verification
+- AI interaction logging for transparency
+- Evidence package export (FDA-ready)
+- Archive validation with WORM-like semantics
+- Complete ALCOA+ data integrity
+
+### 6. Operations Assistant
+- AI-powered copilot for manufacturing operations
+- Natural language queries for data insights
+- Contextual recommendations
+- Integrated with quality workflows
+
+## Architecture
+
+### System Architecture
+
+The BioPharm GMP Intelligence Platform is a modern web application built with a React frontend and optional Node.js backend for enterprise features.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Frontend (React + Vite)                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │  Dashboard   │  │   Quality    │  │  Analytics   │          │
+│  │  Monitoring  │  │  Management  │  │  Predictive  │          │
+│  └──────────────┘  └──────────────┘  └──────────────┘          │
+│                                                                   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │         Component Library (Radix UI + Tailwind)          │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │ Digital Twin │  │   Quality    │  │   Modeling   │          │
+│  │  Simulation  │  │  Automation  │  │    Engine    │          │
+│  └──────────────┘  └──────────────┘  └──────────────┘          │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ REST API
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   Backend (Express.js - Optional)                │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │ Audit Store  │  │ Metrics Store│  │   Archive    │          │
+│  │  (JSONL +    │  │  (Time-Series│  │  (WORM-like) │          │
+│  │  Hash Chain) │  │   Logging)   │  │              │          │
+│  └──────────────┘  └──────────────┘  └──────────────┘          │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              External Integrations (Production)                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │   OPC UA     │  │     MES      │  │   Historian  │          │
+│  │  Equipment   │  │    Batch     │  │   Process    │          │
+│  │    Data      │  │    Data      │  │    Data      │          │
+│  └──────────────┘  └──────────────┘  └──────────────┘          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ## Technology Stack
 
 ### Frontend
-- **React 19** with TypeScript
-- **Vite** - Build tool and dev server
-- **GitHub Spark** - AI-powered development framework
-- **Tailwind CSS** - Styling with custom pharmaceutical-focused design system
+- **React 19** with TypeScript - Modern component-based UI
+- **Vite** - Fast build tool and dev server
+- **GitHub Spark** - AI-powered development framework with KV store
+- **Tailwind CSS** - Utility-first styling with custom pharmaceutical-focused design system
 - **Radix UI** - Accessible component primitives
-- **Recharts & D3** - Data visualization
+- **Recharts & D3** - Data visualization and charting
 - **React Query** - Server state management
+- **Framer Motion** - Smooth animations
 
-### Backend
-- **Express.js** - REST API server
+### Backend (Optional)
+- **Express.js** - Lightweight REST API server
 - **Node.js** - Runtime environment
 - **JSONL-based storage** - Append-only audit logs with SHA-256 hash chain
 - **Optional RBAC** - Role-based access control for compliance
+
+### State Management
+- **@github/spark** - KV store for reactive state with useKV hook
+- **Persistent key-value storage** - With subscriptions and real-time updates
 
 ### Key Libraries
 - **@github/spark** - AI capabilities and state management
@@ -35,42 +152,6 @@ This platform provides comprehensive manufacturing intelligence and quality assu
 - **zod** - Schema validation
 - **jszip** - Archive generation
 - **date-fns** - Date manipulation
-
-## Repository Structure
-
-```
-biopharmgmp-intellig/
-├── src/
-│   ├── components/        # React components (75+ components)
-│   │   ├── Dashboard.tsx          # Main dashboard
-│   │   ├── BatchMonitoring.tsx    # Batch tracking
-│   │   ├── QualityManagement.tsx  # eQMS workflows
-│   │   ├── Analytics.tsx          # Analytics & reporting
-│   │   ├── AuditTrail.tsx         # Audit logging
-│   │   └── ui/                    # Reusable UI components
-│   ├── lib/               # Core libraries
-│   │   ├── digitalTwin.ts         # Equipment simulation
-│   │   ├── qualityAutomation.ts   # Quality workflow engine
-│   │   ├── modeling.ts            # Predictive models
-│   │   ├── onPremSparkProvider.ts # On-prem LLM gateway
-│   │   └── devSparkMock.ts        # Development mock
-│   ├── hooks/             # Custom React hooks
-│   ├── types/             # TypeScript type definitions
-│   ├── utils/             # Utility functions
-│   ├── data/              # Seed data and mock data
-│   └── App.tsx            # Main application component
-├── server/                # Backend API
-│   ├── index.mjs          # Express server
-│   └── stores/            # Data stores (audit, metrics, archive)
-├── docs/                  # Documentation
-│   ├── platform-abstraction-layer.md
-│   ├── local-api.md
-│   ├── equipment-integration.md
-│   ├── ai-credibility-assessment.md
-│   └── evidence/          # FDA validation templates
-├── public/                # Static assets
-└── dist/                  # Build output (generated)
-```
 
 ## Getting Started
 
@@ -133,44 +214,636 @@ Output will be in the `dist/` directory.
 npm run preview
 ```
 
-## Key Features
+## Repository Structure
 
-### 1. **Real-Time Dashboard**
+```
+biopharmgmp-intellig/
+├── src/
+│   ├── components/        # React components (75+ components)
+│   │   ├── Dashboard.tsx          # Main dashboard
+│   │   ├── BatchMonitoring.tsx    # Batch tracking
+│   │   ├── QualityManagement.tsx  # eQMS workflows
+│   │   ├── Analytics.tsx          # Analytics & reporting
+│   │   ├── AuditTrail.tsx         # Audit logging
+│   │   ├── OperationsAssistant.tsx # AI assistant
+│   │   └── ui/                    # Reusable UI components
+│   ├── lib/               # Core libraries
+│   │   ├── digitalTwin.ts         # Equipment simulation
+│   │   ├── qualityAutomation.ts   # Quality workflow engine
+│   │   ├── modeling.ts            # Predictive models
+│   │   ├── equipmentFeed.ts       # Equipment data abstraction
+│   │   ├── spark.ts               # LLM interface
+│   │   ├── onPremSparkProvider.ts # On-prem LLM gateway
+│   │   └── devSparkMock.ts        # Development mock
+│   ├── hooks/             # Custom React hooks
+│   │   ├── use-audit.ts           # Audit logging
+│   │   ├── use-alerts.ts          # Alert management
+│   │   └── use-production-batches.ts # Batch data
+│   ├── types/             # TypeScript type definitions
+│   │   ├── quality.ts             # Quality types
+│   │   ├── automation.ts          # Automation types
+│   │   └── workflows.ts           # Workflow types
+│   ├── utils/             # Utility functions
+│   ├── data/              # Seed data and mock data
+│   │   ├── seed.ts                # Seed data
+│   │   └── equipmentCatalog.ts    # Equipment metadata
+│   └── App.tsx            # Main application component
+├── server/                # Backend API
+│   ├── index.mjs          # Express server
+│   └── stores/            # Data stores
+│       ├── auditStore.mjs         # Audit JSONL with hash chain
+│       ├── metricsStore.mjs       # Metrics storage
+│       └── immutableArchive.mjs   # WORM archive
+├── docs/                  # Documentation
+│   ├── TECHNICAL_GUIDE.md         # Comprehensive technical guide
+│   ├── platform-abstraction-layer.md # PAL architecture
+│   ├── local-api.md               # API documentation
+│   ├── equipment-integration.md   # Equipment connectivity
+│   ├── ai-credibility-assessment.md # FDA risk assessment
+│   └── evidence/          # FDA validation templates
+├── public/                # Static assets
+└── dist/                  # Build output (generated)
+```
+
+## Core Components
+
+### 1. Dashboard Component
+
+The Dashboard provides real-time overview of manufacturing operations.
+
+**File:** `src/components/Dashboard.tsx`
+
+**Key Features:**
 - Live equipment status monitoring
-- Batch execution tracking
-- Critical alerts and notifications
+- Active batch tracking
+- Critical alerts display
 - KPI visualization
+- Historical trend charts
 
-### 2. **Quality Management System (eQMS)**
-- **Deviations**: Create, investigate, and resolve manufacturing deviations
-- **Investigations**: AI-assisted root cause analysis workflows
-- **CAPAs**: Corrective and preventive action management
-- **Change Controls**: Structured change management process
-- **E-Signatures**: Electronic signature capture with audit trail
+**Example Usage:**
 
-### 3. **Batch Monitoring**
-- Real-time batch status and progress
-- Critical process parameter (CPP) tracking
-- Batch analytics and trending
-- Historical batch comparison
+```tsx
+import { Dashboard } from '@/components/Dashboard'
 
-### 4. **Predictive Analytics**
-- Equipment failure prediction
-- Quality risk scoring
-- Trend analysis and pattern recognition
-- Model performance metrics
+function App() {
+  return (
+    <div className="app">
+      <Dashboard />
+    </div>
+  )
+}
+```
 
-### 5. **Audit & Compliance**
-- Tamper-evident audit trail with hash chain verification
-- AI interaction logging
-- Evidence package export (FDA-ready)
-- Archive validation
+**State Management:**
 
-### 6. **Operations Assistant**
-- AI-powered copilot for manufacturing operations
-- Natural language queries
-- Contextual recommendations
-- Integrated with quality workflows
+```tsx
+// Dashboard uses equipment feed subscription
+import { subscribeToEquipmentFeed } from '@/lib/equipmentFeed'
+
+useEffect(() => {
+  const unsubscribe = subscribeToEquipmentFeed((snapshot) => {
+    setBatchState(snapshot.batches)
+    setEquipmentTelemetryState(snapshot.equipmentTelemetry)
+  })
+  return unsubscribe
+}, [])
+```
+
+### 2. Quality Management System (eQMS)
+
+Comprehensive quality workflow management for deviations, CAPAs, investigations, and change controls.
+
+**File:** `src/components/QualityManagement.tsx`
+
+**Creating a Deviation:**
+
+```tsx
+import { useKV } from '@github/spark/hooks'
+import type { Deviation } from '@/types/quality'
+
+function useDeviationManagement() {
+  const [deviations, setDeviations] = useKV<Deviation[]>('deviations', [])
+  
+  const createDeviation = (data: Omit<Deviation, 'id'>) => {
+    const newDeviation: Deviation = {
+      ...data,
+      id: `DEV-${Date.now()}`,
+      reportedDate: new Date(),
+      status: 'open',
+    }
+    setDeviations([...deviations, newDeviation])
+    return newDeviation
+  }
+  
+  return { deviations, createDeviation }
+}
+```
+
+### 3. Batch Monitoring
+
+Real-time tracking of batch execution and critical process parameters.
+
+**File:** `src/components/BatchMonitoring.tsx`
+
+**Example:**
+
+```tsx
+import { useProductionBatches } from '@/hooks/use-production-batches'
+import { getCPPCompliance } from '@/data/seed'
+
+function BatchMonitor() {
+  const { batches } = useProductionBatches()
+  
+  return (
+    <div>
+      {batches.map(batch => {
+        const compliance = getCPPCompliance(batch)
+        return (
+          <div key={batch.id}>
+            <h3>{batch.id}</h3>
+            <p>CPP Compliance: {(compliance * 100).toFixed(1)}%</p>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+```
+
+### 4. Predictive Analytics
+
+ML-based analysis for quality prediction and equipment failure detection.
+
+**File:** `src/components/Analytics.tsx`
+
+**Model Metrics:**
+
+```tsx
+import { monitor, type ModelId } from '@/lib/modeling'
+
+function ModelMetrics({ modelId }: { modelId: ModelId }) {
+  const metrics = monitor.metrics(modelId, {
+    threshold: 0.5,
+    minN: 10,
+    requireBothClasses: true
+  })
+  
+  return (
+    <div>
+      <p>AUROC: {metrics.auroc.toFixed(3)}</p>
+      <p>Accuracy: {metrics.accuracy ? (metrics.accuracy * 100).toFixed(1) + '%' : 'N/A'}</p>
+      <p>Brier Score: {metrics.brier.toFixed(3)}</p>
+      <p>ECE: {metrics.ece.toFixed(3)}</p>
+    </div>
+  )
+}
+```
+
+### 5. Audit Trail
+
+Complete audit logging with tamper detection.
+
+**File:** `src/components/AuditTrail.tsx`
+
+**Example:**
+
+```tsx
+import { useAuditLogger } from '@/hooks/use-audit'
+
+function useQualityAction() {
+  const { log, withAudit } = useAuditLogger()
+  
+  const approveDeviation = async (deviationId: string) => {
+    await withAudit(
+      'Approve Deviation',
+      'deviation',
+      `Approved deviation ${deviationId}`,
+      async () => {
+        // Perform approval logic
+        await performApproval(deviationId)
+      },
+      { recordId: deviationId }
+    )
+  }
+  
+  return { approveDeviation }
+}
+```
+
+## Digital Twin Simulation
+
+The Digital Twin provides realistic manufacturing simulation for development and training.
+
+**File:** `src/lib/digitalTwin.ts`
+
+### Starting the Digital Twin
+
+```typescript
+import { startDigitalTwin } from '@/lib/digitalTwin'
+
+// Start with default options
+const twin = startDigitalTwin()
+
+// Start with custom options
+const customTwin = startDigitalTwin({
+  tickMs: 2000,              // Update every 2 seconds
+  simSecondsPerTick: 60,     // Simulate 60 seconds per tick
+  monitorEverySimSeconds: 30 // Sample predictions every 30 sim seconds
+})
+```
+
+### Subscribing to Twin Events
+
+```typescript
+import { subscribeToTwin, type TwinSnapshot } from '@/lib/digitalTwin'
+
+const unsubscribe = subscribeToTwin((snapshot: TwinSnapshot) => {
+  console.log('Twin update:', {
+    timestamp: snapshot.timestamp,
+    batchCount: snapshot.batches.length,
+    equipmentCount: snapshot.equipmentTelemetry.length
+  })
+  
+  // Update application state
+  updateDashboard(snapshot)
+})
+
+// Cleanup when done
+unsubscribe()
+```
+
+### Simulated Events
+
+The Digital Twin generates realistic events:
+- **CPP Drift**: Temperature, pressure, pH, and volume variations
+- **Equipment Alerts**: Vibration spikes, utilization changes
+- **Batch Transitions**: Phase changes, completion events
+- **Quality Events**: Out-of-spec (OOS) and out-of-trend (OOT) conditions
+
+### Digital Twin Controls
+
+The platform includes a floating digital twin controller for simulating equipment behavior:
+
+- **Play/Pause**: Control simulation execution
+- **Speed**: Adjust simulation speed (5-600 seconds per tick)
+- **Draggable**: Reposition the control panel
+
+## Quality Automation Engine
+
+The Quality Automation Engine monitors batch data and automatically generates quality events.
+
+**File:** `src/lib/qualityAutomation.ts`
+
+### Automation Triggers
+
+Two types of automated quality triggers:
+
+1. **OOS (Out of Specification)**: Parameter exceeds defined bounds
+2. **OOT (Out of Trend)**: Sustained drift toward bounds
+
+### Initialization
+
+```typescript
+import { initializeQualityAutomation } from '@/lib/qualityAutomation'
+
+// Initialize automation engine (call once at app startup)
+initializeQualityAutomation()
+```
+
+### Responding to Automation Suggestions
+
+```typescript
+import { useKV } from '@github/spark/hooks'
+import type { AutomationSuggestion } from '@/types/automation'
+
+function AutomationQueue() {
+  const [queue = []] = useKV<AutomationSuggestion[]>('automation-queue', [])
+  const [, setDeviations] = useKV<Deviation[]>('deviations', [])
+  
+  const acceptSuggestion = (suggestion: AutomationSuggestion) => {
+    // Add deviation to quality management
+    setDeviations(prev => [...prev, suggestion.proposedDeviation])
+    
+    // Remove from queue
+    setQueue(queue.filter(s => s.id !== suggestion.id))
+  }
+  
+  return (
+    <div>
+      {queue.map(suggestion => (
+        <div key={suggestion.id}>
+          <h3>{suggestion.type}</h3>
+          <p>{suggestion.summary}</p>
+          <button onClick={() => acceptSuggestion(suggestion)}>
+            Accept
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+```
+
+## Predictive Analytics
+
+The platform includes three predictive models for proactive quality management.
+
+**File:** `src/lib/modeling.ts`
+
+### Model Types
+
+```typescript
+export type ModelId = 'quality_prediction' | 'equipment_failure' | 'deviation_risk'
+```
+
+### Quality Prediction Model
+
+Predicts whether all Critical Process Parameters will remain in specification:
+
+```typescript
+import { predictQuality, decisionThreshold } from '@/lib/modeling'
+
+function checkBatchQuality(batch: BatchData) {
+  const prediction = predictQuality(batch)
+  
+  return {
+    probability: prediction.p,
+    inSpec: prediction.p >= decisionThreshold.quality_prediction,
+    features: prediction.features,
+    confidence: Math.abs(prediction.p - 0.5) * 2  // 0 to 1
+  }
+}
+```
+
+### Equipment Failure Prediction
+
+Predicts equipment failure risk based on telemetry:
+
+```typescript
+import { predictEquipmentFailure, decisionThreshold } from '@/lib/modeling'
+
+function monitorEquipment(equipment: EquipmentTelemetry) {
+  const prediction = predictEquipmentFailure(equipment)
+  
+  if (prediction.p > decisionThreshold.equipment_failure) {
+    // High risk - generate alert
+    createMaintenanceAlert(equipment.id, prediction.p)
+  }
+}
+```
+
+### Model Monitor
+
+Centralized monitoring of model predictions:
+
+```typescript
+import { monitor } from '@/lib/modeling'
+
+// Add a prediction record
+monitor.add({
+  id: 'pred-001',
+  model: 'quality_prediction',
+  timestamp: Date.now(),
+  p: 0.85,  // Predicted probability [0,1]
+  y: 1,     // Observed outcome (0 or 1)
+  features: {
+    temperature: 37.2,
+    pressure: 1.8,
+    pH: 7.1,
+    batchAge: 48
+  }
+})
+
+// Get performance metrics
+const metrics = monitor.metrics('quality_prediction', {
+  threshold: 0.95,
+  minN: 10,
+  requireBothClasses: true
+})
+```
+
+## API Reference
+
+### Backend API Endpoints
+
+**Base URL:** `http://localhost:5000/api` (development)
+
+#### Health Check
+
+```http
+GET /api/health
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "service": "biopharmgmp-api",
+  "time": "2025-11-13T18:10:36.476Z",
+  "version": "0.1.0"
+}
+```
+
+#### Audit Trail
+
+**Append Audit Event**
+
+```http
+POST /api/audit
+Content-Type: application/json
+Authorization: Bearer <token>  (if AUTH_TOKEN set)
+X-User-Role: Admin             (if RBAC_ENABLED)
+```
+
+**Request Body:**
+```json
+{
+  "action": "Approve Deviation",
+  "module": "deviation",
+  "details": "Approved deviation DEV-123",
+  "recordId": "DEV-123",
+  "outcome": "success"
+}
+```
+
+**Query Audit Events**
+
+```http
+GET /api/audit?from=2025-11-01&to=2025-11-13&limit=100
+```
+
+**Verify Hash Chain**
+
+```http
+GET /api/audit/verify
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "valid": true,
+  "totalRecords": 1523,
+  "firstRecord": "2025-10-01T00:00:00.000Z",
+  "lastRecord": "2025-11-13T18:10:36.476Z"
+}
+```
+
+See [docs/local-api.md](docs/local-api.md) for complete API documentation.
+
+## Integration Patterns
+
+### Equipment Feed Integration
+
+**File:** `src/lib/equipmentFeed.ts`
+
+#### Development Mode (Digital Twin)
+
+```typescript
+import { ensureEquipmentFeed, subscribeToEquipmentFeed } from '@/lib/equipmentFeed'
+
+// Initialize equipment feed (uses Digital Twin by default)
+ensureEquipmentFeed()
+
+// Subscribe to updates
+const unsubscribe = subscribeToEquipmentFeed((snapshot) => {
+  console.log('Equipment update:', snapshot)
+  updateDashboard(snapshot.batches, snapshot.equipmentTelemetry)
+})
+```
+
+#### Production Mode (OPC UA Example)
+
+```typescript
+import { registerEquipmentFeed } from '@/lib/equipmentFeed'
+import { OPCUAClient } from 'node-opcua'
+
+// Custom OPC UA adapter
+registerEquipmentFeed({
+  subscribe: (listener) => {
+    const client = new OPCUAClient()
+    
+    // Connect to OPC UA server
+    client.connect('opc.tcp://plc.example.com:4840')
+    
+    // Subscribe to equipment nodes
+    const subscription = client.createSubscription({
+      requestedPublishingInterval: 1000,
+      requestedLifetimeCount: 100,
+      requestedMaxKeepAliveCount: 10
+    })
+    
+    // Monitor CPP nodes and transform to platform snapshot format
+    // ... (see TECHNICAL_GUIDE.md for complete example)
+    
+    return () => {
+      subscription.terminate()
+      client.disconnect()
+    }
+  }
+})
+```
+
+### AI/LLM Integration
+
+#### On-Premise LLM Gateway
+
+**File:** `src/lib/onPremSparkProvider.ts`
+
+```typescript
+import { registerOnPremSpark } from '@/lib/onPremSparkProvider'
+
+// Configure on-premise LLM endpoint
+registerOnPremSpark({
+  endpoint: 'https://llm.yourcompany.com/v1/chat',
+  token: 'your-api-token',
+  model: 'gpt-4' // or your model name
+})
+```
+
+## Security & Compliance
+
+### 21 CFR Part 11 Compliance
+
+The platform implements key requirements for electronic records:
+
+1. **Computer-Generated Records**: All audit events are timestamped and attributed
+2. **Tamper Detection**: SHA-256 hash chain prevents undetected modifications
+3. **Archive Integrity**: Optional WORM-like archive for immutability
+
+#### Hash Chain Implementation
+
+```typescript
+// Hash chain implementation (simplified)
+function appendAuditEvent(event: AuditEvent, previousHash: string): AuditEventStored {
+  const payload = JSON.stringify({
+    timestamp: event.timestamp,
+    userId: event.userId,
+    action: event.action,
+    module: event.module,
+    details: event.details
+  })
+  
+  const hash = createHash('sha256')
+    .update(previousHash + payload)
+    .digest('hex')
+  
+  return {
+    ...event,
+    hash: `sha256:${hash}`,
+    prevHash: previousHash
+  }
+}
+```
+
+### Data Integrity (ALCOA+)
+
+The platform ensures data integrity following ALCOA+ principles:
+
+- **Attributable**: All events logged with user ID and timestamp
+- **Legible**: Human-readable JSON format
+- **Contemporaneous**: Real-time event logging
+- **Original**: Append-only audit trail
+- **Accurate**: Hash chain verification
+- **Complete**: Full context in audit details
+- **Consistent**: Standardized event structure
+- **Enduring**: Persistent storage with backups
+- **Available**: Query API for retrieval
+
+### E-Signatures
+
+```typescript
+// E-signature implementation
+import { webcrypto } from 'crypto'
+
+async function generateSignature(
+  userId: string,
+  action: string,
+  reason: string,
+  timestamp: Date
+): Promise<string> {
+  const data = JSON.stringify({ userId, action, reason, timestamp })
+  const encoder = new TextEncoder()
+  const dataBuffer = encoder.encode(data)
+  
+  const hashBuffer = await webcrypto.subtle.digest('SHA-256', dataBuffer)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  
+  return `SHA256:${hashHex}`
+}
+```
+
+### RBAC (Optional)
+
+Supported roles:
+- **Admin**: Full system access
+- **Quality Approver**: Approve deviations, CAPAs, sign documents
+- **Supervisor**: Create deviations/CAPAs, view analytics
+- **Operator**: View dashboard and batches
+- **System**: Create audit events, record metrics
+
+Enable via `RBAC_ENABLED=true` environment variable.
 
 ## Configuration
 
@@ -188,30 +861,14 @@ PORT=5000
 AUTH_TOKEN=your-auth-token
 RBAC_ENABLED=true
 ARCHIVE_ENABLED=true
+ARCHIVE_DIR=/data/audit-archive
+
+# Optional: Backend auth for frontend
+VITE_BACKEND_AUTH_TOKEN=your-auth-token
+VITE_RBAC_ROLE=Admin
 ```
 
 See [docs/platform-abstraction-layer.md](docs/platform-abstraction-layer.md) for deployment options.
-
-## Digital Twin Controls
-
-The platform includes a floating digital twin controller for simulating equipment behavior:
-
-- **Play/Pause**: Control simulation execution
-- **Speed**: Adjust simulation speed (5-600 seconds per tick)
-- **Draggable**: Reposition the control panel
-
-The digital twin generates realistic manufacturing events for testing and training.
-
-## Documentation
-
-### Technical Documentation
-
-- **[Technical Guide](docs/TECHNICAL_GUIDE.md)** - Comprehensive technical documentation with architecture, code examples, use cases, and deployment guide
-- **[Platform Abstraction Layer](docs/platform-abstraction-layer.md)** - Architecture and deployment flexibility
-- **[Local API Server](docs/local-api.md)** - Backend API documentation
-- **[Equipment Integration](docs/equipment-integration.md)** - Equipment connectivity guide
-- **[AI Credibility Assessment](docs/ai-credibility-assessment.md)** - FDA 7-step risk assessment
-- **[Evidence Package](docs/evidence/)** - FDA validation templates
 
 ## Scripts
 
@@ -225,26 +882,18 @@ The digital twin generates realistic manufacturing events for testing and traini
 | `npm run lint` | Run ESLint |
 | `npm run kill` | Kill process on port 5000 |
 
-## Compliance & Security
+## Documentation
 
-### Audit Trail
-- Append-only JSONL with SHA-256 hash chain
-- Tamper detection via cryptographic verification
-- Immutable archive support (WORM-like semantics)
+### Technical Documentation
 
-### E-Signatures
-- Web Crypto API for digital signatures
-- Timestamped with ISO 8601
-- User ID and reason captured
+- **[Technical Guide](docs/TECHNICAL_GUIDE.md)** - Comprehensive technical documentation with advanced architecture details, data models, use cases, and deployment guide
+- **[Platform Abstraction Layer](docs/platform-abstraction-layer.md)** - Architecture and deployment flexibility
+- **[Local API Server](docs/local-api.md)** - Backend API documentation
+- **[Equipment Integration](docs/equipment-integration.md)** - Equipment connectivity guide
+- **[AI Credibility Assessment](docs/ai-credibility-assessment.md)** - FDA 7-step risk assessment
+- **[Evidence Package](docs/evidence/)** - FDA validation templates
 
-### RBAC (Optional)
-Supported roles:
-- Admin
-- Quality Approver
-- Supervisor
-- System
-
-Enable via `RBAC_ENABLED=true` environment variable.
+For detailed code examples, advanced use cases, data models, and deployment strategies, see the [Technical Guide](docs/TECHNICAL_GUIDE.md).
 
 ## License
 
