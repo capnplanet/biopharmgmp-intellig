@@ -468,44 +468,39 @@ export type TwinOptions = {
 
 The BioPharm GMP Intelligence Platform is a modern web application built with a React frontend and optional Node.js backend for enterprise features.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Frontend (React + Vite)                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │  Dashboard   │  │   Quality    │  │  Analytics   │          │
-│  │  Monitoring  │  │  Management  │  │  Predictive  │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-│                                                                   │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │         Component Library (Radix UI + Tailwind)          │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                   │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │ Digital Twin │  │   Quality    │  │   Modeling   │          │
-│  │  Simulation  │  │  Automation  │  │    Engine    │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ REST API
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   Backend (Express.js - Optional)                │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │ Audit Store  │  │ Metrics Store│  │   Archive    │          │
-│  │  (JSONL +    │  │  (Time-Series│  │  (WORM-like) │          │
-│  │  Hash Chain) │  │   Logging)   │  │              │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              External Integrations (Production)                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │   OPC UA     │  │     MES      │  │   Historian  │          │
-│  │  Equipment   │  │    Batch     │  │   Process    │          │
-│  │    Data      │  │    Data      │  │    Data      │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Frontend["Frontend (React + Vite)"]
+        Dashboard["Dashboard<br/>Monitoring"]
+        Quality["Quality<br/>Management"]
+        Analytics["Analytics<br/>Predictive"]
+        ComponentLib["Component Library<br/>(Radix UI + Tailwind)"]
+        DigitalTwin["Digital Twin<br/>Simulation"]
+        QualityAuto["Quality<br/>Automation"]
+        ModelEngine["Modeling<br/>Engine"]
+        
+        Dashboard -.-> ComponentLib
+        Quality -.-> ComponentLib
+        Analytics -.-> ComponentLib
+        DigitalTwin -.-> ComponentLib
+        QualityAuto -.-> ComponentLib
+        ModelEngine -.-> ComponentLib
+    end
+    
+    subgraph Backend["Backend (Express.js - Optional)"]
+        AuditStore["Audit Store<br/>(JSONL + Hash Chain)"]
+        MetricsStore["Metrics Store<br/>(Time-Series Logging)"]
+        Archive["Archive<br/>(WORM-like)"]
+    end
+    
+    subgraph External["External Integrations (Production)"]
+        OPCUA["OPC UA<br/>Equipment Data"]
+        MES["MES<br/>Batch Data"]
+        Historian["Historian<br/>Process Data"]
+    end
+    
+    Frontend -->|REST API| Backend
+    Backend --> External
 ```
 
 ## Technology Stack
@@ -1151,65 +1146,33 @@ Append to Conversation History (max 50 messages)
 
 **Data Flow Diagram:**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Data Sources (KV Store)                  │
-├─────────────────────────────────────────────────────────────┤
-│ • batches[]          • equipment-telemetry[]                │
-│ • deviations[]       • capas[]                              │
-│ • change-controls[]  • automation-queue[]                   │
-│ • alerts[]           • model-metrics-*                      │
-└────────────────────────────┬────────────────────────────────┘
-                             │
-                             ▼
-        ┌────────────────────────────────────┐
-        │  useOperationsAssistant Hook       │
-        │  (Aggregation & Computation)       │
-        └────────────┬───────────────────────┘
-                     │
-                     ▼
-        ┌────────────────────────────────────┐
-        │      OperationsDigest              │
-        │  • summary (text)                  │
-        │  • metrics (computed KPIs)         │
-        │  • batches (aggregated)            │
-        │  • equipment (top risks)           │
-        │  • qualityRecords (counts)         │
-        │  • alerts (by severity)            │
-        │  • automation (queue status)       │
-        │  • modelPerformance (metrics)      │
-        └────────────┬───────────────────────┘
-                     │
-                     ▼
-        ┌────────────────────────────────────┐
-        │    LLM Prompt Construction         │
-        │  "You are Operations Copilot..."   │
-        │  + Snapshot Summary                │
-        │  + Structured JSON                 │
-        └────────────┬───────────────────────┘
-                     │
-        ┌────────────┴────────────┐
-        │                         │
-        ▼                         ▼
-┌──────────────┐        ┌─────────────────┐
-│ GitHub Spark │   OR   │ On-Prem Gateway │
-│   Runtime    │        │  (HTTP POST)    │
-└──────┬───────┘        └────────┬────────┘
-       │                         │
-       └────────┬────────────────┘
-                │
-                ▼
-     ┌─────────────────────┐
-     │   LLM Response      │
-     └──────────┬──────────┘
-                │
-     ┌──────────┴──────────┐
-     │                     │
-     ▼                     ▼
-┌──────────┐      ┌────────────────┐
-│  Audit   │      │  Display to    │
-│  Logger  │      │  User (UI)     │
-└──────────┘      └────────────────┘
+```mermaid
+graph TD
+    DataSources["Data Sources (KV Store)<br/>• batches[]<br/>• equipment-telemetry[]<br/>• deviations[]<br/>• capas[]<br/>• change-controls[]<br/>• automation-queue[]<br/>• alerts[]<br/>• model-metrics-*"]
+    
+    Hook["useOperationsAssistant Hook<br/>(Aggregation & Computation)"]
+    
+    Digest["OperationsDigest<br/>• summary (text)<br/>• metrics (computed KPIs)<br/>• batches (aggregated)<br/>• equipment (top risks)<br/>• qualityRecords (counts)<br/>• alerts (by severity)<br/>• automation (queue status)<br/>• modelPerformance (metrics)"]
+    
+    PromptConstruct["LLM Prompt Construction<br/>'You are Operations Copilot...'<br/>+ Snapshot Summary<br/>+ Structured JSON"]
+    
+    Spark["GitHub Spark<br/>Runtime"]
+    OnPrem["On-Prem Gateway<br/>(HTTP POST)"]
+    
+    Response["LLM Response"]
+    
+    Audit["Audit<br/>Logger"]
+    Display["Display to<br/>User (UI)"]
+    
+    DataSources --> Hook
+    Hook --> Digest
+    Digest --> PromptConstruct
+    PromptConstruct --> Spark
+    PromptConstruct --> OnPrem
+    Spark --> Response
+    OnPrem --> Response
+    Response --> Audit
+    Response --> Display
 ```
 
 **File References:**
@@ -1315,69 +1278,19 @@ Human Review
 
 **Data Flow Diagram:**
 
-```
-┌──────────────────────────────────────────────────────────┐
-│               Digital Twin (src/lib/digitalTwin.ts)      │
-│  Generates TwinSnapshot every tickMs (default 2s)        │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-                         │ TwinSnapshot { timestamp, batches[], equipmentTelemetry[] }
-                         │
-                         ▼
-┌──────────────────────────────────────────────────────────┐
-│        Quality Automation Engine                         │
-│        (src/lib/qualityAutomation.ts)                    │
-│                                                           │
-│  initializeQualityAutomation()                           │
-│    └─→ subscribeToTwin(listener)                         │
-│                                                           │
-│  For each batch parameter:                               │
-│    ├─→ checkOOSCondition(streak ≥ 3)                    │
-│    └─→ checkOOTCondition(counter ≥ 6)                   │
-│                                                           │
-│  State Maps:                                             │
-│    • oosStreaks: Map<key, number>                        │
-│    • trendState: Map<key, {lastValue, counter}>         │
-│    • eventCadence: Map<key, timestamp>                   │
-│    • activeTriggers: Map<key, deviationId>              │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-                         │ AutomationSuggestion
-                         │
-                         ▼
-┌──────────────────────────────────────────────────────────┐
-│            KV Store: automation-queue[]                  │
-│  [{                                                      │
-│    id: "AUTO-...",                                       │
-│    deviationId: "DEV-...",                              │
-│    trigger: "OOS" | "OOT",                              │
-│    parameter: "temperature" | "pressure" | ...,         │
-│    summary: "Temperature OOS detected...",               │
-│    actions: ["Investigate...", "Review..."],            │
-│    assignee: "Engineering",                              │
-│    status: "pending",                                    │
-│    aiConfidence: "high" | "medium",                     │
-│    measurement: { currentValue, target, bounds }         │
-│  }]                                                      │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-                         │ useKV subscription
-                         │
-                         ▼
-┌──────────────────────────────────────────────────────────┐
-│      AutomationBridge Component                          │
-│      (src/components/AutomationBridge.tsx)               │
-│                                                           │
-│  Display pending suggestions                             │
-│    ├─→ Show trigger type, parameter, severity           │
-│    ├─→ Show current value vs bounds                     │
-│    ├─→ Show recommended actions                         │
-│    └─→ Show AI confidence level                         │
-│                                                           │
-│  User Actions:                                           │
-│    ├─→ Accept → Move to Quality Management              │
-│    └─→ Dismiss → Log reason, remove from queue          │
-└──────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    Twin["Digital Twin<br/>(src/lib/digitalTwin.ts)<br/>Generates TwinSnapshot every tickMs (default 2s)"]
+    
+    QA["Quality Automation Engine<br/>(src/lib/qualityAutomation.ts)<br/><br/>initializeQualityAutomation()<br/>└─→ subscribeToTwin(listener)<br/><br/>For each batch parameter:<br/>├─→ checkOOSCondition(streak ≥ 3)<br/>└─→ checkOOTCondition(counter ≥ 6)<br/><br/>State Maps:<br/>• oosStreaks: Map&lt;key, number&gt;<br/>• trendState: Map&lt;key, {lastValue, counter}&gt;<br/>• eventCadence: Map&lt;key, timestamp&gt;<br/>• activeTriggers: Map&lt;key, deviationId&gt;"]
+    
+    KV["KV Store: automation-queue[]<br/>[{<br/>id: 'AUTO-...',<br/>deviationId: 'DEV-...',<br/>trigger: 'OOS' | 'OOT',<br/>parameter: 'temperature' | 'pressure' | ...,<br/>summary: 'Temperature OOS detected...',<br/>actions: ['Investigate...', 'Review...'],<br/>assignee: 'Engineering',<br/>status: 'pending',<br/>aiConfidence: 'high' | 'medium',<br/>measurement: { currentValue, target, bounds }<br/>}]"]
+    
+    Bridge["AutomationBridge Component<br/>(src/components/AutomationBridge.tsx)<br/><br/>Display pending suggestions<br/>├─→ Show trigger type, parameter, severity<br/>├─→ Show current value vs bounds<br/>├─→ Show recommended actions<br/>└─→ Show AI confidence level<br/><br/>User Actions:<br/>├─→ Accept → Move to Quality Management<br/>└─→ Dismiss → Log reason, remove from queue"]
+    
+    Twin -->|"TwinSnapshot<br/>{timestamp, batches[], equipmentTelemetry[]}"| QA
+    QA -->|AutomationSuggestion| KV
+    KV -->|useKV subscription| Bridge
 ```
 
 **Configuration Constants:**
@@ -1520,109 +1433,25 @@ function computeAUROC(rs: PredictionRecord[]) {
 
 **Data Flow Diagram:**
 
-```
-┌────────────────────────────────────────────────────────┐
-│         Batch/Equipment Data Source                    │
-│  • BatchData from TwinSnapshot or Equipment Feed       │
-│  • EquipmentTelemetry from Digital Twin                │
-└─────────────────┬──────────────────────────────────────┘
-                  │
-                  ▼
-┌────────────────────────────────────────────────────────┐
-│           Prediction Functions                         │
-│         (src/lib/modeling.ts)                          │
-│                                                         │
-│  predictQuality(batch)                                 │
-│    └─→ cpp_compliance = getCPPCompliance(batch)       │
-│        └─→ p = clamp(0.05 + 0.9 * cpp, 0, 1)         │
-│            └─→ y = (cpp === 1) ? 1 : 0                │
-│                                                         │
-│  predictEquipmentFailure(equipment)                    │
-│    └─→ vibrationScore + runtimeScore + utilizScore   │
-│        └─→ p = weighted combination                   │
-│            └─→ y = (alert present) ? 1 : 0            │
-│                                                         │
-│  predictDeviationRisk(batch)                           │
-│    └─→ normalized deviations from mid-spec           │
-│        └─→ p = max(devs) / 2                          │
-│            └─→ y = (any CPP out of spec) ? 1 : 0     │
-└─────────────────┬──────────────────────────────────────┘
-                  │
-                  │ { p, y, features }
-                  │
-                  ▼
-┌────────────────────────────────────────────────────────┐
-│            ModelMonitor Singleton                      │
-│         (src/lib/modeling.ts)                          │
-│                                                         │
-│  private records: PredictionRecord[] = []              │
-│                                                         │
-│  add(record: PredictionRecord)                         │
-│    └─→ records.push(record)                           │
-│                                                         │
-│  metrics(model, opts)                                  │
-│    ├─→ Filter records by model                        │
-│    ├─→ Compute AUROC (rank-based)                     │
-│    ├─→ Compute Brier (MSE of probabilities)           │
-│    ├─→ Compute ECE (calibration bins)                 │
-│    └─→ Compute Accuracy (if n ≥ minN)                 │
-└─────────────────┬──────────────────────────────────────┘
-                  │
-                  │ Periodic Sampling
-                  │
-                  ▼
-┌────────────────────────────────────────────────────────┐
-│        ModelMetricsSampler Component                   │
-│     (src/components/ModelMetricsSampler.tsx)           │
-│                                                         │
-│  useEffect(() => {                                     │
-│    const interval = setInterval(() => {                │
-│      for (model of ['quality_prediction',             │
-│                      'equipment_failure',             │
-│                      'deviation_risk']) {             │
-│        const metrics = monitor.metrics(model, opts)   │
-│        setKV(`model-metrics-${model}`, {              │
-│          timestamp: Date.now(),                       │
-│          ...metrics                                    │
-│        })                                              │
-│      }                                                 │
-│    }, samplingInterval)                                │
-│  }, [])                                                │
-└─────────────────┬──────────────────────────────────────┘
-                  │
-                  │ Persisted Metrics
-                  │
-                  ▼
-┌────────────────────────────────────────────────────────┐
-│          KV Store: model-metrics-*                     │
-│  {                                                     │
-│    timestamp: number,                                  │
-│    n: number,           // Sample count                │
-│    accuracy: number?,   // Classification accuracy     │
-│    brier: number,       // Brier score (calibration)   │
-│    ece: number,         // Expected calibration error  │
-│    auroc: number,       // Area under ROC curve        │
-│    threshold: number,   // Decision threshold          │
-│    hasPosNeg: boolean   // Both classes present?       │
-│  }                                                     │
-└─────────────────┬──────────────────────────────────────┘
-                  │
-                  │ useKV subscription
-                  │
-                  ▼
-┌────────────────────────────────────────────────────────┐
-│              UI Display                                │
-│                                                         │
-│  AI Audit Trail Page:                                  │
-│    ├─→ Line charts (AUROC, Brier, ECE over time)      │
-│    ├─→ Threshold indicators                           │
-│    └─→ Sample count display                           │
-│                                                         │
-│  Analytics Page:                                       │
-│    ├─→ Model performance cards                        │
-│    ├─→ Latest metrics with color coding               │
-│    └─→ Historical trends                              │
-└────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    Data["Batch/Equipment Data Source<br/>• BatchData from TwinSnapshot or Equipment Feed<br/>• EquipmentTelemetry from Digital Twin"]
+    
+    Predictions["Prediction Functions<br/>(src/lib/modeling.ts)<br/><br/>predictQuality(batch)<br/>└─→ cpp_compliance = getCPPCompliance(batch)<br/>└─→ p = clamp(0.05 + 0.9 * cpp, 0, 1)<br/>└─→ y = (cpp === 1) ? 1 : 0<br/><br/>predictEquipmentFailure(equipment)<br/>└─→ vibrationScore + runtimeScore + utilizScore<br/>└─→ p = weighted combination<br/>└─→ y = (alert present) ? 1 : 0<br/><br/>predictDeviationRisk(batch)<br/>└─→ normalized deviations from mid-spec<br/>└─→ p = max(devs) / 2<br/>└─→ y = (any CPP out of spec) ? 1 : 0"]
+    
+    Monitor["ModelMonitor Singleton<br/>(src/lib/modeling.ts)<br/><br/>private records: PredictionRecord[] = []<br/><br/>add(record: PredictionRecord)<br/>└─→ records.push(record)<br/><br/>metrics(model, opts)<br/>├─→ Filter records by model<br/>├─→ Compute AUROC (rank-based)<br/>├─→ Compute Brier (MSE of probabilities)<br/>├─→ Compute ECE (calibration bins)<br/>└─→ Compute Accuracy (if n ≥ minN)"]
+    
+    Sampler["ModelMetricsSampler Component<br/>(src/components/ModelMetricsSampler.tsx)<br/><br/>useEffect(() => {<br/>const interval = setInterval(() => {<br/>for (model of ['quality_prediction',<br/>'equipment_failure',<br/>'deviation_risk']) {<br/>const metrics = monitor.metrics(model, opts)<br/>setKV(`model-metrics-$${model}`, {<br/>timestamp: Date.now(),<br/>...metrics<br/>})<br/>}<br/>}, samplingInterval)<br/>}, [])"]
+    
+    KVStore["KV Store: model-metrics-*<br/>{<br/>timestamp: number,<br/>n: number, // Sample count<br/>accuracy: number?, // Classification accuracy<br/>brier: number, // Brier score (calibration)<br/>ece: number, // Expected calibration error<br/>auroc: number, // Area under ROC curve<br/>threshold: number, // Decision threshold<br/>hasPosNeg: boolean // Both classes present?<br/>}"]
+    
+    UI["UI Display<br/><br/>AI Audit Trail Page:<br/>├─→ Line charts (AUROC, Brier, ECE over time)<br/>├─→ Threshold indicators<br/>└─→ Sample count display<br/><br/>Analytics Page:<br/>├─→ Model performance cards<br/>├─→ Latest metrics with color coding<br/>└─→ Historical trends"]
+    
+    Data -->|"{ p, y, features }"| Predictions
+    Predictions --> Monitor
+    Monitor -->|Periodic Sampling| Sampler
+    Sampler -->|Persisted Metrics| KVStore
+    KVStore -->|useKV subscription| UI
 ```
 
 **Performance Thresholds:**
@@ -2773,31 +2602,25 @@ The platform can be deployed on AWS using multiple service configurations:
 
 **Container-Based Deployment (Recommended)**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         AWS Cloud                            │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  Application Load Balancer (ALB)                      │  │
-│  └────────────────────┬─────────────────────────────────┘  │
-│                       │                                      │
-│  ┌────────────────────┴─────────────────────────────────┐  │
-│  │  Amazon ECS / EKS (Container Orchestration)          │  │
-│  │                                                       │  │
-│  │  ┌──────────────┐  ┌──────────────┐                 │  │
-│  │  │   Frontend   │  │   Backend    │                 │  │
-│  │  │  Container   │  │  Container   │                 │  │
-│  │  │ (React+Vite) │  │ (Express.js) │                 │  │
-│  │  └──────────────┘  └──────────────┘                 │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │   Amazon     │  │   Amazon     │  │   Amazon     │     │
-│  │   RDS/       │  │   S3         │  │   KMS        │     │
-│  │   DynamoDB   │  │   (Audit     │  │   (Encryption│     │
-│  │   (Optional) │  │   Archive)   │  │   Keys)      │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph AWS["AWS Cloud"]
+        ALB["Application Load Balancer (ALB)"]
+        
+        subgraph ECS["Amazon ECS / EKS (Container Orchestration)"]
+            Frontend["Frontend Container<br/>(React+Vite)"]
+            Backend["Backend Container<br/>(Express.js)"]
+        end
+        
+        subgraph Storage["Storage Services"]
+            RDS["Amazon RDS/<br/>DynamoDB<br/>(Optional)"]
+            S3["Amazon S3<br/>(Audit Archive)"]
+            KMS["Amazon KMS<br/>(Encryption Keys)"]
+        end
+        
+        ALB --> ECS
+        ECS --> Storage
+    end
 ```
 
 #### AWS Services Integration
@@ -3046,31 +2869,25 @@ The platform can be deployed on Azure using multiple service configurations:
 
 **Container-Based Deployment (Recommended)**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Azure Cloud                             │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  Azure Application Gateway / Front Door               │  │
-│  └────────────────────┬─────────────────────────────────┘  │
-│                       │                                      │
-│  ┌────────────────────┴─────────────────────────────────┐  │
-│  │  Azure Kubernetes Service (AKS) / Container Instances│  │
-│  │                                                       │  │
-│  │  ┌──────────────┐  ┌──────────────┐                 │  │
-│  │  │   Frontend   │  │   Backend    │                 │  │
-│  │  │  Container   │  │  Container   │                 │  │
-│  │  │ (React+Vite) │  │ (Express.js) │                 │  │
-│  │  └──────────────┘  └──────────────┘                 │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │   Azure      │  │   Blob       │  │   Key        │     │
-│  │   SQL/       │  │   Storage    │  │   Vault      │     │
-│  │   Cosmos DB  │  │   (Audit     │  │   (Secrets)  │     │
-│  │   (Optional) │  │   Archive)   │  │              │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Azure["Azure Cloud"]
+        Gateway["Azure Application Gateway /<br/>Front Door"]
+        
+        subgraph Containers["Azure Kubernetes Service (AKS) / Container Instances"]
+            Frontend["Frontend Container<br/>(React+Vite)"]
+            Backend["Backend Container<br/>(Express.js)"]
+        end
+        
+        subgraph Storage["Storage Services"]
+            SQL["Azure SQL/<br/>Cosmos DB<br/>(Optional)"]
+            Blob["Blob Storage<br/>(Audit Archive)"]
+            KeyVault["Key Vault<br/>(Secrets)"]
+        end
+        
+        Gateway --> Containers
+        Containers --> Storage
+    end
 ```
 
 #### Azure Services Integration

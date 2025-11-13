@@ -150,27 +150,33 @@ This implementation adds comprehensive cloud deployment support for AWS and Azur
 
 ### AWS Architecture
 
-```
-Internet → ALB → ECS Fargate Tasks (Frontend + Backend) → EFS Storage
-                         ↓
-                  CloudWatch Logs
-                  Secrets Manager
+```mermaid
+graph LR
+    Internet[Internet] --> ALB[ALB]
+    ALB --> ECS[ECS Fargate Tasks<br/>Frontend + Backend]
+    ECS --> EFS[EFS Storage]
+    ECS --> CloudWatch[CloudWatch Logs]
+    ECS --> Secrets[Secrets Manager]
 ```
 
 ### Azure Architecture
 
-```
-Internet → App Service (Frontend) → App Service (Backend) → Storage Account
-                                            ↓
-                                    Application Insights
-                                    Key Vault
+```mermaid
+graph LR
+    Internet[Internet] --> Frontend[App Service<br/>Frontend]
+    Frontend --> Backend[App Service<br/>Backend]
+    Backend --> Storage[Storage Account]
+    Backend --> Insights[Application Insights]
+    Backend --> KeyVault[Key Vault]
 ```
 
 ### Docker Architecture
 
-```
-Docker Compose → Frontend Container (Nginx)
-              → Backend Container (Node.js) → Volumes (Data Persistence)
+```mermaid
+graph LR
+    Compose[Docker Compose] --> FrontendC[Frontend Container<br/>Nginx]
+    Compose --> BackendC[Backend Container<br/>Node.js]
+    BackendC --> Volumes[Volumes<br/>Data Persistence]
 ```
 
 ## Key Features
