@@ -57,39 +57,35 @@ The BioPharm GMP Intelligence Platform is designed for cloud-native deployment w
 
 The AWS deployment uses the following services:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Internet Gateway                             │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                Application Load Balancer (ALB)                   │
-│                    (Public Subnets)                              │
-└────────────────┬────────────────────────┬───────────────────────┘
-                 │                        │
-                 ▼                        ▼
-    ┌────────────────────┐    ┌────────────────────┐
-    │  ECS Fargate Task  │    │  ECS Fargate Task  │
-    │   (Private Subnet) │    │   (Private Subnet) │
-    │  ┌──────────────┐  │    │  ┌──────────────┐  │
-    │  │  Frontend    │  │    │  │  Frontend    │  │
-    │  │  Container   │  │    │  │  Container   │  │
-    │  └──────────────┘  │    │  └──────────────┘  │
-    │  ┌──────────────┐  │    │  ┌──────────────┐  │
-    │  │  Backend     │  │    │  │  Backend     │  │
-    │  │  Container   │  │    │  │  Container   │  │
-    │  └──────────────┘  │    │  └──────────────┘  │
-    └────────┬───────────┘    └────────┬───────────┘
-             │                         │
-             └────────┬────────────────┘
-                      │
-                      ▼
-            ┌──────────────────┐
-            │  Amazon EFS      │
-            │  (Persistent     │
-            │   Storage)       │
-            └──────────────────┘
+```mermaid
+graph TD
+    Internet["Internet Gateway"]
+    
+    ALB["Application Load Balancer (ALB)<br/>(Public Subnets)"]
+    
+    subgraph AZ1["Availability Zone 1"]
+        Task1["ECS Fargate Task<br/>(Private Subnet)"]
+        Frontend1["Frontend Container"]
+        Backend1["Backend Container"]
+        Task1 --> Frontend1
+        Task1 --> Backend1
+    end
+    
+    subgraph AZ2["Availability Zone 2"]
+        Task2["ECS Fargate Task<br/>(Private Subnet)"]
+        Frontend2["Frontend Container"]
+        Backend2["Backend Container"]
+        Task2 --> Frontend2
+        Task2 --> Backend2
+    end
+    
+    EFS["Amazon EFS<br/>(Persistent Storage)"]
+    
+    Internet --> ALB
+    ALB --> Task1
+    ALB --> Task2
+    Task1 --> EFS
+    Task2 --> EFS
 ```
 
 **Components:**
