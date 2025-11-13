@@ -9,22 +9,25 @@ An AI-powered platform for real-time manufacturing oversight, quality management
 
 1. [Overview](#overview)
 2. [Key Features](#key-features)
-3. [Architecture](#architecture)
-4. [Technology Stack](#technology-stack)
-5. [Getting Started](#getting-started)
-6. [Repository Structure](#repository-structure)
-7. [Core Components](#core-components)
-8. [Digital Twin Simulation](#digital-twin-simulation)
-9. [Quality Automation Engine](#quality-automation-engine)
-10. [Predictive Analytics](#predictive-analytics)
-11. [API Reference](#api-reference)
-12. [Integration Patterns](#integration-patterns)
-13. [Security & Compliance](#security--compliance)
-14. [Configuration](#configuration)
-15. [Cloud Platform Compatibility](#cloud-platform-compatibility)
-16. [Scripts](#scripts)
-17. [Documentation](#documentation)
-18. [License](#license)
+3. [AI Functionality](#ai-functionality)
+4. [Architecture](#architecture)
+5. [Technology Stack](#technology-stack)
+6. [Getting Started](#getting-started)
+7. [Repository Structure](#repository-structure)
+8. [Core Components](#core-components)
+9. [Digital Twin Simulation](#digital-twin-simulation)
+10. [Quality Automation Engine](#quality-automation-engine)
+11. [Predictive Analytics](#predictive-analytics)
+12. [AI Workflows and Data Flows](#ai-workflows-and-data-flows)
+13. [AI Use Cases and Examples](#ai-use-cases-and-examples)
+14. [API Reference](#api-reference)
+15. [Integration Patterns](#integration-patterns)
+16. [Security & Compliance](#security--compliance)
+17. [Configuration](#configuration)
+18. [Cloud Platform Compatibility](#cloud-platform-compatibility)
+19. [Scripts](#scripts)
+20. [Documentation](#documentation)
+21. [License](#license)
 
 ## Overview
 
@@ -78,6 +81,386 @@ This platform provides comprehensive manufacturing intelligence and quality assu
 - Natural language queries for data insights
 - Contextual recommendations
 - Integrated with quality workflows
+
+## AI Functionality
+
+The BioPharm GMP Intelligence Platform integrates multiple AI capabilities designed specifically for pharmaceutical manufacturing. All AI functionality is built with regulatory compliance, transparency, and human-in-the-loop controls as core principles.
+
+### AI Components Overview
+
+The platform includes four primary AI systems, each with distinct purposes and implementations:
+
+#### 1. Operations Assistant (LLM-Powered Copilot)
+
+**File:** `src/components/OperationsAssistant.tsx`  
+**AI Engine:** `src/lib/spark.ts`, `src/lib/onPremSparkProvider.ts`
+
+The Operations Assistant is an AI-powered copilot that provides natural language insights into manufacturing operations. It uses Large Language Models (LLMs) to answer questions about batches, equipment, quality events, and model performance.
+
+**Key Capabilities:**
+- **Contextual Query Processing**: Answers questions based on real-time operations snapshot including batches, equipment telemetry, quality records, alerts, and model metrics
+- **Data Grounding**: Every response is grounded in structured data (JSON) from the platform's KV store and equipment feed
+- **Conversation History**: Maintains up to 50 messages for context-aware interactions
+- **Audit Logging**: All prompts and responses are logged to the AI Audit Trail for transparency
+- **Fallback Behavior**: When LLM is unavailable, provides snapshot summary with explicit notification
+
+**Data Sources:**
+```typescript
+// From src/hooks/use-operations-assistant.ts
+const digest: OperationsDigest = {
+  summary: string,           // Plain text summary
+  metrics: {
+    batchYield: number,
+    firstPassRate: number,
+    deviationRate: number,
+    averageDeviationRisk: number,
+    equipmentOee: number,
+    averageCompliance: number
+  },
+  batches: { /* batch status, progress, risks */ },
+  equipment: { /* equipment status, risks */ },
+  qualityRecords: { /* deviations, CAPAs, change controls */ },
+  alerts: { /* active alerts by severity */ },
+  automation: { /* automation queue status */ },
+  modelPerformance: { /* AUROC, Brier, ECE metrics */ }
+}
+```
+
+**LLM Integration Architecture:**
+The platform uses an abstraction layer that supports multiple LLM deployment modes:
+- **GitHub Spark Runtime** (`src/lib/spark.ts`): Default integration when running in GitHub Spark environment
+- **On-Premise LLM Gateway** (`src/lib/onPremSparkProvider.ts`): For pharmaceutical environments requiring on-premise AI with configurable endpoint, token, and model
+- **Development Mock** (`src/lib/devSparkMock.ts`): Deterministic responses for testing
+
+**Prompt Structure:**
+```typescript
+// From src/components/OperationsAssistant.tsx (lines 93-100)
+const prompt = spark.llmPrompt`
+  You are the "Operations Copilot" for a GMP manufacturing command center. 
+  Answer precisely with metrics and concise actions.
+
+  OPERATIONS SNAPSHOT (UTC ${digest.updatedAt.toISOString()}):
+  ${latestSummary}
+
+  STRUCTURED DATA (JSON):
+  ${JSON.stringify({ metrics, batches, equipment, qualityRecords, alerts, automation, modelPerformance })}
+`
+```
+
+#### 2. Quality Automation Engine
+
+**File:** `src/lib/qualityAutomation.ts`  
+**Type Definitions:** `src/types/automation.ts`
+
+The Quality Automation Engine monitors batch execution in real-time and automatically detects quality events that may require human intervention. It generates non-binding suggestions for deviations based on statistical analysis of Critical Process Parameters (CPPs).
+
+**Automation Triggers:**
+
+1. **OOS (Out of Specification)**
+   - Triggered when a parameter breaches specification limits
+   - Requires 3 consecutive measurements outside bounds (configurable via `OOS_REQUIRED_STREAK`)
+   - Severity assigned based on magnitude of deviation
+   ```typescript
+   // From src/lib/qualityAutomation.ts (lines 58-67)
+   const determineSeverity = (trigger: AutomationTrigger, deviationMagnitude: number, range: number) => {
+     const ratio = range === 0 ? deviationMagnitude : Math.abs(deviationMagnitude) / range
+     if (trigger === 'OOS') {
+       if (ratio > 0.75) return 'critical'  // >75% of range
+       if (ratio > 0.5) return 'high'       // >50% of range
+       return 'medium'
+     }
+     // OOT events are cautionary
+     if (ratio > 0.6) return 'high'
+     return 'medium'
+   }
+   ```
+
+2. **OOT (Out of Trend)**
+   - Triggered by sustained drift toward specification limits
+   - Requires 6 consecutive measurements trending in same direction (configurable via `OOT_REQUIRED_COUNTER`)
+   - Enables proactive intervention before OOS occurs
+
+**Event Cadence Control:**
+- Cooldown period of 5 real minutes between same-parameter events (`EVENT_COOLDOWN_MS`)
+- Prevents alert fatigue from rapid-fire notifications
+- Implemented via timestamp tracking in `eventCadence` Map
+
+**Automation Workflow:**
+```
+Digital Twin Tick → Quality Automation Monitor
+    ↓
+CPP Analysis (Temperature, Pressure, pH, Volume)
+    ↓
+Trigger Detection (OOS/OOT)
+    ↓
+Deviation Record Creation
+    ↓
+AutomationSuggestion Generation
+    ↓
+Append to automation-queue (KV store)
+    ↓
+Human Review via AutomationBridge component
+    ↓
+Accept (→ Quality Management) or Dismiss
+```
+
+**Assignee Recommendation:**
+```typescript
+// From src/lib/qualityAutomation.ts (lines 70-75)
+const recommendedAssignee = (parameter: string) => {
+  if (parameter === 'temperature' || parameter === 'pressure') return 'Engineering'
+  if (parameter === 'pH') return 'Process Development'
+  if (parameter === 'volume') return 'Manufacturing'
+  return 'Quality Assurance'
+}
+```
+
+#### 3. Predictive Analytics Models
+
+**File:** `src/lib/modeling.ts`  
+**Model Monitoring:** `src/components/ModelMetricsSampler.tsx`
+
+The platform includes three predictive models for proactive quality management:
+
+**Model Types:**
+```typescript
+// From src/lib/modeling.ts (line 3)
+export type ModelId = 'quality_prediction' | 'equipment_failure' | 'deviation_risk'
+```
+
+**A. Quality Prediction Model**
+
+Predicts whether all Critical Process Parameters will remain within specification.
+
+```typescript
+// From src/lib/modeling.ts (lines 107-119)
+export function predictQuality(batch: BatchData) {
+  const cpp = getCPPCompliance(batch) // [0,1]
+  // Simple mapping with small smoothing
+  const p = clamp(0.05 + 0.9 * cpp, 0, 1)
+  const features: Features = {
+    cpp_compliance: cpp,
+    temp_delta: Math.abs(batch.parameters.temperature.current - batch.parameters.temperature.target),
+    pressure_delta: Math.abs(batch.parameters.pressure.current - batch.parameters.pressure.target),
+    ph_delta: Math.abs(batch.parameters.pH.current - batch.parameters.pH.target),
+  }
+  const y = outcomeQuality(batch)
+  return { p, y, features }
+}
+```
+
+**Decision Threshold:** 0.95 (strict threshold since y=1 means all CPPs in spec)
+
+**B. Equipment Failure Prediction**
+
+Predicts equipment failure risk based on telemetry data.
+
+```typescript
+// From src/lib/modeling.ts (lines 153-177)
+export function predictEquipmentFailure(eq: EqT) {
+  const vibrationRms = eq.vibrationRms ?? 0
+  const runHours = eq.runHours ?? 0
+  const utilizationRatio = eq.utilization / 100
+  
+  // Risk increases with vibration, runtime, and utilization
+  const vibrationScore = clamp(vibrationRms / 5.0, 0, 1)
+  const runtimeScore = clamp(runHours / 10000, 0, 1)
+  const utilizationScore = clamp(utilizationRatio, 0, 1)
+  
+  // Weighted combination
+  const risk = (vibrationScore * 0.4 + runtimeScore * 0.3 + utilizationScore * 0.3)
+  
+  const features: Features = {
+    vibration_rms: vibrationRms,
+    run_hours: runHours,
+    utilization: eq.utilization,
+  }
+  const y = outcomeEquipmentFailure(eq)
+  return { p: risk, y, features }
+}
+```
+
+**Decision Threshold:** 0.5
+
+**C. Deviation Risk Model**
+
+Predicts likelihood of deviation based on normalized distance from specification mid-point.
+
+```typescript
+// From src/lib/modeling.ts (lines 125-142)
+export function predictDeviationRisk(batch: BatchData) {
+  const { cppBounds: s, parameters: p } = batch
+  const norm = (val: number, min: number, max: number) => 
+    Math.abs(val - (min + max) / 2) / ((max - min) / 2)
+  const devs = [
+    norm(p.temperature.current, s.temperature.min, s.temperature.max),
+    norm(p.pressure.current, s.pressure.min, s.pressure.max),
+    norm(p.pH.current, s.pH.min, s.pH.max),
+  ]
+  const risk = clamp(Math.max(...devs), 0, 2) / 2 // map to [0,1]
+  const features: Features = {
+    temp_norm_dev: devs[0],
+    pressure_norm_dev: devs[1],
+    ph_norm_dev: devs[2],
+  }
+  const y = outcomeDeviation(batch)
+  return { p: risk, y, features }
+}
+```
+
+**Decision Threshold:** 0.5
+
+**Model Performance Metrics:**
+
+The platform implements comprehensive model monitoring using industry-standard metrics:
+
+```typescript
+// From src/lib/modeling.ts (lines 29-48)
+metrics(model: ModelId, opts?: { 
+  threshold?: number; 
+  minN?: number; 
+  requireBothClasses?: boolean 
+}) {
+  const t = opts?.threshold ?? 0.5
+  const minN = opts?.minN ?? 1
+  const needBoth = opts?.requireBothClasses ?? false
+  const rs = this.getRecords(model)
+  const n = rs.length
+  
+  // Performance metrics
+  const accuracy = preds.filter(x => x.c === x.y).length / n
+  const brier = rs.reduce((s, r) => s + (r.p - r.y) * (r.p - r.y), 0) / n
+  const ece = expectedCalibrationError(rs, 5)
+  const auroc = computeAUROC(rs)
+  
+  return { n, accuracy, brier, ece, auroc, threshold: t, hasPosNeg }
+}
+```
+
+**Metrics Explained:**
+- **AUROC (Area Under ROC Curve)**: Measures ability to distinguish between positive and negative outcomes. Range [0,1], higher is better. Target: ≥0.75
+- **Brier Score**: Measures calibration accuracy of probabilistic predictions. Range [0,1], lower is better. Target: ≤0.20
+- **ECE (Expected Calibration Error)**: Measures how well predicted probabilities match observed frequencies. Range [0,1], lower is better. Target: ≤0.10
+- **Accuracy**: Percentage of correct classifications (when predictions are thresholded). Only reported when sufficient samples exist
+
+**Model Monitoring Workflow:**
+```
+Batch/Equipment Data → Predict (p, features)
+    ↓
+Record Prediction with PredictionRecord
+    ↓
+Add to ModelMonitor singleton
+    ↓
+Periodic Sampling (ModelMetricsSampler)
+    ↓
+Calculate AUROC/Brier/ECE
+    ↓
+Persist to KV store (model-metrics-{modelId})
+    ↓
+Display in AI Audit Trail and Analytics
+```
+
+#### 4. AI Audit Trail and Transparency
+
+**Files:** `src/components/AIAuditTrail.tsx`, `src/hooks/use-audit.ts`
+
+Every AI interaction is logged for regulatory compliance and transparency.
+
+**Logged Events:**
+- **AI Assistant Prompts**: User questions to Operations Assistant (first 400 chars)
+- **AI Assistant Responses**: LLM responses (first 1200 chars)
+- **AI Fallback**: When LLM unavailable, logs fallback response
+- **Model Predictions**: Via ModelMetricsSampler, logs prediction outcomes
+- **Automation Suggestions**: Quality automation proposals and decisions
+
+**Audit Record Structure:**
+```typescript
+// From src/hooks/use-audit.ts
+{
+  timestamp: Date,
+  userId: string,
+  action: string,         // e.g., "AI Assistant Prompt"
+  module: 'ai',
+  details: string,        // Prompt/response content
+  recordId?: string,
+  outcome?: 'success' | 'failure' | 'pending'
+}
+```
+
+**AI Audit Trail Features:**
+- **Conversation Archive**: Full history of Operations Assistant interactions
+- **Export Capability**: Export as JSON or CSV for regulatory review
+- **Model Metrics Display**: Real-time AUROC, Brier, ECE charts
+- **Searchable**: Filter by date, action, module
+- **Hash Chain Integrity**: When backend enabled, provides tamper detection
+
+### AI Architecture Principles
+
+**1. Human-in-the-Loop**
+- All AI outputs are suggestions, not automated decisions
+- Quality automation requires human acceptance via AutomationBridge
+- Operations Assistant provides insights, but humans make final decisions
+- Model predictions inform risk scoring but don't auto-reject batches
+
+**2. Transparency and Explainability**
+- Full audit trail of all AI interactions
+- Model performance metrics visible in real-time
+- Feature values logged with predictions
+- Prompt and response content preserved
+
+**3. Regulatory Compliance**
+- FDA 7-Step Risk-Based Credibility Assessment implemented (see `docs/ai-credibility-assessment.md`)
+- ALCOA+ data integrity principles applied to AI logs
+- 21 CFR Part 11 compliance for electronic records
+- Evidence package export for regulatory submissions
+
+**4. Deployment Flexibility**
+- **On-Premise LLM**: Configure via `VITE_ONPREM_LLM_ENDPOINT` for data sovereignty
+- **Cloud LLM**: Use GitHub Spark or other cloud providers
+- **Air-Gapped**: Development mock for environments without internet
+
+**5. Model Credibility Goals**
+- AUROC ≥ 0.75 for all models (target threshold)
+- Brier Score ≤ 0.20 for calibration quality
+- ECE ≤ 0.10 for probability calibration
+- Graceful degradation with missing data
+
+### AI and Digital Twin Integration
+
+**File:** `src/lib/digitalTwin.ts`
+
+The Digital Twin serves dual purposes:
+1. **Development/Testing**: Simulated manufacturing environment for AI training and testing
+2. **AI Trigger Source**: Generates realistic CPP drift and equipment events to exercise quality automation
+
+**Integration Flow:**
+```
+Digital Twin Tick (every 2 seconds by default)
+    ↓
+Update Batch Parameters with Gaussian Noise
+    ↓
+Update Equipment Telemetry
+    ↓
+Publish TwinSnapshot to subscribers
+    ↓
+Quality Automation Engine receives snapshot
+    ↓
+Analyzes CPPs for OOS/OOT triggers
+    ↓
+Model Predictions sampled (every 30 sim seconds)
+    ↓
+Operations Assistant digest updated
+```
+
+**Simulation Controls:**
+```typescript
+// From src/lib/digitalTwin.ts (lines 14-18)
+export type TwinOptions = {
+  tickMs: number,                  // Real-time interval (default: 2000ms)
+  simSecondsPerTick: number,       // Simulated seconds per tick (default: 60)
+  monitorEverySimSeconds: number   // Prediction sampling interval (default: 30)
+}
+```
 
 ## Architecture
 
@@ -711,6 +1094,1177 @@ const metrics = monitor.metrics('quality_prediction', {
 })
 ```
 
+## AI Workflows and Data Flows
+
+This section provides detailed documentation of how AI components interact with data sources and each other within the platform.
+
+### Workflow 1: Operations Assistant Query Processing
+
+**End-to-End Flow:**
+
+```
+User Input (Natural Language Query)
+    ↓
+[OperationsAssistant Component]
+    ↓
+useOperationsAssistant Hook
+    │
+    ├─→ Subscribe to TwinSnapshot (Digital Twin)
+    ├─→ Fetch Quality Records (deviations, CAPAs, change controls)
+    ├─→ Fetch Alerts (useAlerts hook)
+    ├─→ Fetch Automation Queue
+    ├─→ Fetch Model Metrics (ModelMonitor)
+    │
+    ↓
+Build OperationsDigest
+    │
+    ├─→ Compute batch metrics (yield, first-pass rate, deviation rate)
+    ├─→ Compute equipment metrics (OEE, top risks)
+    ├─→ Compute quality metrics (open deviations, CAPAs)
+    ├─→ Aggregate model performance (AUROC, Brier, ECE)
+    │
+    ↓
+Generate Summary Text + Structured JSON
+    ↓
+[Spark LLM Interface]
+    │
+    ├─→ GitHub Spark Runtime (if available)
+    ├─→ On-Premise LLM Gateway (if configured)
+    ├─→ Fallback (summary only, no LLM)
+    │
+    ↓
+Format Prompt with Context
+    ↓
+Send to LLM
+    ↓
+Receive Response
+    ↓
+[Audit Logger]
+    ├─→ Log Prompt (action: "AI Assistant Prompt", module: "ai")
+    ├─→ Log Response (action: "AI Assistant Response", module: "ai")
+    │
+    ↓
+Display to User
+    ↓
+Append to Conversation History (max 50 messages)
+```
+
+**Data Flow Diagram:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Data Sources (KV Store)                  │
+├─────────────────────────────────────────────────────────────┤
+│ • batches[]          • equipment-telemetry[]                │
+│ • deviations[]       • capas[]                              │
+│ • change-controls[]  • automation-queue[]                   │
+│ • alerts[]           • model-metrics-*                      │
+└────────────────────────────┬────────────────────────────────┘
+                             │
+                             ▼
+        ┌────────────────────────────────────┐
+        │  useOperationsAssistant Hook       │
+        │  (Aggregation & Computation)       │
+        └────────────┬───────────────────────┘
+                     │
+                     ▼
+        ┌────────────────────────────────────┐
+        │      OperationsDigest              │
+        │  • summary (text)                  │
+        │  • metrics (computed KPIs)         │
+        │  • batches (aggregated)            │
+        │  • equipment (top risks)           │
+        │  • qualityRecords (counts)         │
+        │  • alerts (by severity)            │
+        │  • automation (queue status)       │
+        │  • modelPerformance (metrics)      │
+        └────────────┬───────────────────────┘
+                     │
+                     ▼
+        ┌────────────────────────────────────┐
+        │    LLM Prompt Construction         │
+        │  "You are Operations Copilot..."   │
+        │  + Snapshot Summary                │
+        │  + Structured JSON                 │
+        └────────────┬───────────────────────┘
+                     │
+        ┌────────────┴────────────┐
+        │                         │
+        ▼                         ▼
+┌──────────────┐        ┌─────────────────┐
+│ GitHub Spark │   OR   │ On-Prem Gateway │
+│   Runtime    │        │  (HTTP POST)    │
+└──────┬───────┘        └────────┬────────┘
+       │                         │
+       └────────┬────────────────┘
+                │
+                ▼
+     ┌─────────────────────┐
+     │   LLM Response      │
+     └──────────┬──────────┘
+                │
+     ┌──────────┴──────────┐
+     │                     │
+     ▼                     ▼
+┌──────────┐      ┌────────────────┐
+│  Audit   │      │  Display to    │
+│  Logger  │      │  User (UI)     │
+└──────────┘      └────────────────┘
+```
+
+**File References:**
+- **User Interface**: `src/components/OperationsAssistant.tsx` (lines 1-200+)
+- **Data Aggregation**: `src/hooks/use-operations-assistant.ts` (lines 1-300+)
+- **LLM Interface**: `src/lib/spark.ts` (lines 1-10)
+- **On-Prem Provider**: `src/lib/onPremSparkProvider.ts` (lines 1-51)
+- **Audit Logging**: `src/hooks/use-audit.ts`
+
+### Workflow 2: Quality Automation Trigger Detection
+
+**End-to-End Flow:**
+
+```
+Digital Twin Tick (every tickMs)
+    ↓
+Generate TwinSnapshot
+    │
+    ├─→ batches[] (updated parameters with noise)
+    ├─→ equipmentTelemetry[] (updated metrics)
+    │
+    ↓
+Notify Subscribers
+    ↓
+[Quality Automation Engine]
+    ↓
+FOR EACH Batch:
+    FOR EACH Parameter (temperature, pressure, pH, volume):
+        │
+        ├─→ Extract current value, target, bounds
+        ├─→ Calculate deviation
+        ├─→ Calculate compliance
+        │
+        ├─→ CHECK OOS (Out of Specification):
+        │   │
+        │   ├─→ Is value outside bounds?
+        │   │   ├─→ NO: Reset OOS streak counter
+        │   │   ├─→ YES: Increment OOS streak counter
+        │   │           │
+        │   │           ├─→ Streak ≥ OOS_REQUIRED_STREAK (3)?
+        │   │               ├─→ YES: TRIGGER OOS Event
+        │   │               └─→ NO: Continue monitoring
+        │   │
+        │   └─→ OOS EVENT TRIGGERED:
+        │       │
+        │       ├─→ Check cooldown (last event < 5 min ago?)
+        │       │   ├─→ YES: Skip (prevent alert fatigue)
+        │       │   └─→ NO: Continue
+        │       │
+        │       ├─→ Create Deviation Record
+        │       │   ├─→ ID: DEV-{timestamp}-{batch}-{param}-OOS-{random}
+        │       │   ├─→ Severity: determineSeverity(deviation, range)
+        │       │   ├─→ Assignee: recommendedAssignee(parameter)
+        │       │   ├─→ Origin: "digital-twin"
+        │       │   ├─→ Metadata: { trigger, parameter, values, bounds }
+        │       │
+        │       ├─→ Create AutomationSuggestion
+        │       │   ├─→ ID: AUTO-{timestamp}-{random}
+        │       │   ├─→ Actions: ["Investigate root cause", "Review trend", ...]
+        │       │   ├─→ Status: "pending"
+        │       │   ├─→ aiConfidence: "high" (OOS is definitive)
+        │       │
+        │       └─→ Append to automation-queue[] (KV store)
+        │
+        └─→ CHECK OOT (Out of Trend):
+            │
+            ├─→ Calculate trend direction (toward upper or lower bound)
+            ├─→ Is trending toward bound?
+            │   ├─→ NO: Reset OOT counter
+            │   ├─→ YES: Increment OOT counter
+            │           │
+            │           ├─→ Counter ≥ OOT_REQUIRED_COUNTER (6)?
+            │               ├─→ YES: TRIGGER OOT Event
+            │               └─→ NO: Continue monitoring
+            │
+            └─→ OOT EVENT TRIGGERED:
+                │
+                ├─→ Check cooldown (same as OOS)
+                │
+                ├─→ Create Deviation Record (severity: medium/high)
+                │
+                ├─→ Create AutomationSuggestion
+                │   ├─→ aiConfidence: "medium" (trend-based, not definitive)
+                │
+                └─→ Append to automation-queue[]
+    
+Display in AutomationBridge Component
+    ↓
+Human Review
+    │
+    ├─→ ACCEPT:
+    │   ├─→ Move Deviation to Quality Management
+    │   ├─→ Update suggestion status: "accepted"
+    │   ├─→ Remove from automation-queue
+    │   └─→ Log audit event
+    │
+    └─→ DISMISS:
+        ├─→ Update suggestion status: "dismissed"
+        ├─→ Log reason and signature
+        ├─→ Remove from automation-queue
+        └─→ Log audit event
+```
+
+**Data Flow Diagram:**
+
+```
+┌──────────────────────────────────────────────────────────┐
+│               Digital Twin (src/lib/digitalTwin.ts)      │
+│  Generates TwinSnapshot every tickMs (default 2s)        │
+└────────────────────────┬─────────────────────────────────┘
+                         │
+                         │ TwinSnapshot { timestamp, batches[], equipmentTelemetry[] }
+                         │
+                         ▼
+┌──────────────────────────────────────────────────────────┐
+│        Quality Automation Engine                         │
+│        (src/lib/qualityAutomation.ts)                    │
+│                                                           │
+│  initializeQualityAutomation()                           │
+│    └─→ subscribeToTwin(listener)                         │
+│                                                           │
+│  For each batch parameter:                               │
+│    ├─→ checkOOSCondition(streak ≥ 3)                    │
+│    └─→ checkOOTCondition(counter ≥ 6)                   │
+│                                                           │
+│  State Maps:                                             │
+│    • oosStreaks: Map<key, number>                        │
+│    • trendState: Map<key, {lastValue, counter}>         │
+│    • eventCadence: Map<key, timestamp>                   │
+│    • activeTriggers: Map<key, deviationId>              │
+└────────────────────────┬─────────────────────────────────┘
+                         │
+                         │ AutomationSuggestion
+                         │
+                         ▼
+┌──────────────────────────────────────────────────────────┐
+│            KV Store: automation-queue[]                  │
+│  [{                                                      │
+│    id: "AUTO-...",                                       │
+│    deviationId: "DEV-...",                              │
+│    trigger: "OOS" | "OOT",                              │
+│    parameter: "temperature" | "pressure" | ...,         │
+│    summary: "Temperature OOS detected...",               │
+│    actions: ["Investigate...", "Review..."],            │
+│    assignee: "Engineering",                              │
+│    status: "pending",                                    │
+│    aiConfidence: "high" | "medium",                     │
+│    measurement: { currentValue, target, bounds }         │
+│  }]                                                      │
+└────────────────────────┬─────────────────────────────────┘
+                         │
+                         │ useKV subscription
+                         │
+                         ▼
+┌──────────────────────────────────────────────────────────┐
+│      AutomationBridge Component                          │
+│      (src/components/AutomationBridge.tsx)               │
+│                                                           │
+│  Display pending suggestions                             │
+│    ├─→ Show trigger type, parameter, severity           │
+│    ├─→ Show current value vs bounds                     │
+│    ├─→ Show recommended actions                         │
+│    └─→ Show AI confidence level                         │
+│                                                           │
+│  User Actions:                                           │
+│    ├─→ Accept → Move to Quality Management              │
+│    └─→ Dismiss → Log reason, remove from queue          │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Configuration Constants:**
+```typescript
+// From src/lib/qualityAutomation.ts (lines 39-44)
+const OOS_REQUIRED_STREAK = 3        // Consecutive OOS measurements
+const OOT_REQUIRED_COUNTER = 6       // Consecutive trending measurements
+const EVENT_COOLDOWN_MS = 5 * 60 * 1000  // 5 minutes cooldown
+```
+
+**File References:**
+- **Automation Engine**: `src/lib/qualityAutomation.ts` (lines 1-286)
+- **Type Definitions**: `src/types/automation.ts` (lines 1-30)
+- **UI Component**: `src/components/AutomationBridge.tsx`
+
+### Workflow 3: Predictive Model Inference and Monitoring
+
+**End-to-End Flow:**
+
+```
+Data Source (Batch or Equipment)
+    ↓
+Prediction Function Called
+    │
+    ├─→ predictQuality(batch)
+    ├─→ predictEquipmentFailure(equipment)
+    └─→ predictDeviationRisk(batch)
+    │
+    ↓
+Extract Features
+    │
+    ├─→ Quality: cpp_compliance, temp_delta, pressure_delta, ph_delta
+    ├─→ Equipment: vibration_rms, run_hours, utilization
+    └─→ Deviation Risk: temp_norm_dev, pressure_norm_dev, ph_norm_dev
+    │
+    ↓
+Compute Prediction Probability p ∈ [0,1]
+    │
+    ├─→ Apply model-specific logic (weighted combination, normalization)
+    │
+    ↓
+Determine Ground Truth Outcome y ∈ {0,1}
+    │
+    ├─→ Quality: y=1 if all CPPs in spec, else y=0
+    ├─→ Equipment: y=1 if alert present, else y=0
+    └─→ Deviation Risk: y=1 if any CPP out of spec, else y=0
+    │
+    ↓
+Return { p, y, features }
+    ↓
+[Optional: Record for Monitoring]
+    ↓
+ModelMonitor.add({
+  id: unique-id,
+  model: modelId,
+  timestamp: Date.now(),
+  p: probability,
+  y: outcome,
+  features: feature-map
+})
+    ↓
+[Periodic Sampling via ModelMetricsSampler]
+    │
+    ├─→ Every 30 simulated seconds (configurable)
+    ├─→ Call monitor.metrics(modelId, { threshold, minN, requireBothClasses })
+    │
+    ↓
+Compute Performance Metrics
+    │
+    ├─→ AUROC = computeAUROC(predictions)
+    │   │
+    │   └─→ Rank predictions by probability
+    │       └─→ Calculate area under ROC curve
+    │           └─→ (sumPosRanks - nPos*(nPos+1)/2) / (nPos * nNeg)
+    │
+    ├─→ Brier Score = Σ(p - y)² / n
+    │   │
+    │   └─→ Measures squared error of probabilistic predictions
+    │
+    ├─→ ECE = expectedCalibrationError(predictions, bins=5)
+    │   │
+    │   └─→ Bin predictions into 5 equal-width bins
+    │       └─→ For each bin: |avg_predicted - avg_actual|
+    │           └─→ Weighted average across bins
+    │
+    └─→ Accuracy = correct_predictions / total_predictions
+        │
+        └─→ Only computed if n ≥ minN and both classes present
+    │
+    ↓
+Persist Metrics to KV Store
+    │
+    └─→ Key: "model-metrics-{modelId}"
+        └─→ Value: { timestamp, n, accuracy, brier, ece, auroc, threshold }
+    │
+    ↓
+Display in UI
+    │
+    ├─→ AI Audit Trail: Charts of AUROC, Brier, ECE over time
+    └─→ Analytics: Model performance cards with latest metrics
+```
+
+**AUROC Calculation Details:**
+
+```typescript
+// From src/lib/modeling.ts (lines 79-102)
+function computeAUROC(rs: PredictionRecord[]) {
+  const pos = rs.filter(r => r.y === 1)  // Positive outcomes
+  const neg = rs.filter(r => r.y === 0)  // Negative outcomes
+  const nPos = pos.length
+  const nNeg = neg.length
+  
+  if (nPos === 0 || nNeg === 0) return 0  // Need both classes
+  
+  // Sort all predictions by probability (ascending)
+  const sorted = rs.slice().sort((a, b) => a.p - b.p)
+  
+  // Assign ranks (1-indexed), averaging for ties
+  const ranks: number[] = new Array(sorted.length)
+  let i = 0
+  while (i < sorted.length) {
+    let j = i
+    while (j + 1 < sorted.length && sorted[j + 1].p === sorted[i].p) j++
+    const avgRank = (i + j + 2) / 2  // Average rank for tied predictions
+    for (let k = i; k <= j; k++) ranks[k] = avgRank
+    i = j + 1
+  }
+  
+  // Sum ranks for positive outcomes
+  let sumPosRanks = 0
+  for (let idx = 0; idx < sorted.length; idx++) {
+    if (sorted[idx].y === 1) sumPosRanks += ranks[idx]
+  }
+  
+  // Calculate AUC using rank-sum formula
+  const auc = (sumPosRanks - (nPos * (nPos + 1)) / 2) / (nPos * nNeg)
+  return auc
+}
+```
+
+**Data Flow Diagram:**
+
+```
+┌────────────────────────────────────────────────────────┐
+│         Batch/Equipment Data Source                    │
+│  • BatchData from TwinSnapshot or Equipment Feed       │
+│  • EquipmentTelemetry from Digital Twin                │
+└─────────────────┬──────────────────────────────────────┘
+                  │
+                  ▼
+┌────────────────────────────────────────────────────────┐
+│           Prediction Functions                         │
+│         (src/lib/modeling.ts)                          │
+│                                                         │
+│  predictQuality(batch)                                 │
+│    └─→ cpp_compliance = getCPPCompliance(batch)       │
+│        └─→ p = clamp(0.05 + 0.9 * cpp, 0, 1)         │
+│            └─→ y = (cpp === 1) ? 1 : 0                │
+│                                                         │
+│  predictEquipmentFailure(equipment)                    │
+│    └─→ vibrationScore + runtimeScore + utilizScore   │
+│        └─→ p = weighted combination                   │
+│            └─→ y = (alert present) ? 1 : 0            │
+│                                                         │
+│  predictDeviationRisk(batch)                           │
+│    └─→ normalized deviations from mid-spec           │
+│        └─→ p = max(devs) / 2                          │
+│            └─→ y = (any CPP out of spec) ? 1 : 0     │
+└─────────────────┬──────────────────────────────────────┘
+                  │
+                  │ { p, y, features }
+                  │
+                  ▼
+┌────────────────────────────────────────────────────────┐
+│            ModelMonitor Singleton                      │
+│         (src/lib/modeling.ts)                          │
+│                                                         │
+│  private records: PredictionRecord[] = []              │
+│                                                         │
+│  add(record: PredictionRecord)                         │
+│    └─→ records.push(record)                           │
+│                                                         │
+│  metrics(model, opts)                                  │
+│    ├─→ Filter records by model                        │
+│    ├─→ Compute AUROC (rank-based)                     │
+│    ├─→ Compute Brier (MSE of probabilities)           │
+│    ├─→ Compute ECE (calibration bins)                 │
+│    └─→ Compute Accuracy (if n ≥ minN)                 │
+└─────────────────┬──────────────────────────────────────┘
+                  │
+                  │ Periodic Sampling
+                  │
+                  ▼
+┌────────────────────────────────────────────────────────┐
+│        ModelMetricsSampler Component                   │
+│     (src/components/ModelMetricsSampler.tsx)           │
+│                                                         │
+│  useEffect(() => {                                     │
+│    const interval = setInterval(() => {                │
+│      for (model of ['quality_prediction',             │
+│                      'equipment_failure',             │
+│                      'deviation_risk']) {             │
+│        const metrics = monitor.metrics(model, opts)   │
+│        setKV(`model-metrics-${model}`, {              │
+│          timestamp: Date.now(),                       │
+│          ...metrics                                    │
+│        })                                              │
+│      }                                                 │
+│    }, samplingInterval)                                │
+│  }, [])                                                │
+└─────────────────┬──────────────────────────────────────┘
+                  │
+                  │ Persisted Metrics
+                  │
+                  ▼
+┌────────────────────────────────────────────────────────┐
+│          KV Store: model-metrics-*                     │
+│  {                                                     │
+│    timestamp: number,                                  │
+│    n: number,           // Sample count                │
+│    accuracy: number?,   // Classification accuracy     │
+│    brier: number,       // Brier score (calibration)   │
+│    ece: number,         // Expected calibration error  │
+│    auroc: number,       // Area under ROC curve        │
+│    threshold: number,   // Decision threshold          │
+│    hasPosNeg: boolean   // Both classes present?       │
+│  }                                                     │
+└─────────────────┬──────────────────────────────────────┘
+                  │
+                  │ useKV subscription
+                  │
+                  ▼
+┌────────────────────────────────────────────────────────┐
+│              UI Display                                │
+│                                                         │
+│  AI Audit Trail Page:                                  │
+│    ├─→ Line charts (AUROC, Brier, ECE over time)      │
+│    ├─→ Threshold indicators                           │
+│    └─→ Sample count display                           │
+│                                                         │
+│  Analytics Page:                                       │
+│    ├─→ Model performance cards                        │
+│    ├─→ Latest metrics with color coding               │
+│    └─→ Historical trends                              │
+└────────────────────────────────────────────────────────┘
+```
+
+**Performance Thresholds:**
+```typescript
+// From docs/ai-credibility-assessment.md
+Credibility Goals:
+  - AUROC ≥ 0.75 (target for acceptance)
+  - Brier ≤ 0.20 (good calibration)
+  - ECE ≤ 0.10 (well-calibrated probabilities)
+```
+
+**File References:**
+- **Prediction Functions**: `src/lib/modeling.ts` (lines 105-200)
+- **Model Monitor**: `src/lib/modeling.ts` (lines 16-51)
+- **Metrics Sampler**: `src/components/ModelMetricsSampler.tsx`
+- **Metrics Display**: `src/components/AIAuditTrail.tsx`, `src/components/Analytics.tsx`
+
+### Workflow 4: Equipment Feed Integration
+
+**End-to-End Flow:**
+
+```
+Equipment Data Source
+    │
+    ├─→ Development: Digital Twin (src/lib/digitalTwin.ts)
+    ├─→ Production: OPC UA / MES / Historian
+    │
+    ↓
+Equipment Feed Abstraction Layer
+(src/lib/equipmentFeed.ts)
+    │
+    ├─→ registerEquipmentFeed({ subscribe })
+    │   └─→ Custom adapter implementation
+    │
+    ├─→ ensureEquipmentFeed()
+    │   └─→ Initialize default feed if none registered
+    │
+    └─→ subscribeToEquipmentFeed(listener)
+        └─→ Notify listener on every snapshot
+    │
+    ↓
+Snapshot Format
+{
+  timestamp: Date,
+  batches: BatchData[],
+  equipmentTelemetry: EquipmentTelemetry[]
+}
+    ↓
+Subscribers (Components/Hooks)
+    │
+    ├─→ Dashboard: Display equipment status, batch progress
+    ├─→ Quality Automation: Monitor CPPs for OOS/OOT
+    ├─→ Operations Assistant: Aggregate for digest
+    ├─→ Analytics: Compute metrics and predictions
+    └─→ Model Sampler: Sample predictions for monitoring
+```
+
+**Production Integration Example (OPC UA):**
+
+```typescript
+// Custom OPC UA adapter (example from README)
+import { registerEquipmentFeed } from '@/lib/equipmentFeed'
+import { OPCUAClient } from 'node-opcua'
+
+registerEquipmentFeed({
+  subscribe: (listener) => {
+    const client = new OPCUAClient()
+    
+    // Connect to OPC UA server
+    client.connect('opc.tcp://plc.example.com:4840')
+    
+    // Subscribe to equipment nodes
+    const subscription = client.createSubscription({
+      requestedPublishingInterval: 1000,  // 1 second
+      requestedLifetimeCount: 100,
+      requestedMaxKeepAliveCount: 10
+    })
+    
+    // Monitor CPP nodes and transform to platform snapshot format
+    subscription.monitor([
+      'ns=2;s=Bioreactor1.Temperature',
+      'ns=2;s=Bioreactor1.Pressure',
+      'ns=2;s=Bioreactor1.pH',
+      // ... more nodes
+    ], (dataValues) => {
+      const snapshot = transformToSnapshot(dataValues)
+      listener(snapshot)  // Notify platform
+    })
+    
+    // Return cleanup function
+    return () => {
+      subscription.terminate()
+      client.disconnect()
+    }
+  }
+})
+```
+
+**File References:**
+- **Equipment Feed Abstraction**: `src/lib/equipmentFeed.ts` (lines 1-81)
+- **Digital Twin Implementation**: `src/lib/digitalTwin.ts` (lines 1-281)
+- **Integration Guide**: `docs/equipment-integration.md`
+
+## AI Use Cases and Examples
+
+This section provides concrete, grounded examples of AI functionality in action, with references to actual code in the repository.
+
+### Use Case 1: Querying Operations Assistant for Batch Status
+
+**Scenario:** A manufacturing supervisor wants to know which batches are at highest risk of deviation.
+
+**User Query:**
+```
+"Which batches have the highest deviation risk right now?"
+```
+
+**Operations Assistant Processing:**
+
+1. **Digest Generation** (from `src/hooks/use-operations-assistant.ts`):
+```typescript
+// Lines 140-200: Build batch risk analysis
+const topDeviationRisks = snapshot.batches
+  .map(batch => ({
+    id: batch.id,
+    product: batch.product,
+    stage: batch.currentStage,
+    risk: predictDeviationRisk(batch).p * 100,  // Convert to percentage
+    cppCompliance: getCPPCompliance(batch),
+    status: batch.status,
+    progress: batch.progress
+  }))
+  .sort((a, b) => b.risk - a.risk)  // Sort by risk descending
+  .slice(0, 5)  // Top 5
+```
+
+2. **LLM Prompt** (from `src/components/OperationsAssistant.tsx`, lines 93-110):
+```typescript
+const prompt = spark.llmPrompt`
+  You are the "Operations Copilot" for a GMP manufacturing command center.
+  Answer precisely with metrics and concise actions.
+
+  OPERATIONS SNAPSHOT (UTC ${digest.updatedAt.toISOString()}):
+  ${latestSummary}
+
+  STRUCTURED DATA (JSON):
+  ${JSON.stringify({
+    batches: {
+      topDeviationRisks: [
+        { id: "BTH-001", product: "Monoclonal Antibody", risk: 42.3, cppCompliance: 0.89 },
+        { id: "BTH-003", product: "Vaccine", risk: 38.7, cppCompliance: 0.91 },
+        { id: "BTH-005", product: "Cell Therapy", risk: 31.2, cppCompliance: 0.93 }
+      ]
+    }
+  })}
+
+  USER QUESTION: "Which batches have the highest deviation risk right now?"
+`
+```
+
+3. **Expected LLM Response:**
+```
+The top 3 batches with highest deviation risk are:
+
+1. **BTH-001** (Monoclonal Antibody) - 42.3% risk, 89% CPP compliance
+2. **BTH-003** (Vaccine) - 38.7% risk, 91% CPP compliance  
+3. **BTH-005** (Cell Therapy) - 31.2% risk, 93% CPP compliance
+
+All three batches show moderate deviation risk due to parameters trending toward 
+specification limits. Recommend monitoring temperature and pH closely for BTH-001.
+```
+
+4. **Audit Trail Entry:**
+```typescript
+// From src/components/OperationsAssistant.tsx, line 79
+log('AI Assistant Prompt', 'ai', 'Which batches have the highest deviation risk right now?')
+
+// Line 85
+log('AI Assistant Response', 'ai', 'The top 3 batches with highest deviation risk are...')
+```
+
+**Code References:**
+- Digest building: `src/hooks/use-operations-assistant.ts` (lines 140-200)
+- Prompt construction: `src/components/OperationsAssistant.tsx` (lines 93-110)
+- Audit logging: `src/components/OperationsAssistant.tsx` (lines 79, 85)
+
+### Use Case 2: Accepting Quality Automation Suggestion
+
+**Scenario:** The quality automation engine detects a temperature OOS event and suggests creating a deviation.
+
+**Step 1: Automation Detection** (from `src/lib/qualityAutomation.ts`, lines 150-250)
+
+```typescript
+// Digital Twin tick detects batch BTH-042 temperature = 38.5°C (spec: 37.0 ± 1.0°C)
+const batch = snapshot.batches.find(b => b.id === 'BTH-042')
+const temp = batch.parameters.temperature
+
+// Check if out of specification
+if (temp.current < temp.min || temp.current > temp.max) {
+  // Increment OOS streak
+  oosStreaks.set('BTH-042-temperature', (oosStreaks.get('BTH-042-temperature') || 0) + 1)
+  
+  // Check if streak threshold met
+  if (oosStreaks.get('BTH-042-temperature') >= OOS_REQUIRED_STREAK) {  // 3 consecutive
+    // Create deviation
+    const deviation: Deviation = {
+      id: 'DEV-20251113210000-BTH-042-TEMPERATURE-OOS-123',
+      title: 'Temperature OOS detected in BTH-042',
+      description: 'Temperature measured 38.5°C vs target 37.0. Value breached specification limits.',
+      severity: 'high',  // (38.5 - 38.0) / (38.0 - 36.0) = 0.25, so 'high'
+      status: 'open',
+      batchId: 'BTH-042',
+      reportedBy: 'Digital Twin Monitor',
+      reportedDate: new Date(),
+      assignedTo: 'Engineering',  // recommendedAssignee('temperature')
+      origin: 'digital-twin',
+      metadata: {
+        trigger: 'OOS',
+        parameter: 'temperature',
+        currentValue: 38.5,
+        target: 37.0,
+        bounds: { min: 36.0, max: 38.0 }
+      }
+    }
+    
+    // Create automation suggestion
+    const suggestion: AutomationSuggestion = {
+      id: 'AUTO-20251113210000-456',
+      deviationId: deviation.id,
+      trigger: 'OOS',
+      parameter: 'temperature',
+      summary: 'Temperature exceeded upper specification limit',
+      actions: [
+        'Investigate root cause of temperature spike',
+        'Review bioreactor jacket temperature control',
+        'Check for HVAC system anomalies',
+        'Assess impact on product quality'
+      ],
+      assignee: 'Engineering',
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      aiConfidence: 'high',
+      measurement: {
+        currentValue: 38.5,
+        target: 37.0,
+        bounds: { min: 36.0, max: 38.0 }
+      }
+    }
+    
+    // Append to automation queue
+    appendToQueue(suggestion)
+  }
+}
+```
+
+**Step 2: User Review in AutomationBridge** (from `src/components/AutomationBridge.tsx`)
+
+UI displays:
+```
+┌─────────────────────────────────────────────────────────┐
+│ QUALITY AUTOMATION SUGGESTION                           │
+├─────────────────────────────────────────────────────────┤
+│ ID: AUTO-20251113210000-456                             │
+│ Trigger: OOS (Out of Specification)                     │
+│ Parameter: Temperature                                  │
+│ Batch: BTH-042                                          │
+│ Confidence: High                                        │
+│                                                         │
+│ Current Value: 38.5°C                                   │
+│ Target: 37.0°C                                          │
+│ Specification: 36.0 - 38.0°C                            │
+│ Deviation: +0.5°C (25% of range)                        │
+│                                                         │
+│ Recommended Actions:                                    │
+│ • Investigate root cause of temperature spike           │
+│ • Review bioreactor jacket temperature control          │
+│ • Check for HVAC system anomalies                       │
+│ • Assess impact on product quality                      │
+│                                                         │
+│ Assigned To: Engineering                                │
+│                                                         │
+│ [Accept]  [Dismiss]                                     │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Step 3: Accept Suggestion**
+
+```typescript
+// User clicks "Accept"
+const acceptSuggestion = (suggestion: AutomationSuggestion) => {
+  // 1. Move deviation to quality management
+  setDeviations(prev => [...prev, suggestion.proposedDeviation])
+  
+  // 2. Update suggestion status
+  const updatedSuggestion = {
+    ...suggestion,
+    status: 'accepted' as const,
+    resolvedAt: new Date().toISOString(),
+    decision: 'accepted' as const,
+    decisionBy: currentUser.name
+  }
+  
+  // 3. Remove from automation queue
+  setQueue(queue.filter(s => s.id !== suggestion.id))
+  
+  // 4. Log audit event
+  log(
+    'Accept Automation Suggestion',
+    'automation',
+    `Accepted suggestion ${suggestion.id} for deviation ${suggestion.deviationId}`,
+    { suggestionId: suggestion.id, deviationId: suggestion.deviationId }
+  )
+}
+```
+
+**Result:** Deviation now appears in Quality Management system for formal investigation and resolution.
+
+**Code References:**
+- OOS detection: `src/lib/qualityAutomation.ts` (lines 150-250)
+- Suggestion display: `src/components/AutomationBridge.tsx`
+- Accept handler: `src/components/AutomationBridge.tsx` (accept button handler)
+
+### Use Case 3: Monitoring Predictive Model Performance
+
+**Scenario:** A data scientist wants to verify that the quality prediction model is well-calibrated.
+
+**Step 1: Model Predictions** (continuous, from `src/lib/modeling.ts`)
+
+```typescript
+// Every 30 simulated seconds (via Digital Twin tick)
+for (const batch of batches) {
+  const prediction = predictQuality(batch)
+  
+  // Record prediction with ground truth
+  monitor.add({
+    id: `pred-quality-${Date.now()}-${Math.random()}`,
+    model: 'quality_prediction',
+    timestamp: Date.now(),
+    p: prediction.p,        // e.g., 0.92
+    y: prediction.y,        // e.g., 1 (all CPPs in spec)
+    features: prediction.features
+  })
+}
+```
+
+**Step 2: Metrics Calculation** (from `src/components/ModelMetricsSampler.tsx`)
+
+```typescript
+// Periodic sampling (every 30 simulation seconds)
+useEffect(() => {
+  const interval = setInterval(() => {
+    const metrics = monitor.metrics('quality_prediction', {
+      threshold: 0.95,        // Decision threshold
+      minN: 10,               // Minimum samples required
+      requireBothClasses: true // Need both positive and negative outcomes
+    })
+    
+    // Example metrics result:
+    // {
+    //   n: 150,                    // Total predictions
+    //   accuracy: 0.867,           // 86.7% correct classifications
+    //   brier: 0.045,              // Good calibration (< 0.20)
+    //   ece: 0.032,                // Well-calibrated (< 0.10)
+    //   auroc: 0.912,              // Excellent discrimination (> 0.75)
+    //   threshold: 0.95,
+    //   hasPosNeg: true
+    // }
+    
+    setKV('model-metrics-quality_prediction', {
+      timestamp: Date.now(),
+      ...metrics
+    })
+  }, samplingInterval)
+  
+  return () => clearInterval(interval)
+}, [])
+```
+
+**Step 3: View in AI Audit Trail** (from `src/components/AIAuditTrail.tsx`)
+
+UI displays:
+```
+┌─────────────────────────────────────────────────────────┐
+│ MODEL PERFORMANCE: Quality Prediction                   │
+├─────────────────────────────────────────────────────────┤
+│ Samples: 150                                            │
+│ Decision Threshold: 0.95                                │
+│                                                         │
+│ AUROC (Discrimination):  ████████████████░░  0.912 ✓   │
+│   Target: ≥ 0.75                                        │
+│                                                         │
+│ Brier Score (Calibration): ██░░░░░░░░░░░░  0.045 ✓     │
+│   Target: ≤ 0.20                                        │
+│                                                         │
+│ ECE (Calibration Error):  ██░░░░░░░░░░░░░  0.032 ✓     │
+│   Target: ≤ 0.10                                        │
+│                                                         │
+│ Accuracy:  ████████████████░░░  86.7% ✓                │
+│                                                         │
+│ Status: All metrics within acceptable range             │
+│                                                         │
+│ [View Calibration Plot] [Export Metrics]                │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Interpretation:**
+- **AUROC 0.912**: Model has excellent ability to distinguish batches that will stay in spec from those that won't
+- **Brier 0.045**: Predictions are well-calibrated (low squared error)
+- **ECE 0.032**: When model says 90% confidence, it's correct ~90% of the time
+- **Accuracy 86.7%**: With threshold 0.95, model correctly classifies 86.7% of batches
+
+**Code References:**
+- Prediction recording: `src/lib/modeling.ts` (lines 105-120)
+- Metrics calculation: `src/lib/modeling.ts` (lines 29-48)
+- Metrics sampling: `src/components/ModelMetricsSampler.tsx`
+- Metrics display: `src/components/AIAuditTrail.tsx`
+
+### Use Case 4: Investigating AI-Suggested Deviation
+
+**Scenario:** A quality analyst reviews a deviation that was auto-detected by the quality automation engine.
+
+**Step 1: Navigate to Deviation** (from Quality Management)
+
+```typescript
+// Deviation created by automation engine
+const deviation: Deviation = {
+  id: 'DEV-20251113210000-BTH-042-TEMPERATURE-OOS-123',
+  title: 'Temperature OOS detected in BTH-042',
+  description: 'Temperature measured 38.5°C vs target 37.0. Value breached specification limits.',
+  severity: 'high',
+  status: 'open',
+  batchId: 'BTH-042',
+  reportedBy: 'Digital Twin Monitor',
+  reportedDate: new Date('2025-11-13T21:00:00Z'),
+  assignedTo: 'Engineering',
+  origin: 'digital-twin',  // Indicates AI origin
+  metadata: {
+    trigger: 'OOS',
+    parameter: 'temperature',
+    currentValue: 38.5,
+    target: 37.0,
+    bounds: { min: 36.0, max: 38.0 },
+    detectionTime: '2025-11-13T21:00:00Z',
+    streak: 3  // Number of consecutive OOS measurements
+  }
+}
+```
+
+**Step 2: Review Context in Operations Assistant**
+
+User asks:
+```
+"What was happening with batch BTH-042 when the temperature deviation occurred?"
+```
+
+Operations Assistant response (grounded in data):
+```
+Batch BTH-042 (Monoclonal Antibody, Phase: Cell Culture) experienced a temperature 
+deviation at 21:00 UTC. Context:
+
+• Temperature spiked from 37.2°C to 38.5°C over 6 minutes (3 consecutive measurements)
+• Equipment: Bioreactor BIO-001 (vibration normal, utilization 78%)
+• Other parameters stable: Pressure 1.82 bar (spec 1.8 ± 0.3), pH 7.12 (spec 7.1 ± 0.2)
+• Batch progress: 67% complete, 33 hours runtime
+• Quality prediction before spike: 0.95 (in spec)
+• Quality prediction after spike: 0.72 (risk of OOS)
+
+Recommendation: Review bioreactor jacket temperature control and HVAC logs for 
+20:54-21:00 UTC window.
+```
+
+**Step 3: Create Investigation** (from `src/components/InvestigationWorkflow.tsx`)
+
+```typescript
+const investigation: Investigation = {
+  id: 'INV-001',
+  deviationIds: ['DEV-20251113210000-BTH-042-TEMPERATURE-OOS-123'],
+  status: 'analysis',
+  priority: 'high',
+  lead: 'Quality Assurance',
+  stages: [
+    {
+      id: 'containment',
+      title: 'Containment',
+      gate: 'containment',
+      tasks: [
+        { 
+          title: 'Isolate affected batch',
+          status: 'complete',
+          owner: 'Manufacturing'
+        },
+        { 
+          title: 'Review real-time telemetry',
+          status: 'complete',
+          owner: 'Engineering'
+        }
+      ]
+    },
+    {
+      id: 'root-cause',
+      title: 'Root Cause Analysis',
+      gate: 'root-cause',
+      tasks: [
+        { 
+          title: 'Analyze HVAC logs for 20:54-21:00 UTC',
+          status: 'in-progress',
+          owner: 'Facilities'
+        },
+        { 
+          title: 'Inspect bioreactor temperature probe calibration',
+          status: 'pending',
+          owner: 'Metrology'
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Step 4: AI-Assisted Root Cause**
+
+User asks Operations Assistant:
+```
+"Have we seen similar temperature spikes in other batches?"
+```
+
+Operations Assistant queries historical data and responds:
+```
+Yes, 3 similar temperature spikes detected in past 30 days:
+
+1. BTH-038 (2025-10-15): Temperature spike to 38.3°C during cell culture
+   - Root cause: HVAC cooling valve stuck
+   - Resolution: Valve replaced, batch continued without impact
+
+2. BTH-029 (2025-10-28): Temperature spike to 38.7°C during harvest
+   - Root cause: Bioreactor jacket control loop tuning
+   - Resolution: PID parameters adjusted
+
+3. BTH-042 (2025-11-13): Current incident
+
+Pattern: All spikes occurred between 20:45-21:15 UTC, suggesting potential 
+time-based HVAC control issue or shift change impact.
+```
+
+**Code References:**
+- Deviation metadata: `src/types/quality.ts` (lines 10-26)
+- Investigation workflow: `src/components/InvestigationWorkflow.tsx`
+- Operations Assistant context: `src/hooks/use-operations-assistant.ts`
+
+### Use Case 5: Configuring On-Premise LLM for Compliance
+
+**Scenario:** A pharmaceutical company wants to use the Operations Assistant but requires all AI processing to occur on-premise for data sovereignty.
+
+**Step 1: Deploy On-Premise LLM Gateway**
+
+```bash
+# Company deploys their own LLM endpoint (e.g., LLaMA, Mistral, or GPT-4 on Azure OpenAI)
+# Example: On-premise Ollama instance
+docker run -d -p 11434:11434 ollama/ollama
+ollama pull llama2:13b
+```
+
+**Step 2: Configure Platform** (via `.env` file)
+
+```bash
+# .env
+VITE_ONPREM_LLM_ENDPOINT=https://llm.pharma-company.internal/v1/chat
+VITE_ONPREM_LLM_TOKEN=Bearer your-internal-api-token
+VITE_ONPREM_LLM_MODEL=llama2-13b-gmp  # Company-specific model
+```
+
+**Step 3: Platform Initialization** (from `src/lib/onPremSparkProvider.ts`)
+
+```typescript
+// Lines 12-51
+import { registerOnPremSpark } from '@/lib/onPremSparkProvider'
+
+// Auto-registration on import if env vars present
+if (
+  import.meta.env.VITE_ONPREM_LLM_ENDPOINT &&
+  import.meta.env.VITE_ONPREM_LLM_TOKEN
+) {
+  registerOnPremSpark({
+    endpoint: import.meta.env.VITE_ONPREM_LLM_ENDPOINT,
+    token: import.meta.env.VITE_ONPREM_LLM_TOKEN,
+    model: import.meta.env.VITE_ONPREM_LLM_MODEL || 'gpt-4'
+  })
+}
+
+// Implementation
+export function registerOnPremSpark(config: OnPremConfig) {
+  const w = window as unknown as { spark?: SparkApi }
+  w.spark = {
+    llmPrompt: (strings, ...expr) => ({ strings, values: expr }),
+    llm: async (prompt, model) => {
+      const response = await fetch(config.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': config.token
+        },
+        body: JSON.stringify({
+          model: model || config.model,
+          messages: [{ role: 'user', content: formatPrompt(prompt) }]
+        })
+      })
+      
+      const data = await response.json()
+      return data.choices[0].message.content
+    }
+  }
+}
+```
+
+**Step 4: Verification**
+
+When user asks Operations Assistant a question:
+```
+1. Prompt sent to: https://llm.pharma-company.internal/v1/chat
+2. LLM processes on-premise (no external API calls)
+3. Response logged in audit trail with metadata:
+   {
+     "action": "AI Assistant Response",
+     "module": "ai",
+     "metadata": {
+       "endpoint": "https://llm.pharma-company.internal",
+       "model": "llama2-13b-gmp",
+       "responseTime": 1.2s
+     }
+   }
+```
+
+**Benefits:**
+- **Data Sovereignty**: All manufacturing data stays within company network
+- **Compliance**: No cloud AI services required (GxP/HIPAA compliant)
+- **Audit Trail**: Full transparency of AI provider and model used
+- **Customization**: Can use company-specific fine-tuned models
+
+**Code References:**
+- On-prem provider: `src/lib/onPremSparkProvider.ts` (lines 12-51)
+- Configuration: `.env.example`
+- Audit logging: `src/hooks/use-audit.ts`
+
 ## API Reference
 
 ### Backend API Endpoints
@@ -933,6 +2487,254 @@ Supported roles:
 - **System**: Create audit events, record metrics
 
 Enable via `RBAC_ENABLED=true` environment variable.
+
+### AI Credibility and Regulatory Compliance
+
+The platform implements comprehensive controls for AI credibility aligned with FDA's risk-based framework for AI/ML in drug and biological product development.
+
+#### FDA 7-Step Risk-Based Credibility Assessment
+
+The platform follows FDA's guidance on "Considerations for the Use of Artificial Intelligence to Support Regulatory Decision-Making." Full assessment documentation is available in `docs/ai-credibility-assessment.md`.
+
+**Step 1: Decision Context**
+- **Intended Use**: Real-time monitoring, risk triage, and decision support (not automated release decisions)
+- **Users**: Production operators, quality analysts, supervisors, and administrators
+- **Decision Boundaries**: 
+  - In-scope: Investigation prioritization, automation suggestions, risk scoring
+  - Out-of-scope: Automated batch disposition, GMP-significant changes without approval
+
+**Step 2: Risk Identification**
+- **Model Risks**: False negatives (missed alerts), false positives (alert fatigue), miscalibration
+- **Data Risks**: Timestamp drift, incomplete records, incorrect tag mapping
+- **LLM Risks**: Hallucinations, non-evidence-based suggestions
+- **Mitigation**: Human-in-the-loop controls, audit trails, performance monitoring
+
+**Step 3: Credibility Goals**
+```typescript
+// Performance Targets (from src/lib/modeling.ts and docs/ai-credibility-assessment.md)
+const CREDIBILITY_GOALS = {
+  AUROC: 0.75,        // Minimum discrimination ability
+  BrierScore: 0.20,   // Maximum calibration error
+  ECE: 0.10,          // Maximum expected calibration error
+  Accuracy: null      // Context-dependent (reported but not enforced)
+}
+
+// Decision Thresholds (from src/lib/modeling.ts, lines 54-58)
+export const decisionThreshold: Record<ModelId, number> = {
+  quality_prediction: 0.95,   // Strict (y=1 means all CPPs in spec)
+  deviation_risk: 0.5,        // Balanced
+  equipment_failure: 0.5,     // Balanced
+}
+```
+
+**Step 4: Evidence Generation**
+- **Data Sources**: Digital Twin (controlled scenarios), seed data (deterministic tests), pilot data (shadow mode)
+- **Methods**: Offline evaluation (AUROC, Brier, ECE), calibration plots, robustness testing, LLM groundedness checks
+- **Acceptance Criteria**: Metrics meet goals across ≥100 samples, no category <0.65 AUROC without mitigation
+
+**Step 5: Verification & Validation**
+- **Verification**: Unit tests for AUROC/ECE/Brier utilities, integration tests for audit logging
+- **Validation**: Shadow-mode pilot comparing predictions to actual events (≥2 weeks), SME review of thresholds and UI language
+- **Documentation**: VV logs, prompt inventory, change history
+
+**Step 6: Evidence Presentation**
+- **AI Audit Trail**: Full conversation archive, model metrics (AUROC/Brier/ECE), export capability (JSON/CSV)
+- **Equipment Details**: Calibration info, supported interfaces
+- **Evidence Package**: Available in `docs/evidence/` directory
+  - `01-context-of-use.md`: Intended use and decision boundaries
+  - `02-data-and-methods.md`: Datasets, sampling strategies
+  - `03-results-and-acceptance.md`: Performance metrics, pass/fail criteria
+  - `04-prompts-and-controls.md`: LLM prompts, guardrails, fallback behavior
+  - `05-security-and-privacy.md`: On-prem gateway, token management, roles
+  - `06-change-control.md`: Release notes, approval workflows
+
+**Step 7: Monitoring & Maintenance**
+```typescript
+// From src/components/ModelMetricsSampler.tsx
+// Post-deployment monitoring with automated alerts
+const monitoringChecks = {
+  // Alert when AUROC drops by >0.1 absolute
+  aurocDrift: (current: number, baseline: number) => 
+    Math.abs(current - baseline) > 0.1,
+  
+  // Alert when ECE exceeds threshold
+  calibrationDrift: (ece: number) => ece > 0.15,
+  
+  // Alert when Brier score degrades
+  brierDrift: (current: number, baseline: number) => 
+    current > baseline + 0.05
+}
+
+// All changes require change control
+// - Model retraining → Change control record + acceptance rerun
+// - Prompt updates → Documented in prompt inventory + audit entry
+// - Threshold adjustments → Rationale + audit entry
+```
+
+#### AI Transparency Features
+
+**1. Complete Audit Trail** (`src/components/AIAuditTrail.tsx`)
+```typescript
+// Every AI interaction is logged
+{
+  timestamp: Date,
+  userId: string,
+  action: 'AI Assistant Prompt' | 'AI Assistant Response' | 'AI Fallback',
+  module: 'ai',
+  details: string,  // Full prompt/response (truncated for storage)
+  metadata: {
+    model?: string,
+    endpoint?: string,
+    responseTime?: number,
+    error?: string
+  }
+}
+```
+
+**2. Model Explainability**
+```typescript
+// From src/lib/modeling.ts
+// Every prediction includes feature attribution
+{
+  p: 0.85,           // Predicted probability
+  y: 1,              // Ground truth outcome
+  features: {        // Exact features used in prediction
+    cpp_compliance: 0.92,
+    temp_delta: 0.3,
+    pressure_delta: 0.15,
+    ph_delta: 0.05
+  }
+}
+```
+
+**3. Human-in-the-Loop Controls**
+- **Quality Automation**: All suggestions require human acceptance via AutomationBridge
+- **Operations Assistant**: Clearly labeled as "suggestions" not "decisions"
+- **Model Predictions**: Inform risk scores but don't auto-reject batches
+- **E-Signatures**: Required for deviation approval, CAPA implementation
+
+**4. Graceful Degradation**
+```typescript
+// From src/components/OperationsAssistant.tsx (lines 82-86)
+if (!spark?.llm || !spark.llmPrompt) {
+  const content = buildFallbackResponse()  // Snapshot summary without LLM
+  appendMessage({ role: 'assistant', content, createdAt: new Date().toISOString() })
+  log('AI Fallback', 'ai', content.slice(0, 1200))  // Explicitly logged
+  return
+}
+```
+
+#### Data Integrity (ALCOA+)
+
+The platform ensures AI-related data meets ALCOA+ principles:
+
+- **Attributable**: All AI events logged with userId and timestamp
+- **Legible**: Human-readable JSON format for audit records
+- **Contemporaneous**: Real-time logging (no batch delays)
+- **Original**: Append-only audit trail with hash chain
+- **Accurate**: Model predictions include ground truth for verification
+- **Complete**: Full prompt, response, and feature context preserved
+- **Consistent**: Standardized event structure across all AI interactions
+- **Enduring**: Persistent storage with optional WORM archive
+- **Available**: Query API and export functionality (JSON/CSV)
+
+#### AI-Specific Compliance Controls
+
+**1. LLM Prompt Management**
+```typescript
+// From src/components/OperationsAssistant.tsx (lines 93-110)
+// Prompts are versioned and audited
+const PROMPT_VERSION = '1.0'
+const PROMPT_TEMPLATE = `
+  You are the "Operations Copilot" for a GMP manufacturing command center.
+  Answer precisely with metrics and concise actions.
+  
+  OPERATIONS SNAPSHOT (UTC ${timestamp}):
+  ${summary}
+  
+  STRUCTURED DATA (JSON):
+  ${structuredData}
+`
+
+// Every prompt execution is logged
+log('AI Assistant Prompt', 'ai', userQuestion, { 
+  promptVersion: PROMPT_VERSION,
+  digestTimestamp: digest.updatedAt.toISOString()
+})
+```
+
+**2. Model Version Control**
+```typescript
+// From src/lib/modeling.ts
+export const MODEL_METADATA = {
+  quality_prediction: {
+    version: '1.0',
+    lastUpdated: '2025-11-01',
+    trainingDataset: 'digital-twin-v1',
+    validationDataset: 'pilot-shadow-mode-30d',
+    threshold: 0.95,
+    thresholdRationale: 'Strict threshold since y=1 means all CPPs in spec'
+  },
+  equipment_failure: {
+    version: '1.0',
+    lastUpdated: '2025-11-01',
+    features: ['vibration_rms', 'run_hours', 'utilization'],
+    threshold: 0.5,
+    thresholdRationale: 'Balanced threshold for proactive maintenance'
+  },
+  deviation_risk: {
+    version: '1.0',
+    lastUpdated: '2025-11-01',
+    features: ['temp_norm_dev', 'pressure_norm_dev', 'ph_norm_dev'],
+    threshold: 0.5,
+    thresholdRationale: 'Balanced for early warning without excessive alerts'
+  }
+}
+```
+
+**3. Change Control for AI Components**
+
+All AI changes require change control records:
+- **Model Updates**: Version bump, retraining data summary, acceptance rerun
+- **Prompt Changes**: Documented in prompt inventory with approval
+- **Threshold Adjustments**: Rationale and audit entry
+- **LLM Provider Changes**: Security review and validation
+
+```typescript
+// Example change control record
+{
+  id: 'CC-AI-2025-001',
+  title: 'Update quality_prediction decision threshold',
+  description: 'Adjust threshold from 0.95 to 0.93 based on 90-day performance data',
+  category: 'AI Model Configuration',
+  impact: 'Medium - affects batch risk scoring',
+  rationale: 'Threshold 0.95 resulted in 12% false negatives. New threshold 0.93 reduces false negatives to 4% with acceptable false positive rate (8%)',
+  validation: 'Rerun on historical data shows AUROC=0.89, Brier=0.062, ECE=0.041',
+  approvals: [
+    { role: 'Data Scientist', name: 'John Smith', date: '2025-11-10' },
+    { role: 'Quality Assurance', name: 'Jane Doe', date: '2025-11-11' }
+  ],
+  implementation: '2025-11-13',
+  auditTrailRef: 'AUD-2025-1345'
+}
+```
+
+#### Pilot Readiness Checklist
+
+Before deploying AI features to production:
+
+- ✓ On-premise LLM gateway configured (no cloud AI if required)
+- ✓ AI audit logging validated (prompts, responses, errors logged)
+- ✓ Model metrics sampling active (AUROC/Brier/ECE visible)
+- ✓ Equipment feed uses production adapter (not Digital Twin)
+- ✓ UI language reviewed (non-binding suggestions, no automated decisions)
+- ✓ Access controls defined (least privilege for data sources)
+- ✓ Change control workflow available (prompts, models, thresholds)
+- ✓ Evidence package prepared (all 6 documents in `docs/evidence/`)
+- ✓ Performance baselines established (shadow mode ≥2 weeks)
+- ✓ SME review completed (thresholds, prompts, UI language)
+
+**Reference:** Full assessment in `docs/ai-credibility-assessment.md`
 
 ## Configuration
 
