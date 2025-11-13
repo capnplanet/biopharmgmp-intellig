@@ -204,6 +204,9 @@ The digital twin generates realistic manufacturing events for testing and traini
 
 ## Documentation
 
+### Technical Documentation
+
+- **[Technical Guide](docs/TECHNICAL_GUIDE.md)** - Comprehensive technical documentation with architecture, code examples, use cases, and deployment guide
 - **[Platform Abstraction Layer](docs/platform-abstraction-layer.md)** - Architecture and deployment flexibility
 - **[Local API Server](docs/local-api.md)** - Backend API documentation
 - **[Equipment Integration](docs/equipment-integration.md)** - Equipment connectivity guide
