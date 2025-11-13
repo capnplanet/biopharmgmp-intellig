@@ -21,9 +21,10 @@ An AI-powered platform for real-time manufacturing oversight, quality management
 12. [Integration Patterns](#integration-patterns)
 13. [Security & Compliance](#security--compliance)
 14. [Configuration](#configuration)
-15. [Scripts](#scripts)
-16. [Documentation](#documentation)
-17. [License](#license)
+15. [Cloud Platform Compatibility](#cloud-platform-compatibility)
+16. [Scripts](#scripts)
+17. [Documentation](#documentation)
+18. [License](#license)
 
 ## Overview
 
@@ -957,6 +958,652 @@ VITE_RBAC_ROLE=Admin
 ```
 
 See [docs/platform-abstraction-layer.md](docs/platform-abstraction-layer.md) for deployment options.
+
+## Cloud Platform Compatibility
+
+The BioPharm GMP Intelligence Platform is designed with cloud-native compatibility, supporting deployment on major cloud platforms including AWS and Azure. The platform's architecture leverages industry-standard protocols and storage patterns, enabling seamless integration with cloud services while maintaining GMP compliance requirements.
+
+### AWS (Amazon Web Services) Compatibility
+
+#### Deployment Architecture
+
+The platform can be deployed on AWS using multiple service configurations:
+
+**Container-Based Deployment (Recommended)**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         AWS Cloud                            │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  Application Load Balancer (ALB)                      │  │
+│  └────────────────────┬─────────────────────────────────┘  │
+│                       │                                      │
+│  ┌────────────────────┴─────────────────────────────────┐  │
+│  │  Amazon ECS / EKS (Container Orchestration)          │  │
+│  │                                                       │  │
+│  │  ┌──────────────┐  ┌──────────────┐                 │  │
+│  │  │   Frontend   │  │   Backend    │                 │  │
+│  │  │  Container   │  │  Container   │                 │  │
+│  │  │ (React+Vite) │  │ (Express.js) │                 │  │
+│  │  └──────────────┘  └──────────────┘                 │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │   Amazon     │  │   Amazon     │  │   Amazon     │     │
+│  │   RDS/       │  │   S3         │  │   KMS        │     │
+│  │   DynamoDB   │  │   (Audit     │  │   (Encryption│     │
+│  │   (Optional) │  │   Archive)   │  │   Keys)      │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### AWS Services Integration
+
+**1. Compute Services**
+
+- **Amazon EC2**: Deploy as traditional virtual machines with full control
+  - Recommended instance types: t3.medium or larger for frontend, t3.small for backend
+  - Auto Scaling Groups for high availability
+  
+- **Amazon ECS (Elastic Container Service)**: Container orchestration with Fargate or EC2 launch types
+  ```bash
+  # Example ECS task definition
+  {
+    "family": "biopharmgmp-frontend",
+    "containerDefinitions": [{
+      "name": "frontend",
+      "image": "your-registry/biopharmgmp-frontend:latest",
+      "memory": 512,
+      "cpu": 256,
+      "portMappings": [{"containerPort": 4000}]
+    }]
+  }
+  ```
+
+- **Amazon EKS (Elastic Kubernetes Service)**: Full Kubernetes orchestration for enterprise deployments
+  
+- **AWS Lambda**: Serverless functions for API endpoints and background processing
+  - Deploy backend API endpoints as Lambda functions
+  - Use API Gateway for RESTful API routing
+  - Cost-effective for intermittent workloads
+
+**2. Storage Services**
+
+- **Amazon S3**: Immutable audit trail archive storage with compliance features
+  ```bash
+  # S3 bucket configuration for audit archives
+  aws s3api create-bucket \
+    --bucket biopharmgmp-audit-archive \
+    --region us-east-1
+  
+  # Enable versioning for audit trail integrity
+  aws s3api put-bucket-versioning \
+    --bucket biopharmgmp-audit-archive \
+    --versioning-configuration Status=Enabled
+  
+  # Enable Object Lock for WORM compliance
+  aws s3api put-object-lock-configuration \
+    --bucket biopharmgmp-audit-archive \
+    --object-lock-configuration \
+      'ObjectLockEnabled=Enabled,Rule={DefaultRetention={Mode=COMPLIANCE,Years=7}}'
+  ```
+  
+  - **S3 with Object Lock**: WORM (Write Once Read Many) compliance for 21 CFR Part 11
+  - **S3 Glacier**: Long-term archival storage for historical audit trails
+  - **S3 Versioning**: Automatic versioning for data integrity
+  - **S3 Lifecycle Policies**: Automated transition to cost-effective storage tiers
+
+- **Amazon EFS (Elastic File System)**: Shared file storage for multi-container deployments
+  - Ideal for shared configuration and temporary data exchange
+
+**3. Database Services**
+
+- **Amazon RDS** (PostgreSQL/MySQL): Production-grade relational database for audit events and metrics
+  ```bash
+  # Example RDS configuration
+  aws rds create-db-instance \
+    --db-instance-identifier biopharmgmp-db \
+    --db-instance-class db.t3.medium \
+    --engine postgres \
+    --master-username admin \
+    --allocated-storage 100 \
+    --backup-retention-period 30 \
+    --storage-encrypted
+  ```
+  
+- **Amazon DynamoDB**: NoSQL database for high-throughput event logging
+  - Sub-millisecond latency for real-time audit logging
+  - Auto-scaling for variable workloads
+  - Point-in-time recovery for data protection
+
+- **Amazon ElastiCache**: Redis/Memcached for session state and caching
+  - Cache equipment telemetry data
+  - Real-time KV store for platform state
+
+**4. Security & Compliance Services**
+
+- **AWS IAM (Identity and Access Management)**: Fine-grained access control
+  ```json
+  {
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold"
+      ],
+      "Resource": "arn:aws:s3:::biopharmgmp-audit-archive/*"
+    }]
+  }
+  ```
+
+- **AWS KMS (Key Management Service)**: Encryption key management
+  - Encrypt audit trails at rest
+  - Rotate encryption keys automatically
+  - Audit key usage via CloudTrail
+
+- **AWS Secrets Manager**: Secure credential storage
+  - Store API tokens, database passwords
+  - Automatic credential rotation
+  - Integration with RDS and other services
+
+- **AWS Certificate Manager**: SSL/TLS certificate management
+  - Free certificates for application load balancers
+  - Automatic renewal
+
+**5. Monitoring & Logging Services**
+
+- **Amazon CloudWatch**: Comprehensive monitoring and alerting
+  ```javascript
+  // Example CloudWatch integration for audit logging
+  const cloudwatch = new AWS.CloudWatch();
+  
+  cloudwatch.putMetricData({
+    Namespace: 'BioPharmGMP',
+    MetricData: [{
+      MetricName: 'AuditEventsProcessed',
+      Value: eventCount,
+      Unit: 'Count',
+      Timestamp: new Date()
+    }]
+  });
+  ```
+  
+  - Real-time metrics and dashboards
+  - Custom alarms for critical events
+  - Log aggregation and analysis
+
+- **AWS CloudTrail**: API audit logging for compliance
+  - Track all AWS API calls
+  - Integrate with platform audit trail
+  - Compliance reporting
+
+- **Amazon Managed Grafana**: Advanced visualization and analytics
+  - Custom dashboards for batch monitoring
+  - Equipment telemetry visualization
+  - Quality metrics trending
+
+**6. Integration Services**
+
+- **AWS IoT Core**: Equipment connectivity for manufacturing floor
+  - MQTT broker for equipment telemetry
+  - Device shadows for equipment state
+  - Rules engine for real-time processing
+  
+  ```javascript
+  // Example IoT Core integration for equipment feed
+  import { IoTDataPlaneClient, PublishCommand } from "@aws-sdk/client-iot-data-plane";
+  
+  const client = new IoTDataPlaneClient({ region: "us-east-1" });
+  
+  async function publishEquipmentData(equipmentId, telemetry) {
+    await client.send(new PublishCommand({
+      topic: `factory/equipment/${equipmentId}/telemetry`,
+      payload: JSON.stringify(telemetry),
+      qos: 1
+    }));
+  }
+  ```
+
+- **AWS AppSync**: GraphQL API for real-time data synchronization
+- **Amazon EventBridge**: Event-driven architecture for quality automation triggers
+
+**7. Deployment Patterns on AWS**
+
+**Pattern 1: Single-Region Production Deployment**
+```bash
+# Using AWS CDK (Infrastructure as Code)
+# Install dependencies
+npm install -g aws-cdk
+npm install @aws-cdk/aws-ecs @aws-cdk/aws-s3
+
+# Deploy stack
+cdk deploy biopharmgmp-production
+```
+
+**Pattern 2: Multi-Region High Availability**
+- Primary region: Production workloads
+- Secondary region: Disaster recovery and read replicas
+- S3 Cross-Region Replication for audit archives
+- Route 53 for DNS failover
+
+**Pattern 3: Hybrid Cloud with AWS Outposts**
+- On-premises AWS infrastructure for data sovereignty
+- Local compute and storage with AWS management
+- Seamless integration with cloud services
+
+#### AWS Environment Configuration
+
+```bash
+# .env configuration for AWS deployment
+VITE_ONPREM_LLM_ENDPOINT=https://your-llm.amazonaws.com/v1/chat
+VITE_ONPREM_LLM_TOKEN=your-secret-token
+
+# Backend API with AWS services
+PORT=5000
+AUTH_TOKEN=your-auth-token
+RBAC_ENABLED=true
+
+# S3 Archive configuration
+ARCHIVE_ENABLED=true
+ARCHIVE_TYPE=s3
+AWS_S3_BUCKET=biopharmgmp-audit-archive
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+
+# RDS Database (optional)
+DATABASE_URL=postgresql://user:pass@biopharmgmp-db.region.rds.amazonaws.com:5432/biopharmgmp
+
+# DynamoDB (optional)
+DYNAMODB_AUDIT_TABLE=biopharmgmp-audit-events
+DYNAMODB_METRICS_TABLE=biopharmgmp-metrics
+
+# CloudWatch monitoring
+CLOUDWATCH_ENABLED=true
+CLOUDWATCH_LOG_GROUP=/aws/biopharmgmp/application
+```
+
+#### AWS Compliance Considerations
+
+- **HIPAA Compliance**: AWS provides HIPAA-eligible services (sign BAA)
+- **GxP Compliance**: S3 Object Lock provides WORM storage for 21 CFR Part 11
+- **Data Residency**: Region selection ensures data sovereignty requirements
+- **Audit Trail**: CloudTrail + Platform audit trail = complete compliance picture
+- **Encryption**: KMS encryption at rest, TLS 1.2+ in transit
+
+---
+
+### Azure (Microsoft Azure) Compatibility
+
+#### Deployment Architecture
+
+The platform can be deployed on Azure using multiple service configurations:
+
+**Container-Based Deployment (Recommended)**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Azure Cloud                             │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  Azure Application Gateway / Front Door               │  │
+│  └────────────────────┬─────────────────────────────────┘  │
+│                       │                                      │
+│  ┌────────────────────┴─────────────────────────────────┐  │
+│  │  Azure Kubernetes Service (AKS) / Container Instances│  │
+│  │                                                       │  │
+│  │  ┌──────────────┐  ┌──────────────┐                 │  │
+│  │  │   Frontend   │  │   Backend    │                 │  │
+│  │  │  Container   │  │  Container   │                 │  │
+│  │  │ (React+Vite) │  │ (Express.js) │                 │  │
+│  │  └──────────────┘  └──────────────┘                 │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │   Azure      │  │   Blob       │  │   Key        │     │
+│  │   SQL/       │  │   Storage    │  │   Vault      │     │
+│  │   Cosmos DB  │  │   (Audit     │  │   (Secrets)  │     │
+│  │   (Optional) │  │   Archive)   │  │              │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Azure Services Integration
+
+**1. Compute Services**
+
+- **Azure Virtual Machines**: Full control over compute resources
+  - Recommended VM sizes: Standard_D2s_v3 or larger for production
+  - Virtual Machine Scale Sets for auto-scaling
+  
+- **Azure Kubernetes Service (AKS)**: Managed Kubernetes for container orchestration
+  ```bash
+  # Create AKS cluster
+  az aks create \
+    --resource-group biopharmgmp-rg \
+    --name biopharmgmp-cluster \
+    --node-count 3 \
+    --enable-addons monitoring \
+    --generate-ssh-keys
+  
+  # Deploy application
+  kubectl apply -f kubernetes/deployment.yaml
+  ```
+
+- **Azure Container Instances**: Serverless containers for simple deployments
+  - Fast startup times
+  - Pay-per-second billing
+  - Ideal for batch processing and background jobs
+
+- **Azure Functions**: Serverless compute for event-driven workloads
+  - Deploy backend API as Azure Functions
+  - Integration with Azure Event Grid and Service Bus
+  - Automatic scaling based on demand
+
+**2. Storage Services**
+
+- **Azure Blob Storage**: Immutable audit trail archive with compliance features
+  ```bash
+  # Create storage account with immutability
+  az storage account create \
+    --name biopharmgmpaudit \
+    --resource-group biopharmgmp-rg \
+    --location eastus \
+    --sku Standard_GRS \
+    --kind StorageV2 \
+    --enable-hierarchical-namespace false
+  
+  # Create container with immutability policy
+  az storage container create \
+    --name audit-archive \
+    --account-name biopharmgmpaudit
+  
+  # Enable immutability (WORM) for compliance
+  az storage container immutability-policy create \
+    --account-name biopharmgmpaudit \
+    --container-name audit-archive \
+    --period 2555 \
+    --allow-protected-append-writes true
+  ```
+  
+  - **Immutable Blob Storage**: WORM compliance for 21 CFR Part 11
+  - **Archive Tier**: Cost-effective long-term storage
+  - **Geo-Redundant Storage (GRS)**: Multi-region replication
+  - **Lifecycle Management**: Automated tier transitions
+
+- **Azure Files**: Managed file shares for multi-container access
+  - SMB and NFS protocol support
+  - Integration with on-premises systems
+
+**3. Database Services**
+
+- **Azure SQL Database**: Managed relational database with enterprise features
+  ```bash
+  # Create Azure SQL Database
+  az sql server create \
+    --name biopharmgmp-sql \
+    --resource-group biopharmgmp-rg \
+    --location eastus \
+    --admin-user sqladmin \
+    --admin-password <SecurePassword>
+  
+  az sql db create \
+    --resource-group biopharmgmp-rg \
+    --server biopharmgmp-sql \
+    --name biopharmgmp-db \
+    --service-objective S2 \
+    --backup-storage-redundancy Geo
+  ```
+  
+  - Automatic backups and point-in-time restore
+  - Transparent Data Encryption (TDE)
+  - Advanced threat protection
+
+- **Azure Cosmos DB**: Globally distributed NoSQL database
+  - Multi-model support (Document, Key-Value, Graph)
+  - Single-digit millisecond latency
+  - Automatic indexing for complex queries
+  - Change feed for real-time event processing
+
+- **Azure Database for PostgreSQL/MySQL**: Managed open-source databases
+  - Flexible server deployment options
+  - Built-in high availability
+  - Integration with Azure Monitor
+
+**4. Security & Compliance Services**
+
+- **Azure Active Directory (Azure AD)**: Enterprise identity and access management
+  ```bash
+  # Configure app registration for authentication
+  az ad app create \
+    --display-name "BioPharm GMP Platform" \
+    --available-to-other-tenants false
+  ```
+  
+  - Single sign-on (SSO) integration
+  - Multi-factor authentication (MFA)
+  - Conditional access policies
+  - Role-based access control (RBAC)
+
+- **Azure Key Vault**: Secure secrets, keys, and certificate management
+  ```javascript
+  // Example Key Vault integration
+  const { SecretClient } = require("@azure/keyvault-secrets");
+  const { DefaultAzureCredential } = require("@azure/identity");
+  
+  const credential = new DefaultAzureCredential();
+  const vaultName = "biopharmgmp-keyvault";
+  const url = `https://${vaultName}.vault.azure.net`;
+  
+  const client = new SecretClient(url, credential);
+  const secret = await client.getSecret("DatabasePassword");
+  ```
+  
+  - HSM-backed key protection
+  - Automatic certificate renewal
+  - Audit logging of access
+
+- **Azure Policy**: Governance and compliance enforcement
+  - Enforce tagging standards
+  - Restrict resource types and regions
+  - Ensure encryption requirements
+
+- **Azure Security Center**: Unified security management
+  - Threat detection and prevention
+  - Security recommendations
+  - Compliance dashboard
+
+**5. Monitoring & Logging Services**
+
+- **Azure Monitor**: Comprehensive monitoring and analytics
+  ```javascript
+  // Example Azure Monitor integration
+  const { ApplicationInsights } = require("applicationinsights");
+  
+  ApplicationInsights
+    .setup("your-instrumentation-key")
+    .setAutoCollectRequests(true)
+    .setAutoCollectPerformance(true)
+    .setAutoCollectExceptions(true)
+    .start();
+  
+  const client = ApplicationInsights.defaultClient;
+  client.trackEvent({ name: "AuditEventLogged" });
+  ```
+  
+  - Real-time metrics and alerts
+  - Application Performance Monitoring (APM)
+  - Custom dashboards and workbooks
+
+- **Azure Log Analytics**: Centralized log aggregation and analysis
+  - KQL (Kusto Query Language) for advanced queries
+  - Integration with audit trail
+  - Long-term log retention
+
+- **Application Insights**: Application performance monitoring
+  - Real-time performance metrics
+  - Dependency tracking
+  - Failure analysis and diagnostics
+
+**6. Integration Services**
+
+- **Azure IoT Hub**: Equipment connectivity and management
+  - Bi-directional communication with manufacturing equipment
+  - Device-to-cloud telemetry
+  - Cloud-to-device commands and configuration
+  
+  ```javascript
+  // Example IoT Hub integration for equipment feed
+  const { EventHubConsumerClient } = require("@azure/event-hubs");
+  
+  const client = new EventHubConsumerClient(
+    "$Default",
+    "your-iothub-connection-string"
+  );
+  
+  client.subscribe({
+    processEvents: async (events) => {
+      for (const event of events) {
+        const telemetry = event.body;
+        updateEquipmentFeed(telemetry);
+      }
+    }
+  });
+  ```
+
+- **Azure Event Grid**: Event-driven architecture
+  - Real-time event routing
+  - Integration with quality automation triggers
+  - Custom event schemas
+
+- **Azure Service Bus**: Enterprise messaging
+  - Reliable message queuing
+  - Pub/sub patterns for event distribution
+  - Dead-letter queues for error handling
+
+**7. Deployment Patterns on Azure**
+
+**Pattern 1: Single-Region Production Deployment**
+```bash
+# Using Azure CLI and ARM templates
+az group create --name biopharmgmp-rg --location eastus
+
+az deployment group create \
+  --resource-group biopharmgmp-rg \
+  --template-file azure-deploy.json \
+  --parameters @azure-deploy.parameters.json
+```
+
+**Pattern 2: Multi-Region High Availability**
+- Primary region: Production workloads
+- Secondary region: Disaster recovery
+- Azure Traffic Manager for DNS-based load balancing
+- Blob Storage geo-replication for audit archives
+
+**Pattern 3: Hybrid with Azure Arc**
+- On-premises Kubernetes clusters managed via Azure Arc
+- Unified governance across cloud and on-premises
+- Azure services on-premises via Azure Stack
+
+#### Azure Environment Configuration
+
+```bash
+# .env configuration for Azure deployment
+VITE_ONPREM_LLM_ENDPOINT=https://your-llm.azurewebsites.net/v1/chat
+VITE_ONPREM_LLM_TOKEN=your-secret-token
+
+# Backend API with Azure services
+PORT=5000
+AUTH_TOKEN=your-auth-token
+RBAC_ENABLED=true
+
+# Blob Storage Archive configuration
+ARCHIVE_ENABLED=true
+ARCHIVE_TYPE=azure-blob
+AZURE_STORAGE_ACCOUNT=biopharmgmpaudit
+AZURE_STORAGE_CONTAINER=audit-archive
+AZURE_STORAGE_CONNECTION_STRING=your-connection-string
+
+# Azure SQL Database (optional)
+DATABASE_URL=mssql://user:pass@biopharmgmp-sql.database.windows.net:1433/biopharmgmp-db
+
+# Cosmos DB (optional)
+COSMOSDB_ENDPOINT=https://biopharmgmp-cosmos.documents.azure.com:443/
+COSMOSDB_KEY=your-cosmos-key
+COSMOSDB_DATABASE=biopharmgmp
+
+# Azure Monitor
+APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=your-key;...
+AZURE_MONITOR_ENABLED=true
+```
+
+#### Azure Compliance Considerations
+
+- **HIPAA Compliance**: Azure provides HIPAA-compliant services (sign BAA)
+- **GxP Compliance**: Immutable Blob Storage provides WORM for 21 CFR Part 11
+- **Data Residency**: Region selection and data sovereignty controls
+- **ISO 27001/27018**: Azure certifications support compliance requirements
+- **Audit Trail**: Azure Activity Log + Platform audit trail = comprehensive auditing
+
+---
+
+### Multi-Cloud Deployment Considerations
+
+The platform's architecture supports multi-cloud and hybrid deployment strategies:
+
+**1. Cloud-Agnostic Design**
+- Standard protocols (HTTP/REST, MQTT, OPC UA)
+- Containerized applications (Docker/Kubernetes)
+- Infrastructure as Code (Terraform for multi-cloud)
+
+**2. Data Sovereignty**
+- Deploy in specific regions to meet regulatory requirements
+- Use cloud-native data residency controls
+- Implement data classification and handling policies
+
+**3. Cost Optimization**
+- Use serverless computing for variable workloads
+- Implement lifecycle policies for storage tiers
+- Auto-scaling based on actual demand
+- Reserved instances for predictable workloads
+
+**4. Security Best Practices**
+- Encryption at rest and in transit
+- Network isolation with VPCs/VNets
+- Principle of least privilege for IAM
+- Regular security assessments and updates
+
+**5. Migration Path**
+- Start with development/test in cloud
+- Gradual migration of non-critical workloads
+- Parallel run with on-premises systems
+- Validate compliance before production cutover
+
+### Cloud Provider Feature Comparison
+
+| Feature | AWS | Azure |
+|---------|-----|-------|
+| **Immutable Storage (WORM)** | S3 Object Lock | Blob Immutability Policy |
+| **Container Orchestration** | ECS, EKS | AKS, Container Instances |
+| **Serverless Compute** | Lambda | Functions |
+| **Managed Databases** | RDS, DynamoDB | SQL Database, Cosmos DB |
+| **Equipment IoT** | IoT Core | IoT Hub |
+| **Identity Management** | IAM | Azure AD |
+| **Secrets Management** | Secrets Manager, KMS | Key Vault |
+| **Monitoring** | CloudWatch | Azure Monitor |
+| **Object Storage** | S3 | Blob Storage |
+
+Both platforms provide enterprise-grade services suitable for GMP-compliant pharmaceutical manufacturing applications. The choice between AWS and Azure often depends on:
+- Existing organizational cloud commitments
+- Regional data center availability
+- Specific compliance requirements
+- Integration with existing systems
+- Cost structure and licensing agreements
+
+For detailed deployment guides and infrastructure templates, see the [Technical Guide](docs/TECHNICAL_GUIDE.md) and [Platform Abstraction Layer](docs/platform-abstraction-layer.md) documentation.
 
 ## Scripts
 
