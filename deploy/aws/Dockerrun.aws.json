@@ -1,0 +1,100 @@
+{
+  "AWSEBDockerrunVersion": 2,
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "biopharmgmp-backend:latest",
+      "essential": true,
+      "memory": 512,
+      "portMappings": [
+        {
+          "hostPort": 5000,
+          "containerPort": 5000
+        }
+      ],
+      "environment": [
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "PORT",
+          "value": "5000"
+        },
+        {
+          "name": "RBAC_ENABLED",
+          "value": "true"
+        },
+        {
+          "name": "ARCHIVE_ENABLED",
+          "value": "true"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "audit-data",
+          "containerPath": "/app/data/audit"
+        },
+        {
+          "sourceVolume": "metrics-data",
+          "containerPath": "/app/data/metrics"
+        },
+        {
+          "sourceVolume": "archive-data",
+          "containerPath": "/app/data/archive"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/aws/elasticbeanstalk/biopharmgmp",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "backend"
+        }
+      }
+    },
+    {
+      "name": "frontend",
+      "image": "biopharmgmp-frontend:latest",
+      "essential": true,
+      "memory": 256,
+      "portMappings": [
+        {
+          "hostPort": 80,
+          "containerPort": 80
+        }
+      ],
+      "links": [
+        "backend"
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/aws/elasticbeanstalk/biopharmgmp",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "frontend"
+        }
+      }
+    }
+  ],
+  "volumes": [
+    {
+      "name": "audit-data",
+      "host": {
+        "sourcePath": "/var/app/data/audit"
+      }
+    },
+    {
+      "name": "metrics-data",
+      "host": {
+        "sourcePath": "/var/app/data/metrics"
+      }
+    },
+    {
+      "name": "archive-data",
+      "host": {
+        "sourcePath": "/var/app/data/archive"
+      }
+    }
+  ]
+}

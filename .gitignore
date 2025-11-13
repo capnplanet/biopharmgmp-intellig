@@ -32,3 +32,14 @@ pids
 .devcontainer/
 
 .spark-workbench-id
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+
+# Cloud deployment artifacts
+deploy/**/*.zip
+deploy/**/*.tar.gz
