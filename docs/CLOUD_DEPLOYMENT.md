@@ -235,28 +235,20 @@ Follow the manual setup steps in the [AWS Console Setup Guide](aws-console-setup
 
 The Azure deployment uses the following services:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Azure Traffic Manager                     │
-│                         (DNS Load Balancing)                     │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Azure App Service                           │
-│  ┌────────────────────┐              ┌────────────────────┐     │
-│  │  Frontend          │              │  Backend           │     │
-│  │  (Web App)         │◄────────────►│  (Web App)         │     │
-│  │  Docker Container  │              │  Docker Container  │     │
-│  └────────────────────┘              └─────────┬──────────┘     │
-└───────────────────────────────────────────────┼────────────────┘
-                                                 │
-                                                 ▼
-                                    ┌────────────────────┐
-                                    │  Azure Storage     │
-                                    │  - Blob Storage    │
-                                    │  - File Shares     │
-                                    └────────────────────┘
+```mermaid
+graph TD
+    Traffic["Azure Traffic Manager<br/>(DNS Load Balancing)"]
+    
+    subgraph AppService["Azure App Service"]
+        Frontend["Frontend<br/>(Web App)<br/>Docker Container"]
+        Backend["Backend<br/>(Web App)<br/>Docker Container"]
+        Frontend <--> Backend
+    end
+    
+    Storage["Azure Storage<br/>- Blob Storage<br/>- File Shares"]
+    
+    Traffic --> AppService
+    Backend --> Storage
 ```
 
 **Components:**

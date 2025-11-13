@@ -26,45 +26,39 @@
 
 The BioPharm GMP Intelligence Platform is a modern web application built with a React frontend and optional Node.js backend for enterprise features.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Frontend (React + Vite)                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │  Dashboard   │  │   Quality    │  │  Analytics   │          │
-│  │  Monitoring  │  │  Management  │  │  Predictive  │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-│                                                                   │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │         Component Library (Radix UI + Tailwind)          │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                   │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │ Digital Twin │  │   Quality    │  │   Modeling   │          │
-│  │  Simulation  │  │  Automation  │  │    Engine    │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ REST API
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   Backend (Express.js - Optional)                │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │ Audit Store  │  │ Metrics Store│  │   Archive    │          │
-│  │  (JSONL +    │  │  (Time-Series│  │  (WORM-like) │          │
-│  │  Hash Chain) │  │   Logging)   │  │              │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              External Integrations (Production)                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │   OPC UA     │  │     MES      │  │   Historian  │          │
-│  │  Equipment   │  │    Batch     │  │   Process    │          │
-│  │    Data      │  │    Data      │  │    Data      │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Frontend["Frontend (React + Vite)"]
+        Dashboard["Dashboard<br/>Monitoring"]
+        Quality["Quality<br/>Management"]
+        Analytics["Analytics<br/>Predictive"]
+        ComponentLib["Component Library<br/>(Radix UI + Tailwind)"]
+        DigitalTwin["Digital Twin<br/>Simulation"]
+        QualityAuto["Quality<br/>Automation"]
+        ModelEngine["Modeling<br/>Engine"]
+        
+        Dashboard -.-> ComponentLib
+        Quality -.-> ComponentLib
+        Analytics -.-> ComponentLib
+        DigitalTwin -.-> ComponentLib
+        QualityAuto -.-> ComponentLib
+        ModelEngine -.-> ComponentLib
+    end
+    
+    subgraph Backend["Backend (Express.js - Optional)"]
+        AuditStore["Audit Store<br/>(JSONL + Hash Chain)"]
+        MetricsStore["Metrics Store<br/>(Time-Series Logging)"]
+        Archive["Archive<br/>(WORM-like)"]
+    end
+    
+    subgraph External["External Integrations (Production)"]
+        OPCUA["OPC UA<br/>Equipment Data"]
+        MES["MES<br/>Batch Data"]
+        Historian["Historian<br/>Process Data"]
+    end
+    
+    Frontend -->|REST API| Backend
+    Backend --> External
 ```
 
 ### Technology Stack

@@ -1433,109 +1433,25 @@ function computeAUROC(rs: PredictionRecord[]) {
 
 **Data Flow Diagram:**
 
-```
-┌────────────────────────────────────────────────────────┐
-│         Batch/Equipment Data Source                    │
-│  • BatchData from TwinSnapshot or Equipment Feed       │
-│  • EquipmentTelemetry from Digital Twin                │
-└─────────────────┬──────────────────────────────────────┘
-                  │
-                  ▼
-┌────────────────────────────────────────────────────────┐
-│           Prediction Functions                         │
-│         (src/lib/modeling.ts)                          │
-│                                                         │
-│  predictQuality(batch)                                 │
-│    └─→ cpp_compliance = getCPPCompliance(batch)       │
-│        └─→ p = clamp(0.05 + 0.9 * cpp, 0, 1)         │
-│            └─→ y = (cpp === 1) ? 1 : 0                │
-│                                                         │
-│  predictEquipmentFailure(equipment)                    │
-│    └─→ vibrationScore + runtimeScore + utilizScore   │
-│        └─→ p = weighted combination                   │
-│            └─→ y = (alert present) ? 1 : 0            │
-│                                                         │
-│  predictDeviationRisk(batch)                           │
-│    └─→ normalized deviations from mid-spec           │
-│        └─→ p = max(devs) / 2                          │
-│            └─→ y = (any CPP out of spec) ? 1 : 0     │
-└─────────────────┬──────────────────────────────────────┘
-                  │
-                  │ { p, y, features }
-                  │
-                  ▼
-┌────────────────────────────────────────────────────────┐
-│            ModelMonitor Singleton                      │
-│         (src/lib/modeling.ts)                          │
-│                                                         │
-│  private records: PredictionRecord[] = []              │
-│                                                         │
-│  add(record: PredictionRecord)                         │
-│    └─→ records.push(record)                           │
-│                                                         │
-│  metrics(model, opts)                                  │
-│    ├─→ Filter records by model                        │
-│    ├─→ Compute AUROC (rank-based)                     │
-│    ├─→ Compute Brier (MSE of probabilities)           │
-│    ├─→ Compute ECE (calibration bins)                 │
-│    └─→ Compute Accuracy (if n ≥ minN)                 │
-└─────────────────┬──────────────────────────────────────┘
-                  │
-                  │ Periodic Sampling
-                  │
-                  ▼
-┌────────────────────────────────────────────────────────┐
-│        ModelMetricsSampler Component                   │
-│     (src/components/ModelMetricsSampler.tsx)           │
-│                                                         │
-│  useEffect(() => {                                     │
-│    const interval = setInterval(() => {                │
-│      for (model of ['quality_prediction',             │
-│                      'equipment_failure',             │
-│                      'deviation_risk']) {             │
-│        const metrics = monitor.metrics(model, opts)   │
-│        setKV(`model-metrics-${model}`, {              │
-│          timestamp: Date.now(),                       │
-│          ...metrics                                    │
-│        })                                              │
-│      }                                                 │
-│    }, samplingInterval)                                │
-│  }, [])                                                │
-└─────────────────┬──────────────────────────────────────┘
-                  │
-                  │ Persisted Metrics
-                  │
-                  ▼
-┌────────────────────────────────────────────────────────┐
-│          KV Store: model-metrics-*                     │
-│  {                                                     │
-│    timestamp: number,                                  │
-│    n: number,           // Sample count                │
-│    accuracy: number?,   // Classification accuracy     │
-│    brier: number,       // Brier score (calibration)   │
-│    ece: number,         // Expected calibration error  │
-│    auroc: number,       // Area under ROC curve        │
-│    threshold: number,   // Decision threshold          │
-│    hasPosNeg: boolean   // Both classes present?       │
-│  }                                                     │
-└─────────────────┬──────────────────────────────────────┘
-                  │
-                  │ useKV subscription
-                  │
-                  ▼
-┌────────────────────────────────────────────────────────┐
-│              UI Display                                │
-│                                                         │
-│  AI Audit Trail Page:                                  │
-│    ├─→ Line charts (AUROC, Brier, ECE over time)      │
-│    ├─→ Threshold indicators                           │
-│    └─→ Sample count display                           │
-│                                                         │
-│  Analytics Page:                                       │
-│    ├─→ Model performance cards                        │
-│    ├─→ Latest metrics with color coding               │
-│    └─→ Historical trends                              │
-└────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    Data["Batch/Equipment Data Source<br/>• BatchData from TwinSnapshot or Equipment Feed<br/>• EquipmentTelemetry from Digital Twin"]
+    
+    Predictions["Prediction Functions<br/>(src/lib/modeling.ts)<br/><br/>predictQuality(batch)<br/>└─→ cpp_compliance = getCPPCompliance(batch)<br/>└─→ p = clamp(0.05 + 0.9 * cpp, 0, 1)<br/>└─→ y = (cpp === 1) ? 1 : 0<br/><br/>predictEquipmentFailure(equipment)<br/>└─→ vibrationScore + runtimeScore + utilizScore<br/>└─→ p = weighted combination<br/>└─→ y = (alert present) ? 1 : 0<br/><br/>predictDeviationRisk(batch)<br/>└─→ normalized deviations from mid-spec<br/>└─→ p = max(devs) / 2<br/>└─→ y = (any CPP out of spec) ? 1 : 0"]
+    
+    Monitor["ModelMonitor Singleton<br/>(src/lib/modeling.ts)<br/><br/>private records: PredictionRecord[] = []<br/><br/>add(record: PredictionRecord)<br/>└─→ records.push(record)<br/><br/>metrics(model, opts)<br/>├─→ Filter records by model<br/>├─→ Compute AUROC (rank-based)<br/>├─→ Compute Brier (MSE of probabilities)<br/>├─→ Compute ECE (calibration bins)<br/>└─→ Compute Accuracy (if n ≥ minN)"]
+    
+    Sampler["ModelMetricsSampler Component<br/>(src/components/ModelMetricsSampler.tsx)<br/><br/>useEffect(() => {<br/>const interval = setInterval(() => {<br/>for (model of ['quality_prediction',<br/>'equipment_failure',<br/>'deviation_risk']) {<br/>const metrics = monitor.metrics(model, opts)<br/>setKV(`model-metrics-$${model}`, {<br/>timestamp: Date.now(),<br/>...metrics<br/>})<br/>}<br/>}, samplingInterval)<br/>}, [])"]
+    
+    KVStore["KV Store: model-metrics-*<br/>{<br/>timestamp: number,<br/>n: number, // Sample count<br/>accuracy: number?, // Classification accuracy<br/>brier: number, // Brier score (calibration)<br/>ece: number, // Expected calibration error<br/>auroc: number, // Area under ROC curve<br/>threshold: number, // Decision threshold<br/>hasPosNeg: boolean // Both classes present?<br/>}"]
+    
+    UI["UI Display<br/><br/>AI Audit Trail Page:<br/>├─→ Line charts (AUROC, Brier, ECE over time)<br/>├─→ Threshold indicators<br/>└─→ Sample count display<br/><br/>Analytics Page:<br/>├─→ Model performance cards<br/>├─→ Latest metrics with color coding<br/>└─→ Historical trends"]
+    
+    Data -->|"{ p, y, features }"| Predictions
+    Predictions --> Monitor
+    Monitor -->|Periodic Sampling| Sampler
+    Sampler -->|Persisted Metrics| KVStore
+    KVStore -->|useKV subscription| UI
 ```
 
 **Performance Thresholds:**
