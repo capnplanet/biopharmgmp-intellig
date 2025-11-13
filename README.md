@@ -21,9 +21,10 @@ An AI-powered platform for real-time manufacturing oversight, quality management
 12. [Integration Patterns](#integration-patterns)
 13. [Security & Compliance](#security--compliance)
 14. [Configuration](#configuration)
-15. [Scripts](#scripts)
-16. [Documentation](#documentation)
-17. [License](#license)
+15. [Cloud Platform Compatibility](#cloud-platform-compatibility)
+16. [Scripts](#scripts)
+17. [Documentation](#documentation)
+18. [License](#license)
 
 ## Overview
 
