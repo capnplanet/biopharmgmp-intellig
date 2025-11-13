@@ -1499,32 +1499,55 @@ npm run preview
 ls -la dist/
 ```
 
+### Cloud Deployment
+
+The platform supports comprehensive cloud deployment to AWS and Azure with full containerization support.
+
+**For complete cloud deployment instructions, see the [Cloud Deployment Guide](CLOUD_DEPLOYMENT.md).**
+
+#### Quick Overview
+
+**AWS Deployment:**
+- ECS Fargate with Application Load Balancer
+- EFS for persistent storage
+- CloudWatch for monitoring
+- Terraform infrastructure as code
+- Automated deployment scripts
+
+**Azure Deployment:**
+- App Service with Container Registry
+- Azure Files for persistent storage
+- Application Insights for monitoring
+- Terraform infrastructure as code
+- Automated deployment scripts
+
+**Docker Compose:**
+- Multi-container orchestration
+- Local and on-premise deployment
+- Volume management for persistent data
+- Environment-based configuration
+
 ### Docker Deployment
 
-```dockerfile
-# Dockerfile example
-FROM node:18-alpine
+See `Dockerfile`, `Dockerfile.frontend`, and `docker-compose.yml` in the repository root:
 
-WORKDIR /app
+```bash
+# Local/on-premise deployment with Docker Compose
+docker-compose up -d
 
-# Copy package files
-COPY package*.json ./
+# View logs
+docker-compose logs -f
 
-# Install dependencies
-RUN npm ci --only=production
-
-# Copy application
-COPY . .
-
-# Build
-RUN npm run build
-
-# Expose ports
-EXPOSE 4000 5000
-
-# Start application
-CMD ["sh", "-c", "npm run server & npm run preview"]
+# Stop containers
+docker-compose down
 ```
+
+The containerized deployment includes:
+- Multi-stage builds for optimized images
+- Non-root user for security
+- Health checks for reliability
+- Volume mounts for persistent data
+- Nginx for frontend serving
 
 ### Environment Configuration
 

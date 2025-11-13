@@ -157,7 +157,7 @@ The BioPharm GMP Intelligence Platform is a modern web application built with a 
 
 ### Prerequisites
 
-- **Node.js** 18+ and npm
+- **Node.js** 20+ and npm (Node.js 18+ is supported but Node.js 20+ is recommended for cloud deployments)
 - Git
 
 ### Installation
@@ -214,6 +214,79 @@ Output will be in the `dist/` directory.
 npm run preview
 ```
 
+### Cloud Deployment
+
+The platform supports deployment to AWS and Azure with full containerization support.
+
+#### Docker Deployment
+
+For local or on-premise containerized deployment:
+
+```bash
+# Create .env file with your configuration
+cp .env.example .env  # Edit with your settings
+
+# Start with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop
+docker-compose down
+```
+
+#### AWS Deployment
+
+Deploy to AWS ECS Fargate with Application Load Balancer:
+
+```bash
+# Prerequisites: AWS CLI, Docker, Terraform (optional)
+
+# Deploy infrastructure (using Terraform)
+cd deploy/aws/terraform
+terraform init
+terraform apply
+
+# Build and deploy application
+cd ../../..
+./deploy/scripts/deploy-aws.sh
+```
+
+**AWS Services Used:**
+- ECS Fargate for container orchestration
+- Application Load Balancer for traffic distribution
+- EFS for persistent storage
+- ECR for container registry
+- CloudWatch for logging and monitoring
+- Secrets Manager for credentials
+
+#### Azure Deployment
+
+Deploy to Azure App Service with Container Registry:
+
+```bash
+# Prerequisites: Azure CLI, Docker, Terraform (optional)
+
+# Deploy infrastructure (using Terraform)
+cd deploy/azure/terraform
+terraform init
+terraform apply
+
+# Build and deploy application
+cd ../../..
+./deploy/scripts/deploy-azure.sh
+```
+
+**Azure Services Used:**
+- App Service for container hosting
+- Container Registry for Docker images
+- Storage Account for persistent data
+- Key Vault for secrets management
+- Application Insights for monitoring
+
+For detailed deployment instructions, see [Cloud Deployment Guide](docs/CLOUD_DEPLOYMENT.md).
+
 ## Repository Structure
 
 ```
@@ -256,11 +329,26 @@ biopharmgmp-intellig/
 │       └── immutableArchive.mjs   # WORM archive
 ├── docs/                  # Documentation
 │   ├── TECHNICAL_GUIDE.md         # Comprehensive technical guide
+│   ├── CLOUD_DEPLOYMENT.md        # Cloud deployment guide
 │   ├── platform-abstraction-layer.md # PAL architecture
 │   ├── local-api.md               # API documentation
 │   ├── equipment-integration.md   # Equipment connectivity
 │   ├── ai-credibility-assessment.md # FDA risk assessment
 │   └── evidence/          # FDA validation templates
+├── deploy/                # Cloud deployment configurations
+│   ├── aws/               # AWS-specific configurations
+│   │   ├── terraform/     # AWS Terraform IaC
+│   │   ├── ecs-task-definition.json
+│   │   └── Dockerrun.aws.json
+│   ├── azure/             # Azure-specific configurations
+│   │   └── terraform/     # Azure Terraform IaC
+│   └── scripts/           # Deployment helper scripts
+│       ├── deploy-aws.sh
+│       └── deploy-azure.sh
+├── Dockerfile             # Backend container image
+├── Dockerfile.frontend    # Frontend container image (Nginx)
+├── docker-compose.yml     # Multi-container orchestration
+├── nginx.conf             # Nginx configuration for frontend
 ├── public/                # Static assets
 └── dist/                  # Build output (generated)
 ```
@@ -887,6 +975,7 @@ See [docs/platform-abstraction-layer.md](docs/platform-abstraction-layer.md) for
 ### Technical Documentation
 
 - **[Technical Guide](docs/TECHNICAL_GUIDE.md)** - Comprehensive technical documentation with advanced architecture details, data models, use cases, and deployment guide
+- **[Cloud Deployment Guide](docs/CLOUD_DEPLOYMENT.md)** - Complete guide for deploying to AWS and Azure with Docker, Terraform, and deployment scripts
 - **[Platform Abstraction Layer](docs/platform-abstraction-layer.md)** - Architecture and deployment flexibility
 - **[Local API Server](docs/local-api.md)** - Backend API documentation
 - **[Equipment Integration](docs/equipment-integration.md)** - Equipment connectivity guide
@@ -894,6 +983,8 @@ See [docs/platform-abstraction-layer.md](docs/platform-abstraction-layer.md) for
 - **[Evidence Package](docs/evidence/)** - FDA validation templates
 
 For detailed code examples, advanced use cases, data models, and deployment strategies, see the [Technical Guide](docs/TECHNICAL_GUIDE.md).
+
+For cloud deployment instructions (AWS, Azure, Docker), see the [Cloud Deployment Guide](docs/CLOUD_DEPLOYMENT.md).
 
 ## License
 
