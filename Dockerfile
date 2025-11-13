@@ -1,14 +1,14 @@
 # Multi-stage build for production deployment
 # Stage 1: Build the application
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (including dev dependencies for build)
+RUN npm install
 
 # Copy source code
 COPY . .
@@ -17,13 +17,13 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Production runtime
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
 # Install production dependencies only
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
