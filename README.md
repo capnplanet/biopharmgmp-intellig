@@ -93,7 +93,7 @@ The platform includes four primary AI systems, each with distinct purposes and i
 #### 1. Operations Assistant (LLM-Powered Copilot)
 
 **File:** `src/components/OperationsAssistant.tsx`  
-**AI Engine:** `src/lib/spark.ts`, `src/lib/onPremSparkProvider.ts`
+**AI Engine:** `src/lib/spark.ts`, `src/lib/llmGatewayProvider.ts` (preferred)
 
 The Operations Assistant is an AI-powered copilot that provides natural language insights into manufacturing operations. It uses Large Language Models (LLMs) to answer questions about batches, equipment, quality events, and model performance.
 
@@ -129,7 +129,7 @@ const digest: OperationsDigest = {
 **LLM Integration Architecture:**
 The platform uses an abstraction layer that supports multiple LLM deployment modes:
 - **GitHub Spark Runtime** (`src/lib/spark.ts`): Default integration when running in GitHub Spark environment
-- **On-Premise LLM Gateway** (`src/lib/onPremSparkProvider.ts`): For pharmaceutical environments requiring on-premise AI with configurable endpoint, token, and model
+- **LLM Gateway** (`src/lib/llmGatewayProvider.ts`): Cloud‑ or on‑prem gateway with configurable endpoint, token, and model (legacy `onPrem` provider kept for compatibility)
 - **Development Mock** (`src/lib/devSparkMock.ts`): Deterministic responses for testing
 
 **Prompt Structure:**
@@ -415,7 +415,7 @@ Every AI interaction is logged for regulatory compliance and transparency.
 - Evidence package export for regulatory submissions
 
 **4. Deployment Flexibility**
-- **On-Premise LLM**: Configure via `VITE_ONPREM_LLM_ENDPOINT` for data sovereignty
+- **LLM Gateway (cloud or on-prem)**: Configure via `VITE_LLM_GATEWAY_ENDPOINT` for gateway-hosted LLMs (legacy `VITE_ONPREM_LLM_ENDPOINT` supported)
 - **Cloud LLM**: Use GitHub Spark or other cloud providers
 - **Air-Gapped**: Development mock for environments without internet
 
@@ -685,7 +685,8 @@ biopharmgmp-intellig/
 │   │   ├── modeling.ts            # Predictive models
 │   │   ├── equipmentFeed.ts       # Equipment data abstraction
 │   │   ├── spark.ts               # LLM interface
-│   │   ├── onPremSparkProvider.ts # On-prem LLM gateway
+│   │   ├── llmGatewayProvider.ts # LLM gateway (cloud or on-prem)
+│   │   ├── onPremSparkProvider.ts # legacy on-prem provider (kept for compatibility)
 │   │   └── devSparkMock.ts        # Development mock
 │   ├── hooks/             # Custom React hooks
 │   │   ├── use-audit.ts           # Audit logging
@@ -1157,7 +1158,7 @@ graph TD
     PromptConstruct["LLM Prompt Construction<br/>'You are Operations Copilot...'<br/>+ Snapshot Summary<br/>+ Structured JSON"]
     
     Spark["GitHub Spark<br/>Runtime"]
-    OnPrem["On-Prem Gateway<br/>(HTTP POST)"]
+    OnPrem["LLM Gateway<br/>(HTTP POST - cloud or on-prem)"]
     
     Response["LLM Response"]
     
@@ -1179,7 +1180,7 @@ graph TD
 - **User Interface**: `src/components/OperationsAssistant.tsx` (lines 1-200+)
 - **Data Aggregation**: `src/hooks/use-operations-assistant.ts` (lines 1-300+)
 - **LLM Interface**: `src/lib/spark.ts` (lines 1-10)
-- **On-Prem Provider**: `src/lib/onPremSparkProvider.ts` (lines 1-51)
+- **LLM Gateway Provider**: `src/lib/llmGatewayProvider.ts` (preferred). Legacy: `src/lib/onPremSparkProvider.ts` (lines 1-51)
 - **Audit Logging**: `src/hooks/use-audit.ts`
 
 ### Workflow 2: Quality Automation Trigger Detection
@@ -2000,15 +2001,15 @@ time-based HVAC control issue or shift change impact.
 - Investigation workflow: `src/components/InvestigationWorkflow.tsx`
 - Operations Assistant context: `src/hooks/use-operations-assistant.ts`
 
-### Use Case 5: Configuring On-Premise LLM for Compliance
+### Use Case 5: Configuring the LLM Gateway for Compliance (cloud or on-prem)
 
-**Scenario:** A pharmaceutical company wants to use the Operations Assistant but requires all AI processing to occur on-premise for data sovereignty.
+**Scenario:** A pharmaceutical company wants to use the Operations Assistant but requires AI processing to occur behind a controlled gateway for data sovereignty (cloud-hosted or on‑prem).
 
-**Step 1: Deploy On-Premise LLM Gateway**
+**Step 1: Deploy an LLM Gateway**
 
 ```bash
-# Company deploys their own LLM endpoint (e.g., LLaMA, Mistral, or GPT-4 on Azure OpenAI)
-# Example: On-premise Ollama instance
+# Deploy a gateway that fronts your model hosting (Ollama, local LLM, Azure OpenAI, AWS Bedrock, etc.)
+# Example: Ollama (local) or a small HTTPS gateway that proxies to your cloud LLM with server-side auth
 docker run -d -p 11434:11434 ollama/ollama
 ollama pull llama2:13b
 ```
@@ -2017,33 +2018,35 @@ ollama pull llama2:13b
 
 ```bash
 # .env
-VITE_ONPREM_LLM_ENDPOINT=https://llm.pharma-company.internal/v1/chat
-VITE_ONPREM_LLM_TOKEN=Bearer your-internal-api-token
-VITE_ONPREM_LLM_MODEL=llama2-13b-gmp  # Company-specific model
+# Preferred: cloud- or on-prem LLM gateway endpoint
+VITE_LLM_GATEWAY_ENDPOINT=https://llm.pharma-company.internal/v1/chat
+VITE_LLM_GATEWAY_TOKEN=Bearer your-internal-api-token
+VITE_LLM_GATEWAY_MODEL=llama2-13b-gmp  # Company-specific model
+# Legacy: VITE_ONPREM_LLM_* envs are still supported
 ```
 
-**Step 3: Platform Initialization** (from `src/lib/onPremSparkProvider.ts`)
+**Step 3: Platform Initialization** (from `src/lib/llmGatewayProvider.ts`)
 
 ```typescript
-// Lines 12-51
-import { registerOnPremSpark } from '@/lib/onPremSparkProvider'
+// Auto-registration on import if env vars present (see src/main.tsx)
+import { registerLLMGateway } from '@/lib/llmGatewayProvider'
 
-// Auto-registration on import if env vars present
 if (
-  import.meta.env.VITE_ONPREM_LLM_ENDPOINT &&
-  import.meta.env.VITE_ONPREM_LLM_TOKEN
+  import.meta.env.VITE_LLM_GATEWAY_ENDPOINT &&
+  import.meta.env.VITE_LLM_GATEWAY_TOKEN
 ) {
-  registerOnPremSpark({
-    endpoint: import.meta.env.VITE_ONPREM_LLM_ENDPOINT,
-    token: import.meta.env.VITE_ONPREM_LLM_TOKEN,
-    model: import.meta.env.VITE_ONPREM_LLM_MODEL || 'gpt-4'
+  registerLLMGateway({
+    endpoint: import.meta.env.VITE_LLM_GATEWAY_ENDPOINT,
+    token: import.meta.env.VITE_LLM_GATEWAY_TOKEN,
+    model: import.meta.env.VITE_LLM_GATEWAY_MODEL || 'gpt-4'
   })
 }
 
-// Implementation
-export function registerOnPremSpark(config: OnPremConfig) {
+// Implementation exported from src/lib/llmGatewayProvider.ts
+export function registerLLMGateway(config: LLMGatewayOptions) {
   const w = window as unknown as { spark?: SparkApi }
-  w.spark = {
+}
+
     llmPrompt: (strings, ...expr) => ({ strings, values: expr }),
     llm: async (prompt, model) => {
       const response = await fetch(config.endpoint, {
@@ -2070,7 +2073,7 @@ export function registerOnPremSpark(config: OnPremConfig) {
 When user asks Operations Assistant a question:
 ```
 1. Prompt sent to: https://llm.pharma-company.internal/v1/chat
-2. LLM processes on-premise (no external API calls)
+2. LLM processes via the configured gateway (may be on-premise or cloud)
 3. Response logged in audit trail with metadata:
    {
      "action": "AI Assistant Response",
@@ -2218,20 +2221,22 @@ registerEquipmentFeed({
 
 ### AI/LLM Integration
 
-#### On-Premise LLM Gateway
+#### LLM Gateway (cloud or on-prem)
 
-**File:** `src/lib/onPremSparkProvider.ts`
+**File:** `src/lib/llmGatewayProvider.ts` (preferred)
 
 ```typescript
-import { registerOnPremSpark } from '@/lib/onPremSparkProvider'
+import { registerLLMGateway } from '@/lib/llmGatewayProvider'
 
-// Configure on-premise LLM endpoint
-registerOnPremSpark({
+// Configure gateway endpoint
+registerLLMGateway({
   endpoint: 'https://llm.yourcompany.com/v1/chat',
   token: 'your-api-token',
   model: 'gpt-4' // or your model name
 })
 ```
+
+(Legacy support: `src/lib/onPremSparkProvider.ts` remains available for older deployments.)
 
 ## Security & Compliance
 
@@ -2573,7 +2578,8 @@ Create a `.env` file for custom configuration:
 
 ```bash
 # On-premise LLM Gateway (optional)
-VITE_ONPREM_LLM_ENDPOINT=https://your-llm-gateway.com/v1/chat
+VITE_LLM_GATEWAY_ENDPOINT=https://your-llm-gateway.com/v1/chat
+# Legacy: VITE_ONPREM_LLM_ENDPOINT is still supported
 VITE_ONPREM_LLM_TOKEN=your-secret-token
 
 # API Server (backend)
@@ -2823,7 +2829,8 @@ cdk deploy biopharmgmp-production
 
 ```bash
 # .env configuration for AWS deployment
-VITE_ONPREM_LLM_ENDPOINT=https://your-llm.amazonaws.com/v1/chat
+VITE_LLM_GATEWAY_ENDPOINT=https://your-llm.amazonaws.com/v1/chat
+# Legacy: VITE_ONPREM_LLM_ENDPOINT is still supported
 VITE_ONPREM_LLM_TOKEN=your-secret-token
 
 # Backend API with AWS services
@@ -3131,7 +3138,8 @@ az deployment group create \
 
 ```bash
 # .env configuration for Azure deployment
-VITE_ONPREM_LLM_ENDPOINT=https://your-llm.azurewebsites.net/v1/chat
+VITE_LLM_GATEWAY_ENDPOINT=https://your-llm.azurewebsites.net/v1/chat
+# Legacy: VITE_ONPREM_LLM_ENDPOINT is still supported
 VITE_ONPREM_LLM_TOKEN=your-secret-token
 
 # Backend API with Azure services

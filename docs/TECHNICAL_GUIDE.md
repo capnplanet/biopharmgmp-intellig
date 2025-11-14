@@ -1443,7 +1443,8 @@ npm run server
 
 2. **On-Premise LLM** (no external API calls):
 ```bash
-export VITE_ONPREM_LLM_ENDPOINT=https://your-llm-gateway.com/v1/chat
+export VITE_LLM_GATEWAY_ENDPOINT=https://your-llm-gateway.com/v1/chat
+# Legacy: VITE_ONPREM_LLM_ENDPOINT is still supported
 export VITE_ONPREM_LLM_TOKEN=your-secret-token
 ```
 
@@ -1549,7 +1550,8 @@ Create `.env` file:
 
 ```bash
 # Frontend Configuration
-VITE_ONPREM_LLM_ENDPOINT=https://llm.yourcompany.com/v1/chat
+VITE_LLM_GATEWAY_ENDPOINT=https://llm.yourcompany.com/v1/chat
+# Legacy: VITE_ONPREM_LLM_ENDPOINT is still supported
 VITE_ONPREM_LLM_TOKEN=your-api-token
 
 # Backend Configuration

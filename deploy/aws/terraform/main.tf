@@ -64,7 +64,7 @@ variable "llm_token" {
 }
 
 variable "llm_endpoint" {
-  description = "On-premise LLM endpoint"
+  description = "LLM gateway endpoint (cloud or on-prem)"
   type        = string
   default     = ""
 }
@@ -602,6 +602,9 @@ resource "aws_ecs_task_definition" "main" {
           name  = "ARCHIVE_DIR"
           value = "/app/data/archive"
         },
+        {
+          name  = "VITE_LLM_GATEWAY_ENDPOINT"
+        }
         {
           name  = "VITE_ONPREM_LLM_ENDPOINT"
           value = var.llm_endpoint

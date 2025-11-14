@@ -1,7 +1,7 @@
 # 05 — Security and Privacy
 
 Architecture
-- On‑prem LLM gateway (src/lib/onPremSparkProvider.ts); tokens optional and scoped; TLS recommended.
+- LLM gateway (src/lib/llmGatewayProvider.ts); tokens optional and scoped; TLS recommended. Legacy on-prem provider (`src/lib/onPremSparkProvider.ts`) remains available.
 - Dev mock only when no provider and in development (src/lib/devSparkMock.ts).
 - No secrets stored in browser; provider registered at runtime.
 

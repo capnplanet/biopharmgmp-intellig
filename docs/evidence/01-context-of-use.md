@@ -16,7 +16,7 @@ System overview
 - Data sources: Digital twin (dev), historian/OPC UA adapters (prod via equipment feed abstraction).
 - AI components: 
   - Risk scoring/classifiers (in-browser modeling utilities)
-  - LLM assistant via on-prem gateway in pilots; dev mock if no provider.
+  - LLM assistant via configured gateway (cloud or on‑prem) in pilots; dev mock if no provider.
 
 Traceability references
 - App shell/routing: src/App.tsx

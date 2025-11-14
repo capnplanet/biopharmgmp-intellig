@@ -404,7 +404,8 @@ For local or on-premise deployment using Docker Compose:
    ARCHIVE_ENABLED=true
 
    # Optional: LLM Configuration
-   VITE_ONPREM_LLM_ENDPOINT=https://llm.example.com/v1/chat
+   VITE_LLM_GATEWAY_ENDPOINT=https://llm.example.com/v1/chat
+   # Legacy: VITE_ONPREM_LLM_ENDPOINT is still supported
    VITE_ONPREM_LLM_TOKEN=your-llm-token
    ```
 
@@ -432,7 +433,7 @@ For local or on-premise deployment using Docker Compose:
 ### Environment Variables
 
 #### Frontend Configuration
-- `VITE_ONPREM_LLM_ENDPOINT`: On-premise LLM endpoint URL
+- `VITE_LLM_GATEWAY_ENDPOINT`: LLM gateway endpoint URL (cloud or on-prem). Legacy `VITE_ONPREM_LLM_ENDPOINT` accepted.
 - `VITE_ONPREM_LLM_TOKEN`: Authentication token for LLM API
 - `VITE_BACKEND_URL`: Backend API URL (for Docker deployments)
 

@@ -31,6 +31,9 @@ services:
       - RBAC_ENABLED=${RBAC_ENABLED:-true}
       - ARCHIVE_ENABLED=${ARCHIVE_ENABLED:-true}
       - ARCHIVE_DIR=/app/data/archive
+      # Preferred: cloud- or on-prem LLM gateway endpoint
+      - VITE_LLM_GATEWAY_ENDPOINT=${VITE_LLM_GATEWAY_ENDPOINT}
+      # Legacy compatibility
       - VITE_ONPREM_LLM_ENDPOINT=${VITE_ONPREM_LLM_ENDPOINT}
       - VITE_ONPREM_LLM_TOKEN=${VITE_ONPREM_LLM_TOKEN}
     volumes:

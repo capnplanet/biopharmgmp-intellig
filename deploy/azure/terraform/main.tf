@@ -57,7 +57,7 @@ variable "llm_token" {
 }
 
 variable "llm_endpoint" {
-  description = "On-premise LLM endpoint"
+  description = "LLM gateway endpoint (cloud or on-prem)"
   type        = string
   default     = ""
 }
@@ -270,6 +270,8 @@ resource "azurerm_linux_web_app" "backend" {
     "RBAC_ENABLED"                    = "true"
     "ARCHIVE_ENABLED"                 = "true"
     "ARCHIVE_DIR"                     = "/app/data/archive"
+    "VITE_LLM_GATEWAY_ENDPOINT"      = var.llm_endpoint
+    # legacy compatibility
     "VITE_ONPREM_LLM_ENDPOINT"       = var.llm_endpoint
     "WEBSITES_PORT"                   = "5000"
     "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "false"

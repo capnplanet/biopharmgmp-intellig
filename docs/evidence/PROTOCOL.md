@@ -50,7 +50,7 @@ Routes and navigation
 - Calibration and evaluation:
   - Describe stratification (equipment type, batch stage) and how ECE is computed.
 - LLM methods:
-  - Document provider (on‑prem gateway via src/lib/onPremSparkProvider.ts) or dev mock behavior (src/lib/devSparkMock.ts) during evaluation.
+  - Document provider (LLM gateway via `src/lib/llmGatewayProvider.ts` — cloud or on‑prem) or dev mock behavior (`src/lib/devSparkMock.ts`) during evaluation. Note legacy `src/lib/onPremSparkProvider.ts` is still available.
 - Acceptance targets:
   - Restate AUROC ≥ 0.75, Brier ≤ 0.20, ECE ≤ 0.10.
 - Attachments checklist:

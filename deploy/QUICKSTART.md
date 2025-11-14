@@ -111,8 +111,9 @@ AUTH_TOKEN=your-secure-token-here  # Generate with: openssl rand -base64 32
 ### Optional Variables
 
 ```bash
-# On-premise LLM integration
-VITE_ONPREM_LLM_ENDPOINT=https://llm.yourcompany.com/v1/chat
+# LLM gateway integration (cloud or on-prem)
+VITE_LLM_GATEWAY_ENDPOINT=https://llm.yourcompany.com/v1/chat
+# Legacy: VITE_ONPREM_LLM_ENDPOINT is still supported
 VITE_ONPREM_LLM_TOKEN=your-llm-api-token
 
 # RBAC (recommended for production)

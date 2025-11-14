@@ -18,7 +18,7 @@ Calibration and evaluation
 - Sampling history captured via src/components/ModelMetricsSampler.tsx.
 
 LLM methods
-- Provider selection via src/main.tsx with on-prem gateway (src/lib/onPremSparkProvider.ts) or dev mock (src/lib/devSparkMock.ts).
+- Provider selection via src/main.tsx with configured LLM gateway (src/lib/llmGatewayProvider.ts) or dev mock (src/lib/devSparkMock.ts). Legacy on-prem provider is still present for compatibility.
 - Prompt templates and grounding strategy documented in 04-prompts-and-controls.md.
 
 Acceptance metrics (targets)
