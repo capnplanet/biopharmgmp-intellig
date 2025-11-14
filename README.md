@@ -579,6 +579,42 @@ The API runs on `http://localhost:5000`. See [docs/local-api.md](docs/local-api.
 npm run kill
 ```
 
+### Local Dev — Full-stack UI test
+
+To exercise the full stack locally (frontend + backend API + example gateway handlers):
+
+1. Start the backend API (this mounts the local API used by the SPA):
+
+```bash
+# Terminal A
+npm run server
+```
+
+2. Start the Vite frontend dev server (it will proxy `/api` to the backend):
+
+```bash
+# Terminal B
+npm run dev
+```
+
+3. Verify the backend health endpoint directly:
+
+```bash
+curl -sS http://localhost:5000/api/health | jq || true
+```
+
+4. Verify the frontend dev server is proxying to the API (Vite may choose a different port if 5173/5000 are in use):
+
+```bash
+# Replace PORT with the port printed by `npm run dev` (usually 5173 or 3000)
+curl -sS http://localhost:5173/api/health | jq || true
+```
+
+5. Example gateway handlers live in `examples/` and are documented in `examples/README.md`.
+  To use them, mount the router into your server (see `server/index.mjs`) or adapt to your framework.
+
+If you want, I can also add a small script that mounts the example gateway routers into the local API during development.
+
 ### Build for Production
 
 ```bash

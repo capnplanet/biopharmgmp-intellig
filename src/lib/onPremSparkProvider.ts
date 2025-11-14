@@ -1,51 +1,30 @@
-import type { SparkAPI } from '@/types/spark'
-// Minimal on-prem LLM provider scaffold
-// Registers window.spark to forward prompts to your internal gateway endpoint.
+import { registerLLMGateway } from './llmGatewayProvider'
+
+// Backwards-compatible shim for the legacy onPrem provider.
+// This file keeps the original API (`registerOnPremSpark`) but delegates
+// to the new cloud-agnostic `registerLLMGateway` implementation. That
+// lets older deployments keep calling the old bootstrap while the
+// repository prefers `llmGatewayProvider` going forward.
 
 export type OnPremOptions = {
   endpoint: string // e.g., '/api/llm' or full https://host/path
-  token?: string // optional bearer token; prefer cookie-based auth when possible
-  model?: string // default model name to pass through
-}
-
-function buildPrompt(strings: TemplateStringsArray, ...values: unknown[]): string {
-  let out = ''
-  for (let i = 0; i < strings.length; i++) {
-    out += strings[i]
-    if (i < values.length) out += String(values[i])
-  }
-  return out
-}
-
-async function callOnPrem(endpoint: string, token: string | undefined, payload: unknown): Promise<string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (token) headers['Authorization'] = `Bearer ${token}`
-  const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(payload) })
-  if (!res.ok) throw new Error(`LLM gateway ${res.status}`)
-  // Expect JSON { output: string } but fall back to text
-  const ct = res.headers.get('content-type') || ''
-  if (ct.includes('application/json')) {
-    const data: unknown = await res.json().catch(() => ({}))
-    if (data && typeof data === 'object' && 'output' in data) {
-      const o = (data as { output?: unknown }).output
-      if (typeof o === 'string') return o
-    }
-    return JSON.stringify(data)
-  }
-  return await res.text()
+  token?: string
+  model?: string
 }
 
 export function registerOnPremSpark(opts: OnPremOptions) {
-  if (typeof window === 'undefined') return
-  const w = window as unknown as Window & { spark?: SparkAPI }
-  if (w.spark) return // respect an existing provider
-  const endpoint = opts.endpoint
-  const token = opts.token
-  const defaultModel = opts.model || 'gpt-4o'
-  w.spark = {
-    llmPrompt: buildPrompt,
-    async llm(prompt: unknown, model?: string) {
-      return callOnPrem(endpoint, token, { prompt, model: model || defaultModel })
-    }
+  // Reuse the LLM gateway registration for backwards compatibility
+  try {
+    registerLLMGateway({ endpoint: opts.endpoint, token: opts.token, model: opts.model })
+  } catch (err) {
+    // If anything goes wrong, fail silently in the shim to avoid breaking
+    // the original bootstrap behavior in demos or existing deployments.
+    // Consumers should prefer the new `registerLLMGateway` directly.
+    try { console.warn('registerOnPremSpark shim failed to register gateway', String(err)) } catch {}
   }
 }
+
+// Keep the legacy window.spark registration behavior if someone imports
+// this module directly in older setups. The actual provider implementation
+// lives in `llmGatewayProvider.ts`.
+// No auto-registration here; explicit bootstrap is preserved.
