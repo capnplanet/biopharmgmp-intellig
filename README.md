@@ -1161,7 +1161,7 @@ Generate Summary Text + Structured JSON
 [Spark LLM Interface]
     │
     ├─→ GitHub Spark Runtime (if available)
-    ├─→ On-Premise LLM Gateway (if configured)
+    ├─→ LLM Gateway (cloud or on-premise) (if configured)
     ├─→ Fallback (summary only, no LLM)
     │
     ↓
@@ -2593,7 +2593,7 @@ All AI changes require change control records:
 
 Before deploying AI features to production:
 
-- ✓ On-premise LLM gateway configured (no cloud AI if required)
+- ✓ LLM gateway configured (cloud or on-premise)
 - ✓ AI audit logging validated (prompts, responses, errors logged)
 - ✓ Model metrics sampling active (AUROC/Brier/ECE visible)
 - ✓ Equipment feed uses production adapter (not Digital Twin)
@@ -2613,7 +2613,7 @@ Before deploying AI features to production:
 Create a `.env` file for custom configuration:
 
 ```bash
-# On-premise LLM Gateway (optional)
+# LLM Gateway (cloud or on-premise) (optional)
 VITE_LLM_GATEWAY_ENDPOINT=https://your-llm-gateway.com/v1/chat
 # Legacy: VITE_ONPREM_LLM_ENDPOINT is still supported
 VITE_ONPREM_LLM_TOKEN=your-secret-token
