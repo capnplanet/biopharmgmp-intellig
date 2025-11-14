@@ -67,8 +67,8 @@ export interface Platform {
 
 - Dev mock LLM (only if no provider present): `src/lib/devSparkMock.ts`
   - Sets `window.spark` with a deterministic fake LLM to keep UI functional in development.
-- On‑prem LLM gateway scaffold: `src/lib/onPremSparkProvider.ts`
-  - `registerOnPremSpark({ endpoint, token?, model? })` registers `window.spark` to call your internal gateway.
+ - LLM gateway scaffold: `src/lib/llmGatewayProvider.ts`
+  - `registerLLMGateway({ endpoint, token?, model? })` registers `window.spark` to call your gateway endpoint (cloud or on‑prem).
 - Bootstrap wiring (dynamic): `src/main.tsx`
   - Chooses on‑prem provider if `VITE_ONPREM_LLM_ENDPOINT` is set; otherwise loads the dev mock in development; never overrides a host‑provided `window.spark`.
 
@@ -123,10 +123,10 @@ export function useLLM() {
 
 ```ts
 // excerpt (already wired in src/main.tsx)
-const endpoint = import.meta.env?.VITE_ONPREM_LLM_ENDPOINT
-const token = import.meta.env?.VITE_ONPREM_LLM_TOKEN
+const endpoint = import.meta.env?.VITE_LLM_GATEWAY_ENDPOINT ?? import.meta.env?.VITE_ONPREM_LLM_ENDPOINT
+const token = import.meta.env?.VITE_LLM_GATEWAY_TOKEN ?? import.meta.env?.VITE_ONPREM_LLM_TOKEN
 if (!w.spark && endpoint) {
-  import('./lib/onPremSparkProvider').then(m => m.registerOnPremSpark({ endpoint, token }))
+  import('./lib/llmGatewayProvider').then(m => m.registerLLMGateway({ endpoint, token }))
 } else if (!w.spark && import.meta.env?.DEV) {
   import('./lib/devSparkMock')
 }
@@ -137,7 +137,7 @@ if (!w.spark && endpoint) {
 - Request: `POST <endpoint>` with `{ prompt: string, model?: string }`
 - Response (preferred): `{ output: string }` JSON
 - Response (fallback): text body with the model’s output
-- Auth: Use server‑side session/cookie or `Authorization: Bearer <token>` (token configured via `VITE_ONPREM_LLM_TOKEN`).
+ - Auth: Use server‑side session/cookie or `Authorization: Bearer <token>` (token configured via `VITE_LLM_GATEWAY_TOKEN`, legacy `VITE_ONPREM_LLM_TOKEN` supported).
 
 The scaffold handles both JSON and text responses.
 

@@ -174,7 +174,7 @@ The repository aligns with key principles emphasized in the guidance as follows:
 - Change control and lifecycle management
   - Explicit thresholds and prompts to be versioned; audit events record interactions and can tie to change records; deploy-time provider selection with on-prem gateway support.
 - Security and privacy
-  - On‑prem LLM gateway scaffold (src/lib/onPremSparkProvider.ts) with token option; dev mock used only when no provider is present; avoids exposing secrets in browser.
+  - LLM gateway scaffold (src/lib/llmGatewayProvider.ts) with token option; dev mock used only when no provider is present; avoids exposing secrets in browser.
 - Documentation and evidence generation
   - This document provides a risk-based plan tied to platform artifacts; additional package structure suggested for pilots and production.
 
