@@ -5,6 +5,31 @@
 
 An AI-powered platform for real-time manufacturing oversight, quality management, and predictive analytics in biotechnology and pharmaceutical GMP (Good Manufacturing Practice) environments.
 
+## Development Status
+
+This platform is a **comprehensive reference implementation** demonstrating:
+- ✅ Complete UI workflows for GMP quality management
+- ✅ AI-powered operations assistance and automation  
+- ✅ Predictive analytics with model monitoring
+- ✅ Audit trail and compliance features
+- ✅ Cloud deployment configuration templates
+- ✅ All features fully implemented and accessible in the UI
+
+**Production Deployment Considerations**:
+- 🔧 Requires external LLM provider configuration (Azure OpenAI, AWS Bedrock, or on-premise gateway)
+- 🔧 Backend API persistence verified for development; production deployment requires additional validation
+- 🔧 Cloud deployment configurations provided as comprehensive starting templates (require customization for production security and compliance)
+- 🔧 Equipment integration requires site-specific adapters (OPC UA and MES examples provided for reference)
+- 🔧 Additional unit/integration testing, validation, and security hardening recommended for GMP production use
+- 🔧 Deployment scripts and Terraform configurations require review and customization per organizational policies
+
+**Testing Status**:
+- ✅ Build and runtime verified
+- ✅ All UI workflows accessible and functional
+- ✅ Backend API endpoints implemented and tested
+- ⚠️ Unit/integration test suite not included (recommended for production)
+- ⚠️ End-to-end testing limited to manual verification
+
 ## Table of Contents
 
 1. [Overview](#overview)
@@ -632,6 +657,16 @@ npm run preview
 ### Cloud Deployment
 
 The platform supports deployment to AWS and Azure with full containerization support.
+
+**Important**: The deployment configurations provided are comprehensive starting templates for reference. Production deployments should be reviewed and customized for your organization's:
+- Security requirements and compliance policies (IAM roles, network segmentation, encryption standards)
+- Network architecture and firewall rules
+- Backup, disaster recovery, and business continuity procedures
+- Monitoring, alerting, and observability thresholds
+- Cost optimization strategies and resource sizing
+- Regulatory compliance requirements (GxP, HIPAA, SOC2, etc.)
+
+The scripts and configurations have been designed following cloud provider best practices but require validation and adjustment for production workloads.
 
 #### Docker Deployment
 
@@ -2208,6 +2243,8 @@ See [docs/local-api.md](docs/local-api.md) for complete API documentation.
 
 **File:** `src/lib/equipmentFeed.ts`
 
+**Note**: The platform provides an abstraction layer for equipment data sources. The Digital Twin is used by default for development and demonstration. Production deployments require implementing site-specific adapters for your MES, OPC UA servers, historians, or other data sources. Reference implementations and integration patterns are provided below as examples.
+
 #### Development Mode (Digital Twin)
 
 ```typescript
@@ -2225,11 +2262,17 @@ const unsubscribe = subscribeToEquipmentFeed((snapshot) => {
 
 #### Production Mode (OPC UA Example)
 
+**Note**: This is example code for reference. Production implementations require:
+- Installing `node-opcua` package: `npm install node-opcua`
+- Configuring your specific OPC UA server endpoints and security certificates
+- Implementing error handling, reconnection logic, and monitoring
+- Adapting data transformations to match your equipment tag structure
+
 ```typescript
 import { registerEquipmentFeed } from '@/lib/equipmentFeed'
 import { OPCUAClient } from 'node-opcua'
 
-// Custom OPC UA adapter
+// Custom OPC UA adapter (EXAMPLE - requires customization)
 registerEquipmentFeed({
   subscribe: (listener) => {
     const client = new OPCUAClient()
@@ -2245,7 +2288,7 @@ registerEquipmentFeed({
     })
     
     // Monitor CPP nodes and transform to platform snapshot format
-    // ... (see TECHNICAL_GUIDE.md for complete example)
+    // ... (see TECHNICAL_GUIDE.md and docs/equipment-integration.md for complete example)
     
     return () => {
       subscription.terminate()
@@ -2261,10 +2304,17 @@ registerEquipmentFeed({
 
 **File:** `src/lib/llmGatewayProvider.ts` (preferred)
 
+**Note**: The Operations Assistant requires an external LLM provider. The platform supports:
+- **GitHub Spark Runtime** (when running in GitHub Spark environment)
+- **Custom LLM Gateway** (Azure OpenAI, AWS Bedrock, or on-premise LLMs via HTTP endpoint)
+- **Development Mock** (deterministic responses for testing without LLM)
+
+Configuration requires setting environment variables (see `.env.example`) and deploying gateway handlers from `examples/` directory. See `examples/README.md` for detailed setup instructions.
+
 ```typescript
 import { registerLLMGateway } from '@/lib/llmGatewayProvider'
 
-// Configure gateway endpoint
+// Configure gateway endpoint (requires deployed gateway with authentication)
 registerLLMGateway({
   endpoint: 'https://llm.yourcompany.com/v1/chat',
   token: 'your-api-token',
