@@ -9,14 +9,15 @@ An AI-powered platform for real-time manufacturing oversight, quality management
 
 This platform is a **comprehensive reference implementation** demonstrating:
 - ✅ Complete UI workflows for GMP quality management
-- ✅ AI-powered operations assistance and automation  
-- ✅ Predictive analytics with model monitoring
+- ✅ AI-powered operations assistance architecture and autonomous quality automation  
+- ✅ Risk scoring analytics with performance monitoring infrastructure
 - ✅ Audit trail and compliance features
 - ✅ Cloud deployment configuration templates
 - ✅ All features fully implemented and accessible in the UI
 
 **Production Deployment Considerations**:
-- 🔧 Requires external LLM provider configuration (Azure OpenAI, AWS Bedrock, or on-premise gateway)
+- 🔧 Requires external LLM provider configuration (Azure OpenAI, AWS Bedrock, or on-premise gateway) for Operations Assistant natural language processing
+- 🔧 Risk scoring currently uses deterministic heuristic formulas; ML training infrastructure (logistic regression) implemented but requires activation for learned models
 - 🔧 Backend API persistence verified for development; production deployment requires additional validation
 - 🔧 Cloud deployment configurations provided as comprehensive starting templates (require customization for production security and compliance)
 - 🔧 Equipment integration requires site-specific adapters (OPC UA and MES examples provided for reference)
