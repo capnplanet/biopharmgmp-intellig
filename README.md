@@ -60,7 +60,7 @@ This platform provides comprehensive manufacturing intelligence and quality assu
 
 - **Real-time Manufacturing Oversight**: Live monitoring of batch execution, equipment status, and critical process parameters
 - **AI-Powered Quality Management**: Intelligent workflows for deviations, investigations, CAPAs (Corrective and Preventive Actions), and change controls
-- **Predictive Analytics**: ML-based analysis of historical and real-time MES data to predict quality issues and equipment failures
+- **Predictive Analytics**: Risk scoring analysis of historical and real-time MES data to predict quality issues and equipment failures (currently using deterministic heuristic formulas with ML training infrastructure available for future activation)
 - **Regulatory Compliance**: Complete audit trails, e-signatures, and evidence packages aligned with ICH, ISO, and GMP standards
 - **Digital Twin Simulation**: Equipment behavior simulation for testing and training scenarios
 
@@ -88,11 +88,12 @@ This platform provides comprehensive manufacturing intelligence and quality assu
 - Timeline visualization
 
 ### 4. Predictive Analytics
-- Equipment failure prediction using ML models
-- Quality risk scoring for proactive management
+- Risk scoring for equipment failure prediction
+- Quality risk assessment for proactive management
 - Trend analysis and pattern recognition
-- Model performance metrics (AUROC, Brier, ECE)
+- Model performance metrics tracking (AUROC, Brier, ECE)
 - Automated deviation risk assessment
+- **Note**: Current implementation uses deterministic heuristic formulas; comprehensive ML training infrastructure (logistic regression) is implemented but not activated by default
 
 ### 5. Audit & Compliance
 - Tamper-evident audit trail with SHA-256 hash chain verification
@@ -102,32 +103,40 @@ This platform provides comprehensive manufacturing intelligence and quality assu
 - Complete ALCOA+ data integrity
 
 ### 6. Operations Assistant
-- AI-powered copilot for manufacturing operations
+- AI-powered copilot for manufacturing operations (**requires external LLM provider configuration**)
 - Natural language queries for data insights
 - Contextual recommendations
 - Integrated with quality workflows
+- Falls back to snapshot summaries when LLM unavailable
 
 ## AI Functionality
 
-The BioPharm GMP Intelligence Platform integrates multiple AI capabilities designed specifically for pharmaceutical manufacturing. All AI functionality is built with regulatory compliance, transparency, and human-in-the-loop controls as core principles.
+The BioPharm GMP Intelligence Platform integrates AI automation and decision support capabilities designed specifically for pharmaceutical manufacturing. All AI functionality is built with regulatory compliance, transparency, and human-in-the-loop controls as core principles.
 
 ### AI Components Overview
 
-The platform includes four primary AI systems, each with distinct purposes and implementations:
+The platform includes AI-driven systems with distinct purposes and implementations:
 
-#### 1. Operations Assistant (LLM-Powered Copilot)
+#### 1. Operations Assistant (LLM-Powered Copilot) - **Requires External LLM Configuration**
 
 **File:** `src/components/OperationsAssistant.tsx`  
 **AI Engine:** `src/lib/spark.ts`, `src/lib/llmGatewayProvider.ts` (preferred)
 
-The Operations Assistant is an AI-powered copilot that provides natural language insights into manufacturing operations. It uses Large Language Models (LLMs) to answer questions about batches, equipment, quality events, and model performance.
+The Operations Assistant is an AI-powered copilot architecture that provides natural language insights into manufacturing operations. **Critical requirement**: It requires configuration of an external Large Language Model (LLM) provider to function - it does NOT work out-of-the-box.
 
-**Key Capabilities:**
-- **Contextual Query Processing**: Answers questions based on real-time operations snapshot including batches, equipment telemetry, quality records, alerts, and model metrics
+**Key Capabilities (when LLM configured):**
+- **Contextual Query Processing**: Answers questions based on real-time operations snapshot including batches, equipment telemetry, quality records, alerts, and prediction metrics
 - **Data Grounding**: Every response is grounded in structured data (JSON) from the platform's KV store and equipment feed
 - **Conversation History**: Maintains up to 50 messages for context-aware interactions
 - **Audit Logging**: All prompts and responses are logged to the AI Audit Trail for transparency
-- **Fallback Behavior**: When LLM is unavailable, provides snapshot summary with explicit notification
+- **Graceful Degradation**: When LLM is unavailable, provides snapshot summary with explicit notification (fallback mode)
+
+**LLM Provider Requirement**: ⚠️ **Requires one of the following**:
+1. GitHub Spark Runtime (when running in GitHub Spark environment)
+2. LLM Gateway endpoint (Azure OpenAI, AWS Bedrock, or custom) via `VITE_LLM_GATEWAY_ENDPOINT` environment variable
+3. On-premise LLM server configured
+
+Without LLM configuration, the Operations Assistant displays raw operational snapshots without natural language processing.
 
 **Data Sources:**
 ```typescript
@@ -147,7 +156,7 @@ const digest: OperationsDigest = {
   qualityRecords: { /* deviations, CAPAs, change controls */ },
   alerts: { /* active alerts by severity */ },
   automation: { /* automation queue status */ },
-  modelPerformance: { /* AUROC, Brier, ECE metrics */ }
+  modelPerformance: { /* AUROC, Brier, ECE metrics from heuristic formulas */ }
 }
 ```
 
@@ -155,7 +164,7 @@ const digest: OperationsDigest = {
 The platform uses an abstraction layer that supports multiple LLM deployment modes:
 - **GitHub Spark Runtime** (`src/lib/spark.ts`): Default integration when running in GitHub Spark environment
 - **LLM Gateway** (`src/lib/llmGatewayProvider.ts`): Cloud‑ or on‑prem gateway with configurable endpoint, token, and model (legacy `onPrem` provider kept for compatibility)
-- **Development Mock** (`src/lib/devSparkMock.ts`): Deterministic responses for testing
+- **Development Mock** (`src/lib/devSparkMock.ts`): Deterministic responses for testing without external LLM
 
 **Prompt Structure:**
 ```typescript
@@ -245,23 +254,25 @@ const recommendedAssignee = (parameter: string) => {
 **File:** `src/lib/modeling.ts`  
 **Model Monitoring:** `src/components/ModelMetricsSampler.tsx`
 
-The platform includes three predictive models for proactive quality management:
+The platform includes three risk scoring functions for proactive quality management:
 
-**Model Types:**
+**Important Note**: These are currently **deterministic heuristic formulas**, not machine-learned models. However, comprehensive ML training infrastructure (logistic regression with gradient descent, feature standardization, and L2 regularization) is fully implemented in the same file (lines 266-341) and can be activated to replace the heuristics with learned models.
+
+**Scoring Function Types:**
 ```typescript
 // From src/lib/modeling.ts (line 3)
 export type ModelId = 'quality_prediction' | 'equipment_failure' | 'deviation_risk'
 ```
 
-**A. Quality Prediction Model**
+**A. Quality Prediction Function**
 
-Predicts whether all Critical Process Parameters will remain within specification.
+Calculates probability that all Critical Process Parameters will remain within specification using a deterministic formula.
 
 ```typescript
 // From src/lib/modeling.ts (lines 107-119)
 export function predictQuality(batch: BatchData) {
   const cpp = getCPPCompliance(batch) // [0,1]
-  // Simple mapping with small smoothing
+  // Deterministic heuristic formula (not learned from data)
   const p = clamp(0.05 + 0.9 * cpp, 0, 1)
   const features: Features = {
     cpp_compliance: cpp,
@@ -274,42 +285,42 @@ export function predictQuality(batch: BatchData) {
 }
 ```
 
-**Decision Threshold:** 0.95 (strict threshold since y=1 means all CPPs in spec)
+**Decision Threshold:** 0.95 (strict threshold since y=1 means all CPPs in spec)  
+**Implementation**: Fixed formula, not learned parameters (ML training infrastructure available in lines 266-341)
 
-**B. Equipment Failure Prediction**
+**B. Equipment Failure Prediction Function**
 
-Predicts equipment failure risk based on telemetry data.
+Calculates equipment failure risk probability based on telemetry data using a deterministic weighted formula.
 
 ```typescript
-// From src/lib/modeling.ts (lines 153-177)
+// From src/lib/modeling.ts (lines 155-176)
 export function predictEquipmentFailure(eq: EqT) {
-  const vibrationRms = eq.vibrationRms ?? 0
-  const runHours = eq.runHours ?? 0
-  const utilizationRatio = eq.utilization / 100
+  const rms = eq.vibrationRMS
+  const rmsN = clamp(rms / 6, 0, 1) // Normalize to [0,1]
+  const tvarN = clamp(eq.temperatureVar / 0.6, 0, 1)
   
-  // Risk increases with vibration, runtime, and utilization
-  const vibrationScore = clamp(vibrationRms / 5.0, 0, 1)
-  const runtimeScore = clamp(runHours / 10000, 0, 1)
-  const utilizationScore = clamp(utilizationRatio, 0, 1)
-  
-  // Weighted combination
-  const risk = (vibrationScore * 0.4 + runtimeScore * 0.3 + utilizationScore * 0.3)
+  // Fixed weighted combination (not learned from data)
+  const raw = 0.6 * rmsN + 0.3 * tvarN + (eq.vibrationAlert ? 0.2 : 0)
+  const p = clamp(raw, 0, 1)
   
   const features: Features = {
-    vibration_rms: vibrationRms,
-    run_hours: runHours,
-    utilization: eq.utilization,
+    rms: rms,
+    rms_norm: rmsN,
+    temp_var: eq.temperatureVar,
+    temp_var_norm: tvarN,
+    alert_flag: eq.vibrationAlert ? 1 : 0,
   }
-  const y = outcomeEquipmentFailure(eq)
-  return { p: risk, y, features }
+  const y = outcomeEquipment(eq)
+  return { p, y, features }
 }
 ```
 
-**Decision Threshold:** 0.5
+**Decision Threshold:** 0.5  
+**Implementation**: Fixed weights (0.6, 0.3, 0.2), not learned from training data
 
-**C. Deviation Risk Model**
+**C. Deviation Risk Function**
 
-Predicts likelihood of deviation based on normalized distance from specification mid-point.
+Calculates likelihood of deviation based on maximum normalized distance from specification mid-point using a deterministic formula.
 
 ```typescript
 // From src/lib/modeling.ts (lines 125-142)
@@ -322,6 +333,7 @@ export function predictDeviationRisk(batch: BatchData) {
     norm(p.pressure.current, s.pressure.min, s.pressure.max),
     norm(p.pH.current, s.pH.min, s.pH.max),
   ]
+  // Deterministic max deviation formula (not learned)
   const risk = clamp(Math.max(...devs), 0, 2) / 2 // map to [0,1]
   const features: Features = {
     temp_norm_dev: devs[0],
@@ -333,11 +345,12 @@ export function predictDeviationRisk(batch: BatchData) {
 }
 ```
 
-**Decision Threshold:** 0.5
+**Decision Threshold:** 0.5  
+**Implementation**: Max deviation heuristic, not learned from data
 
-**Model Performance Metrics:**
+**Prediction Performance Monitoring:**
 
-The platform implements comprehensive model monitoring using industry-standard metrics:
+The platform implements comprehensive monitoring infrastructure using industry-standard metrics (currently measuring heuristic formula performance, ready to measure ML model performance when activated):
 
 ```typescript
 // From src/lib/modeling.ts (lines 29-48)
@@ -352,7 +365,7 @@ metrics(model: ModelId, opts?: {
   const rs = this.getRecords(model)
   const n = rs.length
   
-  // Performance metrics
+  // Performance metrics (applies to both heuristic formulas and ML models)
   const accuracy = preds.filter(x => x.c === x.y).length / n
   const brier = rs.reduce((s, r) => s + (r.p - r.y) * (r.p - r.y), 0) / n
   const ece = expectedCalibrationError(rs, 5)
@@ -368,9 +381,11 @@ metrics(model: ModelId, opts?: {
 - **ECE (Expected Calibration Error)**: Measures how well predicted probabilities match observed frequencies. Range [0,1], lower is better. Target: ≤0.10
 - **Accuracy**: Percentage of correct classifications (when predictions are thresholded). Only reported when sufficient samples exist
 
-**Model Monitoring Workflow:**
+**Note**: These metrics currently measure the performance of the deterministic heuristic formulas. The same infrastructure will automatically measure ML model performance when training is activated.
+
+**Monitoring Workflow:**
 ```
-Batch/Equipment Data → Predict (p, features)
+Batch/Equipment Data → Predict (p, features) [using heuristic formula]
     ↓
 Record Prediction with PredictionRecord
     ↓
@@ -911,11 +926,11 @@ function BatchMonitor() {
 
 ### 4. Predictive Analytics
 
-ML-based analysis for quality prediction and equipment failure detection.
+Risk scoring analysis for quality prediction and equipment failure detection (currently using deterministic heuristic formulas).
 
 **File:** `src/components/Analytics.tsx`
 
-**Model Metrics:**
+**Prediction Performance Metrics:**
 
 ```tsx
 import { monitor, type ModelId } from '@/lib/modeling'
@@ -933,6 +948,7 @@ function ModelMetrics({ modelId }: { modelId: ModelId }) {
       <p>Accuracy: {metrics.accuracy ? (metrics.accuracy * 100).toFixed(1) + '%' : 'N/A'}</p>
       <p>Brier Score: {metrics.brier.toFixed(3)}</p>
       <p>ECE: {metrics.ece.toFixed(3)}</p>
+      {/* These metrics currently measure heuristic formula performance */}
     </div>
   )
 }
@@ -1085,25 +1101,27 @@ function AutomationQueue() {
 
 ## Predictive Analytics
 
-The platform includes three predictive models for proactive quality management.
+The platform includes three risk scoring functions for proactive quality management.
 
 **File:** `src/lib/modeling.ts`
 
-### Model Types
+**Important**: Current implementation uses **deterministic heuristic formulas**. Comprehensive ML training infrastructure (logistic regression) is implemented in the same file (lines 266-341) but not activated by default.
+
+### Function Types
 
 ```typescript
 export type ModelId = 'quality_prediction' | 'equipment_failure' | 'deviation_risk'
 ```
 
-### Quality Prediction Model
+### Quality Prediction Function
 
-Predicts whether all Critical Process Parameters will remain in specification:
+Calculates probability that all Critical Process Parameters will remain in specification using a fixed formula:
 
 ```typescript
 import { predictQuality, decisionThreshold } from '@/lib/modeling'
 
 function checkBatchQuality(batch: BatchData) {
-  const prediction = predictQuality(batch)
+  const prediction = predictQuality(batch)  // Uses formula: p = 0.05 + 0.9 * cpp
   
   return {
     probability: prediction.p,
@@ -1114,15 +1132,15 @@ function checkBatchQuality(batch: BatchData) {
 }
 ```
 
-### Equipment Failure Prediction
+### Equipment Failure Prediction Function
 
-Predicts equipment failure risk based on telemetry:
+Calculates equipment failure risk based on telemetry using fixed weights:
 
 ```typescript
 import { predictEquipmentFailure, decisionThreshold } from '@/lib/modeling'
 
 function monitorEquipment(equipment: EquipmentTelemetry) {
-  const prediction = predictEquipmentFailure(equipment)
+  const prediction = predictEquipmentFailure(equipment)  // Uses fixed weights: 0.6*rms + 0.3*temp_var + 0.2*alert
   
   if (prediction.p > decisionThreshold.equipment_failure) {
     // High risk - generate alert
@@ -1131,19 +1149,19 @@ function monitorEquipment(equipment: EquipmentTelemetry) {
 }
 ```
 
-### Model Monitor
+### Prediction Monitor
 
-Centralized monitoring of model predictions:
+Centralized monitoring of prediction performance (works for both heuristic formulas and ML models):
 
 ```typescript
 import { monitor } from '@/lib/modeling'
 
-// Add a prediction record
+// Add a prediction record (same for heuristic or ML)
 monitor.add({
   id: 'pred-001',
   model: 'quality_prediction',
   timestamp: Date.now(),
-  p: 0.85,  // Predicted probability [0,1]
+  p: 0.85,  // Predicted probability [0,1] from heuristic formula
   y: 1,     // Observed outcome (0 or 1)
   features: {
     temperature: 37.2,
@@ -1153,7 +1171,7 @@ monitor.add({
   }
 })
 
-// Get performance metrics
+// Get performance metrics (measures heuristic formula performance currently)
 const metrics = monitor.metrics('quality_prediction', {
   threshold: 0.95,
   minN: 10,
