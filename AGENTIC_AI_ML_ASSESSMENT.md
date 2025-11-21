@@ -12,7 +12,7 @@
 The BioPharm GMP Intelligence Platform is a sophisticated AI-powered manufacturing oversight system that integrates **AI-driven automation and decision support capabilities** with comprehensive regulatory compliance features. The platform demonstrates genuine agentic capabilities through automated quality event detection, deterministic risk scoring functions, and LLM-powered decision support (requires external LLM provider configuration), all while maintaining strict human-in-the-loop controls required for GMP environments.
 
 **Key Findings**:
-- ✅ **Three predictive risk scoring functions** for analytics (quality prediction, deviation risk, equipment failure) - **currently implemented as deterministic heuristics**
+- ✅ **Three predictive risk scoring functions** for analytics (quality prediction, deviation risk, equipment failure) - **implemented using deterministic heuristic formulas**
 - ✅ **One LLM-based agentic assistant** with multi-provider architecture (GitHub Spark, LLM Gateway, on-premise) - **requires external LLM provider configuration**
 - ✅ **Autonomous quality automation engine** that monitors batch parameters and generates deviation suggestions
 - ✅ **Comprehensive model monitoring infrastructure** with AUROC, Brier Score, and Expected Calibration Error (ECE) metrics calculation
@@ -938,7 +938,7 @@ The platform includes ML training infrastructure with varying states of implemen
 2. Implementing model persistence to storage
 3. Integrating trained model predictions into the production prediction flow
 
-**Truth**: Calling these "ML pipelines" is **misleading** - they are currently heuristic formulas with ML infrastructure built alongside them but unused.
+**Accuracy Note**: Referring to these as "ML pipelines" is **not representative of the current implementation** - they are heuristic formulas with ML training infrastructure built alongside them but not currently active.
 
 ### 6.3 Information Processing
 

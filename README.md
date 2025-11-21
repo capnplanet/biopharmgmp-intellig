@@ -62,7 +62,9 @@ This platform provides comprehensive manufacturing intelligence and quality assu
 
 - **Real-time Manufacturing Oversight**: Live monitoring of batch execution, equipment status, and critical process parameters
 - **AI-Powered Quality Management**: Intelligent workflows for deviations, investigations, CAPAs (Corrective and Preventive Actions), and change controls
-- **Predictive Analytics**: Risk scoring analysis of historical and real-time MES data to predict quality issues and equipment failures (currently using deterministic heuristic formulas with ML training infrastructure available for future activation)
+- **Predictive Analytics**: Risk scoring analysis of historical and real-time MES data to predict quality issues and equipment failures
+  - Current implementation: Deterministic heuristic formulas  
+  - ML training infrastructure (logistic regression) available for future activation
 - **Regulatory Compliance**: Complete audit trails, e-signatures, and evidence packages aligned with ICH, ISO, and GMP standards
 - **Digital Twin Simulation**: Equipment behavior simulation for testing and training scenarios
 
