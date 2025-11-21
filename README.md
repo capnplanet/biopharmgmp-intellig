@@ -17,7 +17,8 @@ This platform is a **comprehensive reference implementation** demonstrating:
 
 **Production Deployment Considerations**:
 - 🔧 Requires external LLM provider configuration (Azure OpenAI, AWS Bedrock, or on-premise gateway) for Operations Assistant natural language processing
-- 🔧 Risk scoring currently uses deterministic heuristic formulas; ML training infrastructure (logistic regression) implemented but requires activation for learned models
+- 🔧 Risk scoring currently uses deterministic heuristic formulas
+- 🔧 ML training infrastructure (logistic regression) implemented but requires activation for learned models
 - 🔧 Backend API persistence verified for development; production deployment requires additional validation
 - 🔧 Cloud deployment configurations provided as comprehensive starting templates (require customization for production security and compliance)
 - 🔧 Equipment integration requires site-specific adapters (OPC UA and MES examples provided for reference)

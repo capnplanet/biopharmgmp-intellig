@@ -251,7 +251,7 @@ The platform includes **three risk scoring functions** with comprehensive monito
 2. **Equipment Failure Prediction Function** - Calculates equipment failure risk probability
 3. **Deviation Risk Function** - Calculates likelihood of deviation based on CPP positions
 
-**Important Note**: Current implementations use **deterministic heuristic formulas** (not learned from training data). However, the platform includes **complete logistic regression training infrastructure** (`trainLogisticForModel` function, lines 266-321) ready for activation to enable ML-based predictions.
+**Important Note**: Current implementations use **deterministic heuristic formulas** (not learned from training data). However, the platform includes **complete logistic regression training infrastructure** (`trainLogisticForModel` function in `src/lib/modeling.ts`, lines 266-321) ready for activation to enable ML-based predictions.
 
 ---
 
@@ -968,7 +968,7 @@ The platform includes ML training infrastructure with varying states of implemen
 - ✅ Integration points exist: `predictBatchProbability` and `predictEquipmentProbability` call `predictLogisticProb` first
 - **Could be activated with integration work**: training schedule + model persistence + deployment configuration
 
-**Reality Check**: The assessment should clearly state that **NO ML-trained models are currently active in production**. The system uses only deterministic formulas.
+**Current Implementation Status**: The assessment clearly states that **NO ML-trained models are currently active in production**. The system uses only deterministic formulas.
 
 ---
 
