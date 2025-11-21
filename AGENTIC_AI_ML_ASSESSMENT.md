@@ -9,16 +9,16 @@
 
 ## Executive Summary
 
-The BioPharm GMP Intelligence Platform is a sophisticated AI-powered manufacturing oversight system that integrates **four distinct AI/ML subsystems** with comprehensive regulatory compliance features. The platform demonstrates genuine agentic capabilities through automated quality event detection, predictive risk scoring, and LLM-powered decision support, all while maintaining strict human-in-the-loop controls required for GMP environments.
+The BioPharm GMP Intelligence Platform is a sophisticated AI-powered manufacturing oversight system that integrates **AI-driven automation and decision support capabilities** with comprehensive regulatory compliance features. The platform demonstrates genuine agentic capabilities through automated quality event detection, deterministic risk scoring functions, and LLM-powered decision support (requires external LLM provider configuration), all while maintaining strict human-in-the-loop controls required for GMP environments.
 
 **Key Findings**:
-- ✅ **Three integrated ML pipelines** for predictive analytics (quality prediction, deviation risk, equipment failure)
-- ✅ **One LLM-based agentic assistant** with multi-provider architecture (GitHub Spark, LLM Gateway, on-premise)
+- ✅ **Three predictive risk scoring functions** for analytics (quality prediction, deviation risk, equipment failure) - **currently implemented as deterministic heuristics**
+- ✅ **One LLM-based agentic assistant** with multi-provider architecture (GitHub Spark, LLM Gateway, on-premise) - **requires external LLM provider configuration**
 - ✅ **Autonomous quality automation engine** that monitors batch parameters and generates deviation suggestions
-- ✅ **Comprehensive model monitoring** with AUROC, Brier Score, and Expected Calibration Error (ECE) metrics
+- ✅ **Comprehensive model monitoring infrastructure** with AUROC, Brier Score, and Expected Calibration Error (ECE) metrics calculation
 - ✅ **Complete audit trail** for AI transparency and regulatory compliance (21 CFR Part 11, FDA credibility assessment)
-- ✅ **On-device logistic regression** training capability for adaptive learning
-- ⚠️ **Current models use heuristic functions**, not traditional ML training pipelines (explainable but limited)
+- ✅ **On-device logistic regression** training capability implemented but **not activated by default** - infrastructure ready for ML model training
+- ⚠️ **Current prediction functions use deterministic heuristic formulas**, not learned ML model parameters (explainable but limited predictive capability)
 
 ---
 
@@ -92,12 +92,19 @@ Response to User
 ```
 
 #### Assessment
-**Agentic Level**: ⭐⭐⭐⭐ (4/5)
+**Agentic Level**: ⭐⭐⭐⭐ (4/5) - **when external LLM provider is configured**
 - **Autonomy**: High - automatically aggregates data and constructs context
-- **Reactivity**: High - responds to user queries with grounded insights
+- **Reactivity**: High - responds to user queries with grounded insights (when LLM available)
 - **Proactivity**: Medium - provides summaries but doesn't initiate conversations
 - **Social Ability**: Medium - conversational interface with history maintenance
 - **Learning**: Low - uses static prompts, no fine-tuning capability
+
+**Critical Requirement**: ⚠️ The Operations Assistant **requires external LLM provider configuration** to function. It does NOT work out-of-the-box and needs one of:
+1. GitHub Spark Runtime (when running in GitHub Spark environment)
+2. LLM Gateway endpoint configured via environment variables (Azure OpenAI, AWS Bedrock, or custom endpoint)
+3. On-premise LLM server configured
+
+Without LLM configuration, the component falls back to displaying raw operation snapshots without natural language processing.
 
 ---
 
@@ -239,25 +246,25 @@ export type TwinOptions = {
 
 **Location**: `src/lib/modeling.ts`
 
-The platform includes **three predictive models** with comprehensive monitoring:
-1. **Quality Prediction Model** - Predicts if all CPPs will remain within specification
-2. **Equipment Failure Prediction** - Predicts equipment failure risk
-3. **Deviation Risk Model** - Predicts likelihood of deviation based on CPP positions
+The platform includes **three risk scoring functions** with comprehensive monitoring infrastructure:
+1. **Quality Prediction Function** - Calculates probability that all CPPs will remain within specification
+2. **Equipment Failure Prediction Function** - Calculates equipment failure risk probability
+3. **Deviation Risk Function** - Calculates likelihood of deviation based on CPP positions
 
-**Important Note**: Current implementations use **deterministic heuristic functions** rather than traditional ML training pipelines. However, the platform includes **on-device logistic regression** capability for future adaptive learning.
+**Important Note**: Current implementations use **deterministic heuristic formulas** (not learned from training data). However, the platform includes **complete logistic regression training infrastructure** (`trainLogisticForModel` function, lines 266-321) ready for activation to enable ML-based predictions.
 
 ---
 
-### 2.2 Quality Prediction Model
+### 2.2 Quality Prediction Function
 
-**Model ID**: `quality_prediction`  
+**Function ID**: `quality_prediction`  
 **Code Reference**: Lines 107-119
 
 #### Input Processing
 ```typescript
 export function predictQuality(batch: BatchData) {
   const cpp = getCPPCompliance(batch) // [0,1] - fraction of CPPs in spec
-  const p = clamp(0.05 + 0.9 * cpp, 0, 1) // Smoothed mapping
+  const p = clamp(0.05 + 0.9 * cpp, 0, 1) // Deterministic mapping formula
   
   const features: Features = {
     cpp_compliance: cpp,
@@ -271,27 +278,27 @@ export function predictQuality(batch: BatchData) {
 }
 ```
 
-#### Model Logic
-- **Type**: Heuristic function based on CPP compliance
+#### Function Logic
+- **Type**: Deterministic heuristic formula based on CPP compliance fraction
 - **Output**: Probability [0, 1] that all CPPs will remain within specification
-- **Features**: 4 features (cpp_compliance, temp_delta, pressure_delta, ph_delta)
+- **Features**: 4 features (cpp_compliance, temp_delta, pressure_delta, ph_delta) - extracted and logged for potential ML training
 - **Decision Threshold**: 0.95 (strict, since y=1 means all CPPs in spec)
 - **Ground Truth**: Binary (1 = all CPPs in spec, 0 = any CPP out of spec)
 
 #### Assessment
-**ML Pipeline Maturity**: ⭐⭐ (2/5)
-- ✅ Feature extraction implemented
+**Implementation Maturity**: ⭐⭐ (2/5)
+- ✅ Feature extraction implemented and logged
 - ✅ Ground truth computation
 - ✅ Probability output [0,1]
-- ⚠️ Deterministic heuristic, not learned from data
-- ⚠️ No training pipeline (uses fixed formula)
-- ✅ Can be enhanced with logistic regression (capability present in codebase)
+- ⚠️ Deterministic heuristic formula `p = 0.05 + 0.9 * cpp_compliance`, not learned from training data
+- ⚠️ No active ML training (heuristic uses fixed formula)
+- ✅ Infrastructure ready: Can be replaced with logistic regression via `predictLogisticProb` function (lines 324-333)
 
 ---
 
-### 2.3 Equipment Failure Prediction
+### 2.3 Equipment Failure Prediction Function
 
-**Model ID**: `equipment_failure`  
+**Function ID**: `equipment_failure`  
 **Code Reference**: Lines 155-176
 
 #### Input Processing
@@ -300,7 +307,7 @@ export function predictEquipmentFailure(eq: EqT) {
   const rms = eq.vibrationRMS
   const rmsN = clamp(rms / 6, 0, 1) // Normalize to [0,1] using scale 0-6 mm/s
   const tvarN = clamp(eq.temperatureVar / 0.6, 0, 1) // Normalize temp variance
-  const raw = 0.6 * rmsN + 0.3 * tvarN + (eq.vibrationAlert ? 0.2 : 0)
+  const raw = 0.6 * rmsN + 0.3 * tvarN + (eq.vibrationAlert ? 0.2 : 0) // Fixed weighted formula
   const p = clamp(raw, 0, 1)
   
   const features: Features = {
@@ -316,28 +323,28 @@ export function predictEquipmentFailure(eq: EqT) {
 }
 ```
 
-#### Model Logic
-- **Type**: Weighted combination of normalized telemetry features
+#### Function Logic
+- **Type**: Deterministic weighted combination of normalized telemetry features with fixed weights
 - **Output**: Failure risk probability [0, 1]
-- **Features**: 5 features (rms, rms_norm, temp_var, temp_var_norm, alert_flag)
-- **Weights**: 60% vibration RMS, 30% temperature variance, +20% if alert active
+- **Features**: 5 features (rms, rms_norm, temp_var, temp_var_norm, alert_flag) - extracted and logged
+- **Weights**: Fixed at 60% vibration RMS, 30% temperature variance, +20% if alert active (not learned from data)
 - **Decision Threshold**: 0.5 (balanced)
 - **Ground Truth**: Binary (1 = alert present, 0 = no alert)
 
 #### Assessment
-**ML Pipeline Maturity**: ⭐⭐ (2/5)
-- ✅ Multi-feature extraction (5 features)
+**Implementation Maturity**: ⭐⭐ (2/5)
+- ✅ Multi-feature extraction (5 features) with logging
 - ✅ Feature normalization with domain-specific scales
 - ✅ Ground truth computation
-- ⚠️ Fixed weights, not learned from data
-- ⚠️ No training pipeline
-- ✅ Can be enhanced with logistic regression (per-equipment models supported)
+- ⚠️ Fixed weights (0.6, 0.3, 0.2), not learned from training data
+- ⚠️ No active ML training
+- ✅ Infrastructure ready: Per-equipment models supported via `entityId` parameter in training function
 
 ---
 
-### 2.4 Deviation Risk Model
+### 2.4 Deviation Risk Function
 
-**Model ID**: `deviation_risk`  
+**Function ID**: `deviation_risk`  
 **Code Reference**: Lines 125-142
 
 #### Input Processing
@@ -355,7 +362,7 @@ export function predictDeviationRisk(batch: BatchData) {
     norm(p.pH.current, s.pH.min, s.pH.max),
   ]
   
-  const risk = clamp(Math.max(...devs), 0, 2) / 2 // Map to [0,1]
+  const risk = clamp(Math.max(...devs), 0, 2) / 2 // Deterministic max deviation formula
   
   const features: Features = {
     temp_norm_dev: devs[0],
@@ -368,39 +375,39 @@ export function predictDeviationRisk(batch: BatchData) {
 }
 ```
 
-#### Model Logic
-- **Type**: Max normalized deviation from specification midpoint
+#### Function Logic
+- **Type**: Deterministic formula using max normalized deviation from specification midpoint
 - **Output**: Risk probability [0, 1]
-- **Features**: 3 features (temp_norm_dev, pressure_norm_dev, ph_norm_dev)
+- **Features**: 3 features (temp_norm_dev, pressure_norm_dev, ph_norm_dev) - extracted and logged
 - **Decision Threshold**: 0.5 (balanced)
 - **Ground Truth**: Binary (1 = any CPP out of spec, 0 = all in spec)
 
 #### Assessment
-**ML Pipeline Maturity**: ⭐⭐ (2/5)
-- ✅ Feature normalization (distance from midpoint)
+**Implementation Maturity**: ⭐⭐ (2/5)
+- ✅ Feature normalization (distance from midpoint) with logging
 - ✅ Ground truth computation
 - ✅ Interpretable risk metric
-- ⚠️ Heuristic function (max deviation), not learned
-- ⚠️ No training pipeline
-- ✅ Can be enhanced with logistic regression
+- ⚠️ Heuristic formula (max deviation), not learned from data
+- ⚠️ No active ML training
+- ✅ Infrastructure ready: Can be replaced with learned logistic regression model
 
 ---
 
-### 2.5 On-Device Logistic Regression Pipeline
+### 2.5 Logistic Regression Training Infrastructure (Not Active By Default)
 
 **Code Reference**: Lines 182-341
 
 #### Architecture
-The platform includes a **complete logistic regression training and inference pipeline** that can learn from prediction records. This represents a genuine ML pipeline, though currently not activated by default.
+The platform includes a **complete logistic regression training and inference pipeline** implemented in TypeScript that can learn from accumulated prediction records. This represents genuine ML training infrastructure, **though it is not activated by default** - the system uses heuristic functions unless `trainLogisticForModel` is explicitly called.
 
-#### Training Pipeline
+#### Training Pipeline (Implemented but Not Active)
 ```typescript
 export function trainLogisticForModel(
   model: ModelId, 
   opts?: LRTrainOptions, 
   entityId?: string
 ): boolean {
-  // Configuration
+  // Configuration with defaults
   const lr = opts?.learningRate ?? 0.1
   const epochs = opts?.epochs ?? 200
   const l2 = opts?.l2 ?? 1e-3 // L2 regularization
@@ -453,7 +460,7 @@ export function trainLogisticForModel(
     b -= lr * gradB
   }
   
-  // 6. Store trained model in registry
+  // 6. Store trained model in in-memory registry
   lrRegistry[lrKey(model, entityId)] = {
     featureKeys: keys,
     weights: w,
@@ -467,7 +474,7 @@ export function trainLogisticForModel(
 }
 ```
 
-#### Inference Pipeline
+#### Inference Pipeline (Uses Learned Model if Available)
 ```typescript
 export function predictLogisticProb(
   model: ModelId, 
@@ -476,7 +483,7 @@ export function predictLogisticProb(
 ): number | null {
   // Prefer entity-specific model, fallback to global
   const st = lrRegistry[lrKey(model, entityId)] ?? lrRegistry[lrKey(model)]
-  if (!st) return null
+  if (!st) return null  // Returns null if no trained model exists
   
   // Vectorize and standardize features
   const x = vectorize(features, st.featureKeys)
@@ -489,26 +496,29 @@ export function predictLogisticProb(
 }
 ```
 
+**Note**: The `predictBatchProbability` and `predictEquipmentProbability` functions (lines 346-358) call `predictLogisticProb` first, but fall back to heuristic functions when no trained model is available (which is always the case by default since training is not activated).
+
 #### Key Features
-1. **Per-Entity Models**: Supports training separate models for each equipment (or batch type)
+1. **Per-Entity Models**: Supports training separate models for each equipment (or batch type) via `entityId` parameter
 2. **Feature Standardization**: Z-score normalization for numerical stability
-3. **L2 Regularization**: Prevents overfitting with configurable penalty
+3. **L2 Regularization**: Prevents overfitting with configurable penalty (default: 0.001)
 4. **Batch Gradient Descent**: Efficient training on accumulated records
 5. **Dynamic Feature Selection**: Automatically extracts feature keys from records
 6. **Model Registry**: In-memory storage with metadata (training timestamp, sample count)
 
 #### Assessment
-**ML Pipeline Maturity**: ⭐⭐⭐⭐ (4/5)
-- ✅ Complete training pipeline (data validation, feature extraction, standardization, optimization)
-- ✅ Inference pipeline with fallback to heuristics
-- ✅ Per-entity model support (equipment-specific learning)
-- ✅ Regularization for robustness
-- ✅ Model versioning and metadata tracking
-- ⚠️ Currently not activated by default (heuristics used instead)
-- ⚠️ No persistence across sessions (in-memory only)
+**ML Training Infrastructure Maturity**: ⭐⭐⭐⭐ (4/5)
+- ✅ Complete training pipeline (data validation, feature extraction, standardization, optimization) implemented
+- ✅ Inference pipeline with fallback to heuristics implemented
+- ✅ Per-entity model support (equipment-specific learning) implemented
+- ✅ Regularization for robustness implemented
+- ✅ Model versioning and metadata tracking implemented
+- ⚠️ **NOT activated by default** - system uses heuristic functions unless explicitly trained
+- ⚠️ No persistence across sessions (in-memory only, models lost on restart)
+- ⚠️ No automated training schedule (requires manual invocation)
 - ❌ No hyperparameter tuning pipeline
 
-**Conclusion**: This is a **genuine machine learning pipeline** with proper training, validation, and inference capabilities. It's production-ready but requires activation and integration with a training schedule.
+**Conclusion**: This is a **genuine machine learning training pipeline** with proper data preprocessing, model training, and inference capabilities. The code is production-ready but **requires manual activation and integration** to replace the default heuristic functions. Currently, the system operates purely on deterministic formulas.
 
 ---
 
@@ -862,55 +872,73 @@ export const decisionThreshold: Record<ModelId, number> = {
 
 ## 6. Summary Assessment
 
-### 6.1 Agentic AI Capabilities: YES ✅
+### 6.1 Agentic AI Capabilities: PARTIAL ⚠️
 
-**Rating**: ⭐⭐⭐⭐ (4/5 - Strong Agentic Capabilities)
+**Rating**: ⭐⭐⭐ (3/5 - Strong Autonomous Monitoring, LLM Assistant Requires External Configuration)
 
-The platform demonstrates genuine agentic behavior through:
+The platform demonstrates genuine agentic behavior in autonomous monitoring, with conditional LLM-based assistance:
 
-1. **Autonomous Monitoring** (Quality Automation Engine)
+1. **Autonomous Monitoring** (Quality Automation Engine) - ✅ **Fully Operational**
    - Continuously monitors batch parameters without human initiation
    - Detects OOS and OOT conditions using stateful tracking
    - Generates actionable suggestions with severity and assignee recommendations
    - Proactively prevents quality issues through early warning
+   - **No external dependencies** - works out of the box
 
-2. **Intelligent Assistance** (Operations Assistant)
-   - Autonomously aggregates data from multiple sources
-   - Constructs contextual queries for LLM processing
-   - Maintains conversation history for context-aware interactions
-   - Gracefully degrades when LLM unavailable
+2. **Intelligent Assistance** (Operations Assistant) - ⚠️ **Requires External LLM Configuration**
+   - Autonomously aggregates data from multiple sources (✅ operational)
+   - Constructs contextual queries for LLM processing (✅ infrastructure present)
+   - Maintains conversation history for context-aware interactions (✅ implemented)
+   - Gracefully degrades when LLM unavailable (✅ fallback works)
+   - **Critical Limitation**: **Requires external LLM provider** (GitHub Spark, LLM Gateway, or on-premise LLM) - NOT functional without configuration
 
 3. **Adaptive Architecture**
-   - Multi-provider LLM support (GitHub Spark, LLM Gateway, on-premise)
-   - Equipment feed abstraction for swappable data sources
-   - Per-entity model support for specialized learning
+   - Multi-provider LLM support (GitHub Spark, LLM Gateway, on-premise) - ✅ infrastructure implemented
+   - Equipment feed abstraction for swappable data sources - ✅ implemented
+   - Per-entity model support for specialized learning - ✅ infrastructure present (unused)
 
-**Limitations**:
+**Honest Assessment of Limitations**:
+- ⚠️ **Operations Assistant requires external LLM provider** - not self-contained, needs Azure OpenAI/AWS Bedrock/GitHub Spark/on-prem LLM
 - ⚠️ No self-directed goal formation (operates within predefined objectives)
 - ⚠️ No inter-agent communication (agents operate independently)
-- ⚠️ Limited learning capability (logistic regression available but not default)
+- ⚠️ No active learning capability (logistic regression infrastructure available but not activated)
 
-### 6.2 Machine Learning Pipelines: YES ✅
+### 6.2 Machine Learning Pipelines: INFRASTRUCTURE YES, ACTIVE USE NO ⚠️
 
-**Rating**: ⭐⭐⭐ (3/5 - Functional ML Infrastructure, Room for Enhancement)
+**Rating**: ⭐⭐ (2/5 - Heuristic Functions Currently Active, ML Infrastructure Present But Unused)
 
-The platform includes ML pipelines with varying maturity:
+The platform includes ML training infrastructure with varying states of implementation and activation:
 
-#### Current State (Heuristic Models)
-- ✅ **Three operational models** (quality, deviation, equipment failure)
-- ✅ **Comprehensive monitoring** (AUROC, Brier, ECE)
-- ✅ **Feature extraction and ground truth computation**
-- ⚠️ **Deterministic heuristics**, not learned from data
-- ⚠️ **No active training pipeline**
+#### Current State (Active - Heuristic Functions)
+- ✅ **Three risk scoring functions** operational (quality, deviation, equipment failure)
+- ✅ **Comprehensive monitoring infrastructure** (AUROC, Brier, ECE calculation implemented)
+- ✅ **Feature extraction and ground truth computation** (logged for all predictions)
+- ⚠️ **Deterministic heuristic formulas in active use**, not learned ML model parameters:
+  - Quality: `p = 0.05 + 0.9 * cpp_compliance` (simple linear mapping)
+  - Equipment: `p = 0.6 * rms_norm + 0.3 * temp_var_norm + 0.2 * alert_flag` (fixed weights)
+  - Deviation: `p = max(temp_dev, pressure_dev, ph_dev) / 2` (max deviation formula)
+- ⚠️ **No active ML training** (system does not call training functions)
 
-#### Advanced Capability (Logistic Regression)
-- ✅ **Complete training pipeline** with gradient descent
-- ✅ **Feature standardization** (z-score normalization)
-- ✅ **L2 regularization** for robustness
-- ✅ **Per-entity models** (equipment-specific learning)
-- ✅ **Inference with fallback** to heuristics
-- ⚠️ **Not activated by default** (requires manual invocation)
-- ❌ **No persistence** across sessions (in-memory only)
+#### Advanced Capability (Implemented But Inactive - Logistic Regression)
+- ✅ **Complete training pipeline implemented** with gradient descent (lines 266-321)
+- ✅ **Feature standardization implemented** (z-score normalization)
+- ✅ **L2 regularization implemented** for robustness
+- ✅ **Per-entity models supported** (equipment-specific learning capability)
+- ✅ **Inference with fallback implemented** - `predictLogisticProb` returns null when no trained model exists, causing fallback to heuristics
+- ⚠️ **NOT activated by default** - requires explicit manual invocation of `trainLogisticForModel`
+- ⚠️ **No automated training schedule** implemented
+- ❌ **No persistence across sessions** (in-memory only, models lost on restart)
+- ❌ **No production deployment** of training capability
+
+#### Honest Assessment
+**Current Operational State**: The platform operates entirely on deterministic heuristic formulas. While comprehensive ML training infrastructure exists in the codebase, it is not integrated into the application runtime and requires manual activation.
+
+**ML Potential**: High - the infrastructure is production-ready and could be activated with:
+1. Adding automated training invocation (e.g., daily/weekly schedule)
+2. Implementing model persistence to storage
+3. Integrating trained model predictions into the production prediction flow
+
+**Truth**: Calling these "ML pipelines" is **misleading** - they are currently heuristic formulas with ML infrastructure built alongside them but unused.
 
 ### 6.3 Information Processing
 
@@ -926,17 +954,21 @@ The platform includes ML pipelines with varying maturity:
 
 ### 6.4 Models Informed by ML Pipelines
 
-**Current**: ⭐⭐ (2/5 - Limited)
-- Quality Prediction: Heuristic function based on CPP compliance
-- Deviation Risk: Heuristic function based on max normalized deviation
-- Equipment Failure: Weighted combination of telemetry features
-- **None currently use learned parameters from ML training**
+**Current (Active Production)**: ⭐ (1/5 - None Active)
+- ❌ Quality Prediction: Uses heuristic formula `p = 0.05 + 0.9 * cpp_compliance`, NOT learned parameters
+- ❌ Deviation Risk: Uses heuristic formula `p = max(deviations) / 2`, NOT learned parameters  
+- ❌ Equipment Failure: Uses fixed weights `p = 0.6*rms + 0.3*temp_var + 0.2*alert`, NOT learned parameters
+- **None of the active prediction functions use learned parameters from ML training**
+- All predictions fall back to heuristics because `trainLogisticForModel` is never called
 
-**Potential**: ⭐⭐⭐⭐ (4/5 - High)
-- Logistic regression training pipeline is production-ready
-- Per-entity models supported (equipment-specific learning)
-- Feature extraction and monitoring infrastructure in place
-- **Can be activated with minimal code changes**
+**Potential (If Training Activated)**: ⭐⭐⭐⭐ (4/5 - High)
+- ✅ Logistic regression training pipeline is production-ready (fully implemented)
+- ✅ Per-entity models supported (equipment-specific learning capability exists)
+- ✅ Feature extraction and monitoring infrastructure in place
+- ✅ Integration points exist: `predictBatchProbability` and `predictEquipmentProbability` call `predictLogisticProb` first
+- **Could be activated with integration work**: training schedule + model persistence + deployment configuration
+
+**Reality Check**: The assessment should clearly state that **NO ML-trained models are currently active in production**. The system uses only deterministic formulas.
 
 ---
 
@@ -1007,21 +1039,33 @@ The platform includes ML pipelines with varying maturity:
 
 ## 8. Conclusion
 
-The BioPharm GMP Intelligence Platform demonstrates **genuine agentic AI capabilities** and includes **functional machine learning infrastructure**, though current models use deterministic heuristics rather than learned parameters. The platform excels in:
+The BioPharm GMP Intelligence Platform demonstrates **genuine agentic AI capabilities** through its autonomous quality monitoring engine. However, regarding machine learning, the platform currently uses **deterministic heuristic formulas** for all risk predictions, with **comprehensive ML training infrastructure built but not activated**.
 
-✅ **Autonomous quality monitoring** with stateful event detection  
-✅ **Intelligent decision support** via LLM-powered assistant  
-✅ **Comprehensive model monitoring** with industry-standard metrics  
-✅ **Regulatory compliance** with FDA-aligned credibility assessment  
-✅ **Production-ready ML pipeline** (logistic regression, ready to activate)  
+The platform excels in:
 
-The platform is **truthfully positioned** with clear documentation of:
-- Current limitations (heuristic models)
-- Available capabilities (logistic regression training)
-- Regulatory alignment (21 CFR Part 11, ALCOA+, FDA 7-step)
-- Human-in-the-loop controls
+✅ **Autonomous quality monitoring** with stateful event detection (fully operational)
+✅ **Intelligent decision support capability** via LLM-powered assistant architecture (requires external LLM provider configuration)
+✅ **Comprehensive monitoring infrastructure** with industry-standard metrics calculation (AUROC, Brier, ECE - fully implemented)
+✅ **Regulatory compliance framework** with FDA-aligned credibility assessment documentation
+✅ **Complete ML training infrastructure** (logistic regression with gradient descent, feature standardization, L2 regularization - fully coded but **not active in production**)
 
-**Overall Assessment**: This is a **sophisticated AI platform** with strong foundations for both agentic behavior and machine learning. It's currently operational with deterministic models and has the infrastructure to support learned models with minimal activation effort.
+**Current Limitations - Critical for Accuracy**:
+❌ **Predictions use deterministic heuristic formulas**, not learned ML model parameters (quality: simple linear formula, equipment: fixed weights, deviation: max deviation formula)
+❌ **No active ML training** - `trainLogisticForModel` function exists but is never called in production runtime
+❌ **LLM-based assistant requires external provider** - not functional without configuring GitHub Spark, LLM Gateway, or on-premise LLM endpoint
+❌ **ML infrastructure is dormant** - while fully implemented, it requires integration work (training schedule + model persistence + deployment) to activate
+
+The platform is **accurately documented** with clear distinction between:
+- **Implemented and Active**: Quality automation engine, heuristic risk formulas, monitoring metrics calculation
+- **Implemented but Inactive**: ML training pipeline, logistic regression
+- **Requires External Configuration**: LLM-based Operations Assistant (requires provider setup)
+
+**Overall Assessment**: This is a **sophisticated automation and monitoring platform** with strong foundations for agentic behavior and comprehensive ML infrastructure. It currently operates on deterministic formulas for predictions, with genuine ML capability available but requiring activation. The documentation should clearly communicate this distinction to avoid misleading users about current vs. potential ML capabilities.
+
+**Recommendation**: Update all documentation to clearly distinguish between:
+1. Active heuristic prediction formulas (current state)
+2. Implemented but inactive ML training infrastructure (potential state)
+3. Required external dependencies (LLM providers)
 
 ---
 
