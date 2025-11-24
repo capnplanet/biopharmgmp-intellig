@@ -3356,6 +3356,8 @@ For detailed deployment guides and infrastructure templates, see the [Technical 
 
 ### Technical Documentation
 
+- **[Production Readiness Assessment](PRODUCTION_READINESS_ASSESSMENT.md)** - Comprehensive assessment of build quality, implementation completeness, AI/ML functionality, and production deployment readiness
+- **[AI/ML Assessment](AGENTIC_AI_ML_ASSESSMENT.md)** - Detailed assessment of agentic AI capabilities and machine learning pipeline implementations
 - **[Technical Guide](docs/TECHNICAL_GUIDE.md)** - Comprehensive technical documentation with advanced architecture details, data models, use cases, and deployment guide
 - **[Cloud Deployment Guide](docs/CLOUD_DEPLOYMENT.md)** - Complete guide for deploying to AWS and Azure with Docker, Terraform, and deployment scripts
 - **[Platform Abstraction Layer](docs/platform-abstraction-layer.md)** - Architecture and deployment flexibility
