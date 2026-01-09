@@ -55,7 +55,7 @@ Logistic regression is like a **simple weighing scale** that:
 **In code (from `src/lib/modeling.ts` lines 202-210):**
 ```typescript
 function sigmoid(z: number) {
-  // This is the "special function" that squishes any number to [0,1]
+  // clamp to avoid overflow
   if (z >= 0) {
     const ez = Math.exp(-z)
     return 1 / (1 + ez)
@@ -65,6 +65,8 @@ function sigmoid(z: number) {
   }
 }
 ```
+
+The sigmoid function takes any number and "squishes" it to a value between 0 and 1.
 
 ### Why is this NOT a Neural Network?
 
@@ -150,7 +152,7 @@ export function predictDeviationRisk(batch: BatchData) {
 **What this does:**
 - Calculates how far each parameter is from the safe middle point
 - Takes the **maximum** (the worst offender)
-- Clamps it to range [0,2] and divides by 2 to get a probability
+- Clamps it to range [0,2] then divides by 2 to map to [0,1] probability
 
 **Is this a neural network?** ❌ No. It's: `risk = clamp(max(temp_deviation, pressure_deviation, pH_deviation), 0, 2) / 2`
 
