@@ -94,7 +94,7 @@ The platform documentation mentions three "predictive models" but let's be clear
 ```typescript
 export function predictQuality(batch: BatchData) {
   const cpp = getCPPCompliance(batch) // [0,1] - fraction in spec
-  const p = clamp(0.05 + 0.9 * cpp, 0, 1) // Simple linear formula
+  const p = clamp(0.05 + 0.9 * cpp, 0, 1) // Simple mapping with small smoothing
   // ...
 }
 ```
@@ -150,9 +150,9 @@ export function predictDeviationRisk(batch: BatchData) {
 **What this does:**
 - Calculates how far each parameter is from the safe middle point
 - Takes the **maximum** (the worst offender)
-- Divides by 2 to get a probability
+- Clamps it to range [0,2] and divides by 2 to get a probability
 
-**Is this a neural network?** ❌ No. It's: `risk = max(temp_deviation, pressure_deviation, pH_deviation) / 2`
+**Is this a neural network?** ❌ No. It's: `risk = clamp(max(temp_deviation, pressure_deviation, pH_deviation), 0, 2) / 2`
 
 **Is this machine learning?** ❌ No. It's just finding the maximum value
 
