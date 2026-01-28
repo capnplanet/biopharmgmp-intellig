@@ -3372,13 +3372,13 @@ For cloud deployment instructions (AWS, Azure, Docker), see the [Cloud Deploymen
 
 ## License
 
-Proprietary License – Broad Spectrum GxP LLC
+Proprietary License – Daniel Eylath
 
-Copyright (c) 2025 Broad Spectrum GxP LLC. All rights reserved.
+Copyright (c) 2026 Daniel Eylath. All rights reserved.
 
 This software is confidential and proprietary. See [LICENSE](LICENSE) for full terms.
 
-For licensing inquiries: legal@broadspectrumgxp.com
+For licensing inquiries: daniel@eylath.com
 
 ## Security
 

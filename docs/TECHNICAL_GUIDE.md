@@ -1725,7 +1725,7 @@ biopharmgmp-intellig/
 
 - **Documentation**: `/docs` directory in repository
 - **Issue Tracker**: GitHub Issues
-- **License**: Proprietary - Broad Spectrum GxP LLC
+- **License**: Proprietary - Daniel Eylath
 - **Security**: Report to opensource-security@github.com
 
 ---
